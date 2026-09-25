@@ -3239,189 +3239,248 @@ export default function App() {
           )
         )}
 
-        {/* TAB 3: CÁ NHÂN (PROFILE) */}
+        {/* TAB 3: CÁ NHÂN (GENUINE APPLE ID PROFILE) */}
         {currentTab === 'profile' && (
           profileSubView === 'change_password' ? (
-            /* MÀN HÌNH ĐỔI MẬT KHẨU */
+            /* MÀN HÌNH ĐỔI MẬT KHẨU CHUẨN APPLE */
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: '#000000' }}>
               <View style={styles.fullScreenNavBar}>
                 <TouchableOpacity onPress={() => setProfileSubView('main')} style={styles.fullScreenNavBtn}>
-                  <Ionicons name="chevron-back" size={20} color={appSettings.accentColor} />
-                  <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor }]}>Cá Nhân</Text>
+                  <Ionicons name="chevron-back" size={20} color="#007AFF" />
+                  <Text style={[styles.fullScreenNavBtnText, { color: '#007AFF' }]}>Cá nhân</Text>
                 </TouchableOpacity>
-                <Text style={styles.fullScreenNavTitle}>Đổi Mật Khẩu</Text>
+                <Text style={styles.fullScreenNavTitle}>Đổi mật khẩu</Text>
                 <TouchableOpacity onPress={handleChangePassword} style={styles.fullScreenNavBtn}>
-                  <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor, fontWeight: '700' }]}>Lưu</Text>
+                  <Text style={[styles.fullScreenNavBtnText, { color: '#007AFF', fontWeight: '600' }]}>Lưu</Text>
                 </TouchableOpacity>
               </View>
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, paddingBottom: 120 }} keyboardShouldPersistTaps="handled">
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 100 }} keyboardShouldPersistTaps="handled">
                 <View style={styles.groupedList}>
                   <View style={styles.formRow}>
-                    <Text style={styles.formLabel}>Mật khẩu hiện tại</Text>
-                    <TextInput style={styles.formInput} secureTextEntry placeholder="Nhập mật khẩu cũ" placeholderTextColor="#636366" value={currentPassInput} onChangeText={setCurrentPassInput} />
+                    <Text style={[styles.formLabel, { color: '#FFFFFF', fontSize: 16 }]}>Hiện tại</Text>
+                    <TextInput style={[styles.formInput, { textAlign: 'right', color: '#FFFFFF' }]} secureTextEntry placeholder="Mật khẩu cũ" placeholderTextColor="#636366" value={currentPassInput} onChangeText={setCurrentPassInput} />
                   </View>
                   <View style={styles.formRow}>
-                    <Text style={styles.formLabel}>Mật khẩu mới</Text>
-                    <TextInput style={styles.formInput} secureTextEntry placeholder="Nhập mật khẩu mới" placeholderTextColor="#636366" value={newPassInput} onChangeText={setNewPassInput} />
+                    <Text style={[styles.formLabel, { color: '#FFFFFF', fontSize: 16 }]}>Mới</Text>
+                    <TextInput style={[styles.formInput, { textAlign: 'right', color: '#FFFFFF' }]} secureTextEntry placeholder="Mật khẩu mới" placeholderTextColor="#636366" value={newPassInput} onChangeText={setNewPassInput} />
                   </View>
                   <View style={[styles.formRow, { borderBottomWidth: 0 }]}>
-                    <Text style={styles.formLabel}>Xác nhận lại</Text>
-                    <TextInput style={styles.formInput} secureTextEntry placeholder="Nhập lại lần nữa" placeholderTextColor="#636366" value={confirmNewPassInput} onChangeText={setConfirmNewPassInput} />
+                    <Text style={[styles.formLabel, { color: '#FFFFFF', fontSize: 16 }]}>Xác nhận</Text>
+                    <TextInput style={[styles.formInput, { textAlign: 'right', color: '#FFFFFF' }]} secureTextEntry placeholder="Nhập lại" placeholderTextColor="#636366" value={confirmNewPassInput} onChangeText={setConfirmNewPassInput} />
                   </View>
                 </View>
-                {/* Password Strength Meter */}
-                {newPassInput.length > 0 && (
-                  <View style={{ marginTop: 14 }}>
-                    <View style={{ height: 4, borderRadius: 2, backgroundColor: '#2C2C2E', overflow: 'hidden' }}>
-                      <View style={{ height: '100%', width: `${Math.min(100, Math.max(10, newPassInput.length * 8))}%`, backgroundColor: newPassInput.length < 6 ? '#FF453A' : newPassInput.length < 10 ? '#FF9F0A' : '#30D158', borderRadius: 2 }} />
-                    </View>
-                    <Text style={{ color: newPassInput.length < 6 ? '#FF453A' : newPassInput.length < 10 ? '#FF9F0A' : '#30D158', fontSize: 12, marginTop: 6, fontWeight: '600' }}>
-                      {newPassInput.length < 6 ? '⚠️ Yếu — Cần thêm ký tự' : newPassInput.length < 10 ? '🔸 Trung bình' : '✅ Rất mạnh'}
-                    </Text>
-                  </View>
-                )}
-                <TouchableOpacity style={[styles.btnStartNow, { marginTop: 24, backgroundColor: appSettings.accentColor }]} activeOpacity={0.85} onPress={handleChangePassword}>
-                  <Ionicons name="key" size={17} color="#000" />
-                  <Text style={styles.btnStartNowText}>Cập Nhật Mật Khẩu Mới</Text>
-                </TouchableOpacity>
+                <Text style={{ color: '#8E8E93', fontSize: 12.5, marginTop: 8, marginLeft: 16, lineHeight: 18 }}>
+                  Mật khẩu được sử dụng để mở khóa và bảo vệ dữ liệu Két sắt khi không sử dụng Face ID.
+                </Text>
               </ScrollView>
             </KeyboardAvoidingView>
           ) : profileSubView === 'edit_profile' ? (
-            /* MÀN HÌNH CHỈNH SỬA HỒ SƠ */
+            /* MÀN HÌNH CHỈNH SỬA HỒ SƠ CHUẨN APPLE */
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: '#000000' }}>
               <View style={styles.fullScreenNavBar}>
                 <TouchableOpacity onPress={() => setProfileSubView('main')} style={styles.fullScreenNavBtn}>
-                  <Ionicons name="chevron-back" size={20} color={appSettings.accentColor} />
-                  <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor }]}>Hủy</Text>
+                  <Text style={[styles.fullScreenNavBtnText, { color: '#007AFF' }]}>Hủy</Text>
                 </TouchableOpacity>
-                <Text style={styles.fullScreenNavTitle}>Chỉnh Sửa Hồ Sơ</Text>
+                <Text style={styles.fullScreenNavTitle}>Sửa hồ sơ</Text>
                 <TouchableOpacity onPress={handleSaveEditProfile} style={styles.fullScreenNavBtn}>
-                  <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor, fontWeight: '700' }]}>Lưu</Text>
+                  <Text style={[styles.fullScreenNavBtnText, { color: '#007AFF', fontWeight: '600' }]}>Xong</Text>
                 </TouchableOpacity>
               </View>
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, paddingBottom: 120 }} keyboardShouldPersistTaps="handled">
-                <View style={{ alignItems: 'center', marginVertical: 16 }}>
-                  <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: userProfile.avatarColor, justifyContent: 'center', alignItems: 'center' }}>
-                    <Text style={{ color: '#fff', fontWeight: '800', fontSize: 32 }}>{editDisplayNameInput.charAt(0).toUpperCase()}</Text>
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 20, paddingBottom: 100 }} keyboardShouldPersistTaps="handled">
+                <View style={{ alignItems: 'center', marginBottom: 24 }}>
+                  <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: '#3A3A3C', justifyContent: 'center', alignItems: 'center', marginBottom: 10 }}>
+                    <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 32 }}>{(editDisplayNameInput || 'A').charAt(0).toUpperCase()}</Text>
                   </View>
+                  <Text style={{ color: '#007AFF', fontSize: 15, fontWeight: '500' }}>Chỉnh sửa ảnh</Text>
                 </View>
                 <View style={styles.groupedList}>
                   <View style={styles.formRow}>
-                    <Text style={styles.formLabel}>Tên hiển thị</Text>
-                    <TextInput style={styles.formInput} placeholder="VD: Admin LockX" placeholderTextColor="#636366" value={editDisplayNameInput} onChangeText={setEditDisplayNameInput} />
+                    <Text style={[styles.formLabel, { color: '#FFFFFF', fontSize: 16 }]}>Họ và tên</Text>
+                    <TextInput style={[styles.formInput, { textAlign: 'right', color: '#FFFFFF' }]} placeholder="Tên của bạn" placeholderTextColor="#636366" value={editDisplayNameInput} onChangeText={setEditDisplayNameInput} />
                   </View>
                   <View style={[styles.formRow, { borderBottomWidth: 0 }]}>
-                    <Text style={styles.formLabel}>Username</Text>
-                    <TextInput style={styles.formInput} placeholder="@admin_lockx" placeholderTextColor="#636366" value={editUsernameInput} onChangeText={setEditUsernameInput} autoCapitalize="none" />
+                    <Text style={[styles.formLabel, { color: '#FFFFFF', fontSize: 16 }]}>Username</Text>
+                    <TextInput style={[styles.formInput, { textAlign: 'right', color: '#FFFFFF' }]} placeholder="@username" placeholderTextColor="#636366" value={editUsernameInput} onChangeText={setEditUsernameInput} autoCapitalize="none" />
                   </View>
                 </View>
-                <TouchableOpacity style={[styles.btnStartNow, { marginTop: 24, backgroundColor: appSettings.accentColor }]} activeOpacity={0.85} onPress={handleSaveEditProfile}>
-                  <Ionicons name="checkmark-circle" size={17} color="#000" />
-                  <Text style={styles.btnStartNowText}>Lưu Hồ Sơ</Text>
-                </TouchableOpacity>
               </ScrollView>
             </KeyboardAvoidingView>
           ) : (
-            /* MÀN HÌNH CÁ NHÂN CHÍNH */
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-              <View style={styles.navHeader}>
-                <Text style={styles.largeTitle}>Cá Nhân</Text>
+            /* MÀN HÌNH CÁ NHÂN CHÍNH (APPLE ID STYLE) */
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, { paddingHorizontal: 16, paddingTop: 10 }]}>
+              {/* Apple Large Title */}
+              <View style={{ marginBottom: 14 }}>
+                <Text style={{ fontSize: 34, fontWeight: '700', color: '#FFFFFF', letterSpacing: 0.36 }}>
+                  Cá nhân
+                </Text>
               </View>
 
-              {/* User Profile Card */}
-              <View style={[styles.screenTimeCard, { alignItems: 'center', paddingVertical: 24 }]}>
-                <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: userProfile.avatarColor, justifyContent: 'center', alignItems: 'center', marginBottom: 12 }}>
-                  <Text style={{ color: '#fff', fontWeight: '800', fontSize: 28 }}>{userProfile.displayName.charAt(0).toUpperCase()}</Text>
+              {/* Apple ID Header Card */}
+              <View style={{ alignItems: 'center', marginVertical: 14 }}>
+                <View
+                  style={{
+                    width: 76,
+                    height: 76,
+                    borderRadius: 38,
+                    backgroundColor: '#3A3A3C',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginBottom: 10,
+                  }}
+                >
+                  <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 32 }}>
+                    {(userProfile.displayName || 'A').charAt(0).toUpperCase()}
+                  </Text>
                 </View>
-                <Text style={{ color: '#fff', fontSize: 22, fontWeight: '800' }}>{userProfile.displayName}</Text>
-                <Text style={{ color: '#8E8E93', fontSize: 14, marginTop: 3 }}>{userProfile.username}</Text>
-                <View style={[styles.homeProBadge, { marginTop: 8, paddingHorizontal: 12, paddingVertical: 4 }]}>
-                  <Text style={[styles.homeProBadgeText, { fontSize: 11 }]}>PRO MEMBER</Text>
-                </View>
+                <Text style={{ color: '#FFFFFF', fontSize: 21, fontWeight: '600' }}>
+                  {userProfile.displayName}
+                </Text>
+                <Text style={{ color: '#8E8E93', fontSize: 14, marginTop: 2 }}>
+                  {userProfile.username}
+                </Text>
                 <TouchableOpacity
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 12, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.08)' }}
                   onPress={() => {
                     setEditDisplayNameInput(userProfile.displayName);
                     setEditUsernameInput(userProfile.username);
                     setProfileSubView('edit_profile');
                   }}
+                  style={{ marginTop: 8 }}
                 >
-                  <Ionicons name="pencil" size={14} color={appSettings.accentColor} />
-                  <Text style={{ color: appSettings.accentColor, fontSize: 13, fontWeight: '600' }}>Chỉnh sửa hồ sơ</Text>
+                  <Text style={{ color: '#007AFF', fontSize: 14, fontWeight: '500' }}>
+                    Chỉnh sửa hồ sơ
+                  </Text>
                 </TouchableOpacity>
               </View>
 
-              {/* Usage Stats Cards */}
-              <View style={styles.homeStatsRow}>
-                <View style={styles.homeStatCard}>
-                  <View style={[styles.homeStatIconWrap, { backgroundColor: 'rgba(48,209,88,0.15)' }]}>
-                    <Ionicons name="calendar" size={18} color="#30D158" />
+              {/* NHÓM 1: HOẠT ĐỘNG & THỜI GIAN */}
+              <View style={[styles.sectionWrap, { marginTop: 12, marginBottom: 18 }]}>
+                <Text style={{ color: '#8E8E93', fontSize: 12.5, fontWeight: '500', textTransform: 'uppercase', marginBottom: 6, marginLeft: 16 }}>
+                  Hoạt động
+                </Text>
+                <View style={styles.groupedList}>
+                  {/* Ngày tham gia */}
+                  <View style={styles.cellItem}>
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#34C759' }]}>
+                      <Ionicons name="calendar-outline" size={18} color="#FFFFFF" />
+                    </View>
+                    <View style={[styles.cellContent, { flex: 1 }]}>
+                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Ngày tham gia</Text>
+                    </View>
+                    <Text style={{ color: '#8E8E93', fontSize: 16 }}>{userProfile.joinDate}</Text>
                   </View>
-                  <Text style={styles.homeStatNumber}>{userProfile.joinDate}</Text>
-                  <Text style={styles.homeStatLabel}>Ngày gia nhập</Text>
-                </View>
-                <View style={styles.homeStatCard}>
-                  <View style={[styles.homeStatIconWrap, { backgroundColor: `${appSettings.accentColor}25` }]}>
-                    <Ionicons name="time" size={18} color={appSettings.accentColor} />
+
+                  {/* Ngày đồng hành */}
+                  <View style={styles.cellItem}>
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#AF52DE' }]}>
+                      <Ionicons name="time-outline" size={18} color="#FFFFFF" />
+                    </View>
+                    <View style={[styles.cellContent, { flex: 1 }]}>
+                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Thời gian sử dụng</Text>
+                    </View>
+                    <Text style={{ color: '#8E8E93', fontSize: 16 }}>{userProfile.daysActive} ngày</Text>
                   </View>
-                  <Text style={styles.homeStatNumber}>{userProfile.daysActive}</Text>
-                  <Text style={styles.homeStatLabel}>Ngày đồng hành</Text>
-                </View>
-                <View style={styles.homeStatCard}>
-                  <View style={[styles.homeStatIconWrap, { backgroundColor: 'rgba(191,90,242,0.15)' }]}>
-                    <Ionicons name="hourglass" size={18} color="#BF5AF2" />
+
+                  {/* Giờ hoạt động */}
+                  <View style={[styles.cellItem, { borderBottomWidth: 0 }]}>
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#007AFF' }]}>
+                      <Ionicons name="hourglass-outline" size={18} color="#FFFFFF" />
+                    </View>
+                    <View style={[styles.cellContent, { flex: 1 }]}>
+                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Tổng giờ hoạt động</Text>
+                    </View>
+                    <Text style={{ color: '#8E8E93', fontSize: 16 }}>{userProfile.hoursUsed}h</Text>
                   </View>
-                  <Text style={styles.homeStatNumber}>{userProfile.hoursUsed}h</Text>
-                  <Text style={styles.homeStatLabel}>Giờ hoạt động</Text>
                 </View>
               </View>
 
-              {/* Quick Actions */}
-              <View style={[styles.sectionWrap, { marginTop: 16 }]}>
-                <Text style={styles.sectionCaption}>BẢO MẬT TÀI KHOẢN</Text>
+              {/* NHÓM 2: ĐĂNG NHẬP & BẢO MẬT */}
+              <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 18 }]}>
+                <Text style={{ color: '#8E8E93', fontSize: 12.5, fontWeight: '500', textTransform: 'uppercase', marginBottom: 6, marginLeft: 16 }}>
+                  Đăng nhập & Bảo mật
+                </Text>
                 <View style={styles.groupedList}>
-                  <TouchableOpacity style={styles.cellItem} onPress={() => { setCurrentPassInput(''); setNewPassInput(''); setConfirmNewPassInput(''); setProfileSubView('change_password'); }}>
+                  {/* Đổi mật khẩu */}
+                  <TouchableOpacity
+                    style={styles.cellItem}
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      setCurrentPassInput('');
+                      setNewPassInput('');
+                      setConfirmNewPassInput('');
+                      setProfileSubView('change_password');
+                    }}
+                  >
                     <View style={[styles.cellLeadingIcon, { backgroundColor: '#FF9500' }]}>
-                      <Ionicons name="key" size={17} color="#fff" />
+                      <Ionicons name="key-outline" size={18} color="#FFFFFF" />
                     </View>
-                    <View style={styles.cellContent}>
-                      <Text style={styles.cellTitle}>Đổi Mật Khẩu</Text>
-                      <Text style={styles.cellSubtitle}>Cập nhật mật khẩu bảo vệ tài khoản</Text>
+                    <View style={[styles.cellContent, { flex: 1 }]}>
+                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Đổi mật khẩu</Text>
                     </View>
-                    <Ionicons name="chevron-forward" size={16} color="#636366" />
+                    <Ionicons name="chevron-forward" size={16} color="#48484A" />
                   </TouchableOpacity>
-                  <TouchableOpacity style={[styles.cellItem, { borderBottomWidth: 0 }]} onPress={handleClearOtherSessions}>
+
+                  {/* Face ID Status */}
+                  <View style={styles.cellItem}>
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#34C759' }]}>
+                      <Ionicons name="scan-outline" size={18} color="#FFFFFF" />
+                    </View>
+                    <View style={[styles.cellContent, { flex: 1 }]}>
+                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Xác thực Face ID</Text>
+                    </View>
+                    <Text style={{ color: appSettings.useFaceId ? '#34C759' : '#8E8E93', fontSize: 16 }}>
+                      {appSettings.useFaceId ? 'Đã bật' : 'Tắt'}
+                    </Text>
+                  </View>
+
+                  {/* Đăng xuất thiết bị khác */}
+                  <TouchableOpacity
+                    style={[styles.cellItem, { borderBottomWidth: 0 }]}
+                    activeOpacity={0.7}
+                    onPress={handleClearOtherSessions}
+                  >
                     <View style={[styles.cellLeadingIcon, { backgroundColor: '#FF3B30' }]}>
-                      <Ionicons name="log-out" size={17} color="#fff" />
+                      <Ionicons name="log-out-outline" size={18} color="#FFFFFF" />
                     </View>
-                    <View style={styles.cellContent}>
-                      <Text style={styles.cellTitle}>Đăng Xuất Thiết Bị Khác</Text>
-                      <Text style={styles.cellSubtitle}>Kết thúc phiên đăng nhập trên các máy khác</Text>
+                    <View style={[styles.cellContent, { flex: 1 }]}>
+                      <Text style={{ color: '#FF3B30', fontSize: 16, fontWeight: '400' }}>Đăng xuất thiết bị khác</Text>
                     </View>
-                    <Ionicons name="chevron-forward" size={16} color="#636366" />
+                    <Ionicons name="chevron-forward" size={16} color="#48484A" />
                   </TouchableOpacity>
                 </View>
               </View>
 
-              {/* Login History */}
-              <View style={[styles.sectionWrap, { marginTop: 16 }]}>
-                <Text style={styles.sectionCaption}>LỊCH SỬ ĐĂNG NHẬP ({loginHistory.length})</Text>
+              {/* NHÓM 3: CÁC THIẾT BỊ ĐÃ ĐĂNG NHẬP */}
+              <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 32 }]}>
+                <Text style={{ color: '#8E8E93', fontSize: 12.5, fontWeight: '500', textTransform: 'uppercase', marginBottom: 6, marginLeft: 16 }}>
+                  Thiết bị ({loginHistory.length})
+                </Text>
                 <View style={styles.groupedList}>
-                  {loginHistory.slice(0, 5).map((log, idx) => (
-                    <View key={log.id} style={[styles.cellItem, idx === Math.min(4, loginHistory.length - 1) && { borderBottomWidth: 0 }]}>
-                      <View style={[styles.cellLeadingIcon, { backgroundColor: log.method === 'Face ID' ? '#30D158' : log.method === 'Passcode' ? '#FF9500' : '#0A84FF' }]}>
-                        <Ionicons name={log.method === 'Face ID' ? 'happy' : log.method === 'Passcode' ? 'keypad' : 'lock-closed'} size={17} color="#fff" />
+                  {loginHistory.slice(0, 5).map((log, idx, arr) => (
+                    <View
+                      key={log.id}
+                      style={[
+                        styles.cellItem,
+                        idx === arr.length - 1 && { borderBottomWidth: 0 },
+                      ]}
+                    >
+                      <View style={[styles.cellLeadingIcon, { backgroundColor: '#8E8E93' }]}>
+                        <Ionicons
+                          name={log.device.includes('Mac') ? 'laptop-outline' : 'phone-portrait-outline'}
+                          size={18}
+                          color="#FFFFFF"
+                        />
                       </View>
                       <View style={[styles.cellContent, { flex: 1 }]}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <Text style={styles.cellTitle} numberOfLines={1}>{log.device}</Text>
-                          <View style={{ backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
-                            <Text style={{ color: '#8E8E93', fontSize: 10 }}>{log.method}</Text>
-                          </View>
-                        </View>
-                        <Text style={styles.cellSubtitle}>{log.timestamp} • {log.location}</Text>
-                        <Text style={{ color: '#636366', fontSize: 11, fontFamily: 'monospace' }}>{log.ip}</Text>
+                        <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '400' }} numberOfLines={1}>
+                          {log.device}
+                        </Text>
+                        <Text style={{ color: '#8E8E93', fontSize: 12, marginTop: 2 }}>
+                          {log.timestamp} • {log.location}
+                        </Text>
                       </View>
+                      <Text style={{ color: '#8E8E93', fontSize: 13 }}>
+                        {log.method}
+                      </Text>
                     </View>
                   ))}
                 </View>
