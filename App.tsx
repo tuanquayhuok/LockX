@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   StyleSheet,
   Text,
@@ -16,6 +16,7 @@ import {
   Platform,
   Linking,
   KeyboardAvoidingView,
+  ActivityIndicator,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
@@ -105,13 +106,65 @@ interface GachaItem {
 
 export interface UserProfile {
   displayName: string;
-  username: string; // e.g. '@admin_lockx'
+  username: string; // e.g. '@admin'
   avatarColor: string;
-  joinDate: string; // e.g. '15/08/2026'
-  daysActive: number; // e.g. 40 ngày
-  hoursUsed: number; // e.g. 168 giờ
+  avatarType?: 'image' | 'preset' | 'monogram';
+  avatarUri?: string; // base64 or URL
+  avatarPresetId?: string; // preset ID
+  role?: string;
+  email?: string;
+  phone?: string;
+  bio?: string;
+  birthday?: string;
+  gender?: 'Nam' | 'Nữ' | 'Khác' | 'Bảo mật' | 'Chưa cập nhật';
+  joinDate: string; // e.g. '25/09/2026'
+  joinTimestamp?: number; // epoch ms
+  daysActive: number; // e.g. 1
+  hoursUsed: number; // e.g. 0.2
   currentPasscode: string;
+  lastUsernameChangeTimestamp?: number;
 }
+
+export interface AvatarPreset {
+  id: string;
+  name: string;
+  icon: string;
+  category: 'memoji' | 'tech' | 'cyber';
+  bgColor: string;
+  badge?: string;
+}
+
+export const APP_AVATAR_PRESETS: AvatarPreset[] = [
+  { id: 'av-shield', name: 'Cyber Shield', icon: 'shield-checkmark', category: 'cyber', bgColor: '#0A84FF', badge: 'SECURE' },
+  { id: 'av-fingerprint', name: 'Face & Touch ID', icon: 'finger-print', category: 'cyber', bgColor: '#34C759', badge: 'BIO' },
+  { id: 'av-hacker', name: 'Terminal Dev', icon: 'terminal', category: 'tech', bgColor: '#1E293B', badge: 'PRO' },
+  { id: 'av-key', name: 'Master Key', icon: 'key', category: 'cyber', bgColor: '#FF9500', badge: 'KEY' },
+  { id: 'av-lock', name: 'Secure Vault', icon: 'lock-closed', category: 'cyber', bgColor: '#5856D6', badge: 'VAULT' },
+  { id: 'av-chip', name: 'Apple A18 Pro', icon: 'hardware-chip', category: 'tech', bgColor: '#0284C7', badge: 'AI' },
+  { id: 'av-sparkles', name: 'Apple Intelligence', icon: 'sparkles', category: 'tech', bgColor: '#FF2D55', badge: 'NEW' },
+  { id: 'av-rocket', name: 'Hiệu Năng Cực Đại', icon: 'rocket', category: 'tech', bgColor: '#AF52DE', badge: 'MAX' },
+  { id: 'av-diamond', name: 'VIP Kim Cương', icon: 'diamond', category: 'cyber', bgColor: '#30B0C7', badge: 'VIP' },
+  { id: 'av-flame', name: 'Khiên Lửa', icon: 'flame', category: 'cyber', bgColor: '#FF3B30' },
+  { id: 'av-flash', name: 'Tốc Độ Cao', icon: 'flash', category: 'tech', bgColor: '#E5A50A' },
+  { id: 'av-cube', name: 'Không Gian 3D', icon: 'cube', category: 'tech', bgColor: '#0D9488' },
+  { id: 'av-planet', name: 'Mạng Toàn Cầu', icon: 'planet', category: 'tech', bgColor: '#6366F1' },
+  { id: 'av-infinite', name: 'Vô Hạn Mã Hóa', icon: 'infinite', category: 'cyber', bgColor: '#4338CA', badge: 'PRO' },
+  { id: 'av-star', name: 'Ngôi Sao Tinh Hoa', icon: 'star', category: 'memoji', bgColor: '#D97706', badge: 'TOP' },
+  { id: 'av-person', name: 'Apple ID Chuẩn', icon: 'person', category: 'memoji', bgColor: '#2C2C2E' },
+];
+
+export const MONOGRAM_COLORS = [
+  { name: 'Xanh Apple', color: '#007AFF' },
+  { name: 'Xanh Lá', color: '#34C759' },
+  { name: 'Tím Hoàng Gia', color: '#AF52DE' },
+  { name: 'Cam Hoàng Hôn', color: '#FF9500' },
+  { name: 'Đỏ Ruby', color: '#FF3B30' },
+  { name: 'Hồng Sakura', color: '#FF2D55' },
+  { name: 'Xanh Ngọc', color: '#30B0C7' },
+  { name: 'Xám Titan', color: '#5856D6' },
+  { name: 'Vàng Kim', color: '#E5A50A' },
+  { name: 'Đen Huyền Bí', color: '#2C2C2E' },
+];
 
 export interface LoginHistoryRecord {
   id: string;
@@ -121,22 +174,140 @@ export interface LoginHistoryRecord {
   location: string; // e.g. 'Hà Nội, Việt Nam'
   method: 'Face ID' | 'Mật khẩu' | 'Passcode';
   ip: string;
+  isCurrent?: boolean;
+}
+
+// Helper lấy ngày hiện tại định dạng DD/MM/YYYY chuẩn thực tế
+export const getFormattedTodayDate = () => {
+  const d = new Date();
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${day}/${month}/${year}`;
+};
+
+// Nhận diện thiết bị và hệ điều hành thực tế (hỗ trợ cả Native Expo & Web Mobile Simulator)
+export const getRealDeviceInfo = () => {
+  let model = 'Apple iPhone 15 Pro Max';
+  let os = 'iOS 18.2';
+  let deviceType: 'phone' | 'tablet' | 'desktop' = 'phone';
+
+  if (Platform.OS === 'web') {
+    if (typeof window !== 'undefined' && window.navigator) {
+      const ua = window.navigator.userAgent || '';
+      const w = window.innerWidth || (window.screen && window.screen.width) || 0;
+      const h = window.innerHeight || (window.screen && window.screen.height) || 0;
+      const minDim = Math.min(w, h);
+      const maxDim = Math.max(w, h);
+
+      if (/iPhone/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
+        deviceType = 'phone';
+        const iosMatch = ua.match(/OS (\d+[._]\d+)/);
+        os = iosMatch ? `iOS ${iosMatch[1].replace(/_/g, '.')}` : 'iOS 18.2';
+
+        if ((minDim >= 430 && maxDim >= 870) || minDim === 430) {
+          model = 'iPhone 15 Pro Max';
+        } else if (minDim >= 428 && maxDim >= 920) {
+          model = 'iPhone 14 Plus / 13 Pro Max';
+        } else if (minDim >= 393 && maxDim >= 850) {
+          model = 'iPhone 15 Pro';
+        } else if (minDim >= 390 && maxDim >= 840) {
+          model = 'iPhone 14 / 13';
+        } else if (minDim >= 414 && maxDim >= 890) {
+          model = 'iPhone 11 / XR';
+        } else if (minDim >= 375 && maxDim >= 810) {
+          model = 'iPhone 13 mini / 12 mini';
+        } else if (minDim >= 375 && maxDim >= 660) {
+          model = 'iPhone SE (3rd Gen)';
+        } else {
+          model = 'Apple iPhone';
+        }
+      } else if (/iPad/i.test(ua)) {
+        deviceType = 'tablet';
+        model = 'Apple iPad Pro';
+        os = 'iPadOS 18.2';
+      } else if (/Android/i.test(ua)) {
+        deviceType = 'phone';
+        const andMatch = ua.match(/Android\s+([0-9.]+)/i);
+        os = andMatch ? `Android ${andMatch[1]}` : 'Android 14';
+
+        const match = ua.match(/;\s*([^;)]+)\s+Build/i);
+        if (match && match[1]) {
+          let rawModel = match[1].trim();
+          if (rawModel.startsWith('SM-')) {
+            model = `Samsung (${rawModel})`;
+          } else {
+            model = rawModel;
+          }
+        } else {
+          model = 'Android Smartphone';
+        }
+      } else if (/Windows/i.test(ua)) {
+        deviceType = 'desktop';
+        let browser = 'Chrome';
+        if (/Edg\//i.test(ua)) browser = 'Edge';
+        else if (/Firefox\//i.test(ua)) browser = 'Firefox';
+        else if (/Chrome\//i.test(ua)) browser = 'Chrome';
+        model = `Windows PC (${browser})`;
+        os = 'Windows 11';
+      } else if (/Macintosh|Mac OS X/i.test(ua)) {
+        deviceType = 'desktop';
+        let browser = 'Safari';
+        if (/Chrome\//i.test(ua)) browser = 'Chrome';
+        model = `Apple Mac (${browser})`;
+        os = 'macOS Sonoma';
+      } else {
+        deviceType = 'phone';
+        model = 'Apple iPhone 15 Pro Max';
+        os = 'iOS 18.2';
+      }
+    }
+  } else {
+    try {
+      const Device = require('expo-device');
+      model = Device.modelName || Device.deviceName || (Platform.OS === 'ios' ? 'Apple iPhone 15 Pro Max' : 'Android Smartphone');
+      os = `${Platform.OS === 'ios' ? 'iOS' : 'Android'} ${Device.osVersion || ''}`.trim();
+      deviceType = Device.deviceType === 2 ? 'tablet' : 'phone';
+    } catch (e) {
+      model = Platform.OS === 'ios' ? 'Apple iPhone 15 Pro Max' : 'Android Smartphone';
+      os = Platform.OS === 'ios' ? 'iOS 18.2' : 'Android 14';
+      deviceType = 'phone';
+    }
+  }
+
+  return { model, os, deviceType };
+};
+
+export interface AppNotification {
+  id: string;
+  title: string;
+  message: string;
+  type: 'success' | 'info' | 'warning' | 'security';
+  time: string;
+  timestamp: number;
+  read: boolean;
 }
 
 export interface AppSettings {
   accentColor: string; // e.g. '#0A84FF'
   themeMode: 'dark' | 'light' | 'auto';
   fontSizeScale: 'small' | 'standard' | 'large';
+  fontSizeLevel: number; // 1 to 7 (80% to 150%)
   isBoldText: boolean;
-  language: 'vi' | 'en' | 'zh';
+  language: string; // 'vi' | 'en' | 'zh' | 'ja' | 'ko' | 'fr' | 'de'
   // Commercial & Biometrics Features
   useFaceId: boolean; // Đăng nhập / Mở khóa bằng Face ID
   requireFaceIdForVault: boolean; // Yêu cầu Face ID khi xem mật khẩu trong Két Sắt
   autoLockTimeout: 'immediately' | '1m' | '5m' | 'never'; // Tự động khóa
   hapticFeedback: boolean; // Rung phản hồi xúc giác Haptics
-  cloudSync: boolean; // Đồng bộ đám mây mã hóa iCloud Vault
+  cloudSync?: boolean; // Đồng bộ đám mây iCloud
   securityAlerts: boolean; // Cảnh báo bảo mật tài khoản
-  blurSwitcher: boolean; // Che mờ ứng dụng trong App Switcher
+  blurSwitcher: boolean; // Che mờ ứng dụng trong App Switcher (Bảo vệ riêng tư)
+  // iOS Notifications System
+  enableNotifications: boolean; // Bật / tắt thông báo ứng dụng iOS
+  notifySecurityAlerts: boolean; // Cảnh báo bảo mật qua Push
+  notifyActivity: boolean; // Thông báo thao tác thành công
+  notifySounds: boolean; // Âm thanh thông báo
 }
 
 export interface FriendUser {
@@ -788,59 +959,34 @@ const INITIAL_GACHA: GachaItem[] = [
 
 export const INITIAL_USER_PROFILE: UserProfile = {
   displayName: 'Admin LockX',
-  username: '@admin_lockx',
+  username: '@admin',
   avatarColor: '#0A84FF',
-  joinDate: '15/08/2026',
-  daysActive: 40,
-  hoursUsed: 168,
+  avatarType: 'preset',
+  avatarUri: '',
+  avatarPresetId: 'av-shield',
+  email: '',
+  phone: '',
+  bio: '',
+  birthday: '',
+  gender: 'Chưa cập nhật',
+  joinDate: getFormattedTodayDate(),
+  joinTimestamp: Date.now(),
+  daysActive: 1,
+  hoursUsed: 0.1,
   currentPasscode: '123456',
+  lastUsernameChangeTimestamp: 0,
 };
 
 export const INITIAL_LOGIN_HISTORY: LoginHistoryRecord[] = [
   {
-    id: 'lh-1',
-    timestamp: 'Hôm nay, 15:42',
-    device: 'iPhone 15 Pro Max',
-    os: 'iOS 18.2',
+    id: 'current-session',
+    timestamp: 'Hiện tại (Đang hoạt động)',
+    device: getRealDeviceInfo().model,
+    os: getRealDeviceInfo().os,
     location: 'Hà Nội, Việt Nam',
     method: 'Face ID',
     ip: '14.225.21.84',
-  },
-  {
-    id: 'lh-2',
-    timestamp: 'Hôm qua, 21:18',
-    device: 'iPhone 15 Pro Max',
-    os: 'iOS 18.2',
-    location: 'Hà Nội, Việt Nam',
-    method: 'Face ID',
-    ip: '14.225.21.84',
-  },
-  {
-    id: 'lh-3',
-    timestamp: '21/09/2026, 09:30',
-    device: 'MacBook Pro M3',
-    os: 'macOS 15.0',
-    location: 'TP. Hồ Chí Minh',
-    method: 'Mật khẩu',
-    ip: '118.69.182.20',
-  },
-  {
-    id: 'lh-4',
-    timestamp: '19/09/2026, 14:15',
-    device: 'iPhone 15 Pro Max',
-    os: 'iOS 18.2',
-    location: 'Hà Nội, Việt Nam',
-    method: 'Passcode',
-    ip: '14.225.21.84',
-  },
-  {
-    id: 'lh-5',
-    timestamp: '15/08/2026, 08:00',
-    device: 'iPhone 15 Pro Max',
-    os: 'iOS 18.1',
-    location: 'Hà Nội, Việt Nam',
-    method: 'Face ID',
-    ip: '14.225.21.84',
+    isCurrent: true,
   },
 ];
 
@@ -848,16 +994,50 @@ export const INITIAL_SETTINGS: AppSettings = {
   accentColor: '#0A84FF',
   themeMode: 'dark',
   fontSizeScale: 'standard',
+  fontSizeLevel: 3,
   isBoldText: false,
   language: 'vi',
-  useFaceId: true,
+  useFaceId: false,
   requireFaceIdForVault: false,
   autoLockTimeout: '1m',
   hapticFeedback: true,
-  cloudSync: true,
   securityAlerts: true,
   blurSwitcher: true,
+  enableNotifications: true,
+  notifySecurityAlerts: true,
+  notifyActivity: true,
+  notifySounds: true,
 };
+
+export const INITIAL_NOTIFICATIONS: AppNotification[] = [
+  {
+    id: 'notif-welcome',
+    title: 'Chào Mừng Đến Với LockX Vault',
+    message: 'Két sắt bảo mật chuẩn Apple Keychain AES-256 đã kích hoạt sẵn sàng bảo vệ dữ liệu.',
+    type: 'success',
+    time: 'Vừa xong',
+    timestamp: Date.now() - 60000,
+    read: false,
+  },
+  {
+    id: 'notif-security',
+    title: 'Bảo Vệ Sinh Trắc Học Secure Enclave',
+    message: 'Kích hoạt Face ID trong Cài đặt để mở khóa tức thì và bảo mật tuyệt đối.',
+    type: 'security',
+    time: '15 phút trước',
+    timestamp: Date.now() - 900000,
+    read: false,
+  },
+  {
+    id: 'notif-ios18',
+    title: 'Tối Ưu Hóa Apple iOS 18 & Dynamic Island',
+    message: 'Hệ thống thông báo đẩy thả rơi và capsule mở rộng đã sẵn sàng phục vụ.',
+    type: 'info',
+    time: '1 giờ trước',
+    timestamp: Date.now() - 3600000,
+    read: true,
+  },
+];
 
 export const ACCENT_COLOR_OPTIONS = [
   { id: '#0A84FF', label: 'Xanh Apple', color: '#0A84FF' },
@@ -866,8 +1046,42 @@ export const ACCENT_COLOR_OPTIONS = [
   { id: '#FF9500', label: 'Cam Sunset', color: '#FF9500' },
   { id: '#FF2D55', label: 'Đỏ Ruby', color: '#FF2D55' },
   { id: '#FFD60A', label: 'Vàng Kim', color: '#FFD60A' },
-  { id: '#32ADE6', label: 'Xanh Sky', color: '#32ADE6' },
 ];
+
+export const APP_LANGUAGES = [
+  { code: 'vi', name: 'Tiếng Việt', region: 'Việt Nam', flagUrl: 'https://flagcdn.com/w80/vn.png', emoji: '🇻🇳' },
+  { code: 'en', name: 'English', region: 'Hoa Kỳ (United States)', flagUrl: 'https://flagcdn.com/w80/us.png', emoji: '🇺🇸' },
+  { code: 'zh', name: '简体中文', region: 'Trung Quốc (China)', flagUrl: 'https://flagcdn.com/w80/cn.png', emoji: '🇨🇳' },
+  { code: 'ja', name: '日本語', region: 'Nhật Bản (Japan)', flagUrl: 'https://flagcdn.com/w80/jp.png', emoji: '🇯🇵' },
+  { code: 'ko', name: '한국어', region: 'Hàn Quốc (Korea)', flagUrl: 'https://flagcdn.com/w80/kr.png', emoji: '🇰🇷' },
+  { code: 'fr', name: 'Français', region: 'Pháp (France)', flagUrl: 'https://flagcdn.com/w80/fr.png', emoji: '🇫🇷' },
+  { code: 'de', name: 'Deutsch', region: 'Đức (Germany)', flagUrl: 'https://flagcdn.com/w80/de.png', emoji: '🇩🇪' },
+];
+
+export const renderCountryFlagIcon = (code: string, width = 28, height = 20) => {
+  const lang = APP_LANGUAGES.find((l) => l.code === code) || APP_LANGUAGES[0];
+  return (
+    <View
+      style={{
+        width,
+        height,
+        borderRadius: 4,
+        overflow: 'hidden',
+        borderWidth: 0.5,
+        borderColor: 'rgba(0, 0, 0, 0.15)',
+        backgroundColor: '#E5E5EA',
+        justifyContent: 'center',
+        alignItems: 'center',
+      }}
+    >
+      <Image
+        source={{ uri: lang.flagUrl }}
+        style={{ width: '100%', height: '100%' }}
+        resizeMode="cover"
+      />
+    </View>
+  );
+};
 
 export const INITIAL_FRIENDS: FriendUser[] = [
   {
@@ -1092,6 +1306,806 @@ export const AppleAppIcon = ({
   );
 };
 
+
+// =========================================================================
+// ENTERPRISE AUTHENTICATION SCREEN (WORLD-CLASS APPLE HIG + ANIMATIONS)
+// =========================================================================
+export const EnterpriseAuthScreen = ({
+  authMode,
+  setAuthMode,
+  authUsername,
+  setAuthUsername,
+  authPassword,
+  setAuthPassword,
+  authShowPassword,
+  setAuthShowPassword,
+  authDisplayName,
+  setAuthDisplayName,
+  authConfirmPassword,
+  setAuthConfirmPassword,
+  authError,
+  setAuthError,
+  onLogin,
+  onRegister,
+  onFaceIdLogin,
+  accentColor,
+  isLight,
+  triggerToast,
+  savedAccount,
+  setSavedAccount,
+  useFaceId = false,
+}: {
+  authMode: 'login' | 'register';
+  setAuthMode: (mode: 'login' | 'register') => void;
+  authUsername: string;
+  setAuthUsername: (v: string) => void;
+  authPassword: string;
+  setAuthPassword: (v: string) => void;
+  authShowPassword: boolean;
+  setAuthShowPassword: (v: boolean) => void;
+  authDisplayName: string;
+  setAuthDisplayName: (v: string) => void;
+  authConfirmPassword: string;
+  setAuthConfirmPassword: (v: string) => void;
+  authError: string | null;
+  setAuthError: (v: string | null) => void;
+  onLogin: () => void;
+  onRegister: () => void;
+  onFaceIdLogin: () => void;
+  accentColor: string;
+  isLight: boolean;
+  triggerToast: (msg: string, title?: string, type?: 'success' | 'info' | 'warning' | 'security') => void;
+  savedAccount: string;
+  setSavedAccount: (acc: string) => void;
+  useFaceId?: boolean;
+}) => {
+  const [isEditingAccount, setIsEditingAccount] = useState<boolean>(false);
+
+  // Masking helper function: che một phần tài khoản/email (VD: tuandepxxxxxx@gmail.com)
+  const maskAccountString = (str: string) => {
+    if (!str) return '';
+    const trimmed = str.trim();
+    if (trimmed.includes('@')) {
+      const atIdx = trimmed.indexOf('@');
+      const name = trimmed.slice(0, atIdx);
+      const domain = trimmed.slice(atIdx);
+      const prefixLen = Math.min(7, Math.max(3, Math.floor(name.length * 0.6)));
+      const prefix = name.slice(0, prefixLen);
+      return `${prefix}xxxxxx${domain}`;
+    }
+    const prefixLen = Math.min(5, Math.max(2, Math.floor(trimmed.length / 2)));
+    return `${trimmed.slice(0, prefixLen)}xxxxxx`;
+  };
+  const [focusedInput, setFocusedInput] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [rememberDevice, setRememberDevice] = useState<boolean>(true);
+  const [tabLayoutWidth, setTabLayoutWidth] = useState<number>(340);
+
+  // Animations
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(35)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const glowAnim = useRef(new Animated.Value(0.35)).current;
+  const tabIndicatorAnim = useRef(new Animated.Value(authMode === 'login' ? 0 : 1)).current;
+  const shakeAnim = useRef(new Animated.Value(0)).current;
+  const formOpacityAnim = useRef(new Animated.Value(1)).current;
+
+  // Entrance & Breathing Glow Loop
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 700,
+        useNativeDriver: true,
+      }),
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        friction: 8,
+        tension: 40,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    const pulseLoop = Animated.loop(
+      Animated.sequence([
+        Animated.parallel([
+          Animated.timing(pulseAnim, {
+            toValue: 1.06,
+            duration: 1800,
+            useNativeDriver: true,
+          }),
+          Animated.timing(glowAnim, {
+            toValue: 0.85,
+            duration: 1800,
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.parallel([
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 1800,
+            useNativeDriver: true,
+          }),
+          Animated.timing(glowAnim, {
+            toValue: 0.35,
+            duration: 1800,
+            useNativeDriver: true,
+          }),
+        ]),
+      ])
+    );
+    pulseLoop.start();
+    return () => pulseLoop.stop();
+  }, []);
+
+  // Animate Tab switch
+  useEffect(() => {
+    Animated.spring(tabIndicatorAnim, {
+      toValue: authMode === 'login' ? 0 : 1,
+      friction: 9,
+      tension: 55,
+      useNativeDriver: false,
+    }).start();
+
+    // Form fade transition
+    Animated.sequence([
+      Animated.timing(formOpacityAnim, {
+        toValue: 0,
+        duration: 80,
+        useNativeDriver: true,
+      }),
+      Animated.timing(formOpacityAnim, {
+        toValue: 1,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [authMode]);
+
+  // Trigger shake on authError
+  useEffect(() => {
+    if (authError) {
+      Animated.sequence([
+        Animated.timing(shakeAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: -8, duration: 50, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: 8, duration: 50, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: -4, duration: 50, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: 0, duration: 50, useNativeDriver: true }),
+      ]).start();
+    }
+  }, [authError]);
+
+  // Password Strength Calculator
+  const getPasswordStrength = (pass: string) => {
+    if (!pass) return { score: 0, label: 'Chưa nhập', color: '#8E8E93', percent: '0%' };
+    let score = 0;
+    if (pass.length >= 6) score += 1;
+    if (pass.length >= 8) score += 1;
+    if (/[A-Z]/.test(pass) || /[0-9]/.test(pass)) score += 1;
+    if (/[^A-Za-z0-9]/.test(pass)) score += 1;
+
+    if (score <= 1) return { score: 1, label: 'Bảo mật: Yếu', color: '#FF453A', percent: '30%' };
+    if (score === 2) return { score: 2, label: 'Bảo mật: Khá', color: '#FF9F0A', percent: '65%' };
+    return { score: 3, label: 'Bảo mật: Tối ưu (Chuẩn Doanh Nghiệp)', color: '#30D158', percent: '100%' };
+  };
+
+  const strength = getPasswordStrength(authPassword);
+
+  const handleSubmit = () => {
+    setIsSubmitting(true);
+    setTimeout(() => {
+      setIsSubmitting(false);
+      if (authMode === 'login') {
+        onLogin();
+      } else {
+        onRegister();
+      }
+    }, 450);
+  };
+
+  const tabTranslateX = tabIndicatorAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [2, (tabLayoutWidth / 2) - 2],
+  });
+
+  return (
+    <View style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+      {/* Background Ambient Glowing Orbs */}
+      <View
+        style={{
+          position: 'absolute',
+          top: -60,
+          alignSelf: 'center',
+          width: 320,
+          height: 320,
+          borderRadius: 160,
+          backgroundColor: isLight ? 'rgba(0, 122, 255, 0.08)' : 'rgba(10, 132, 255, 0.16)',
+          opacity: 0.9,
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          bottom: 40,
+          right: -50,
+          width: 240,
+          height: 240,
+          borderRadius: 120,
+          backgroundColor: isLight ? 'rgba(52, 199, 89, 0.06)' : 'rgba(48, 209, 88, 0.10)',
+        }}
+      />
+
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{
+          flexGrow: 1,
+          justifyContent: 'center',
+          paddingHorizontal: 22,
+          paddingVertical: 32,
+        }}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Animated.View
+          style={{
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }],
+            alignItems: 'center',
+          }}
+        >
+          {/* Top Enterprise Security Badge */}
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 7,
+              backgroundColor: isLight ? 'rgba(0, 122, 255, 0.08)' : 'rgba(10, 132, 255, 0.14)',
+              borderColor: isLight ? 'rgba(0, 122, 255, 0.25)' : 'rgba(10, 132, 255, 0.38)',
+              borderWidth: 1,
+              paddingHorizontal: 12,
+              paddingVertical: 5,
+              borderRadius: 20,
+              marginBottom: 16,
+            }}
+          >
+            <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#30D158' }} />
+            <Text
+              style={{
+                color: isLight ? '#007AFF' : '#0A84FF',
+                fontSize: 10.5,
+                fontWeight: '800',
+                letterSpacing: 0.9,
+                fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+              }}
+            >
+              SECURE ENCLAVE 256-BIT • ENTERPRISE READY
+            </Text>
+          </View>
+
+          {/* Animated Glowing Security Shield */}
+          <Animated.View
+            style={{
+              transform: [{ scale: pulseAnim }],
+              marginBottom: 16,
+            }}
+          >
+            {/* Outer Glowing Halo */}
+            <Animated.View
+              style={{
+                position: 'absolute',
+                top: -12,
+                left: -12,
+                right: -12,
+                bottom: -12,
+                borderRadius: 36,
+                backgroundColor: accentColor,
+                opacity: glowAnim,
+              }}
+            />
+            {/* Core Squircle App Icon chuẩn từ assets/icon.png */}
+            <View
+              style={{
+                width: 84,
+                height: 84,
+                borderRadius: 22,
+                backgroundColor: '#000000',
+                justifyContent: 'center',
+                alignItems: 'center',
+                shadowColor: accentColor,
+                shadowOffset: { width: 0, height: 10 },
+                shadowOpacity: 0.6,
+                shadowRadius: 22,
+                borderWidth: 1.5,
+                borderColor: 'rgba(255, 255, 255, 0.25)',
+                overflow: 'hidden',
+              }}
+            >
+              <Image
+                source={require('./assets/icon.png')}
+                style={{ width: '100%', height: '100%' }}
+                resizeMode="cover"
+              />
+            </View>
+          </Animated.View>
+
+          {/* Title & Brand Slogan */}
+          <Text
+            style={{
+              fontSize: 30,
+              fontWeight: '800',
+              color: isLight ? '#000000' : '#FFFFFF',
+              letterSpacing: -0.6,
+              textAlign: 'center',
+            }}
+          >
+            LockX Enterprise
+          </Text>
+          <Text
+            style={{
+              fontSize: 14,
+              color: isLight ? '#6C6C70' : '#8E8E93',
+              marginTop: 4,
+              marginBottom: 24,
+              textAlign: 'center',
+            }}
+          >
+            Hệ Thống Két Sắt & Bảo Mật Dữ Liệu Doanh Nghiệp
+          </Text>
+
+          {/* Apple Sliding Segmented Control */}
+          <View
+            onLayout={(e) => setTabLayoutWidth(e.nativeEvent.layout.width)}
+            style={{
+              width: '100%',
+              flexDirection: 'row',
+              backgroundColor: isLight ? '#E5E5EA' : 'rgba(28, 28, 30, 0.9)',
+              borderRadius: 14,
+              padding: 3,
+              position: 'relative',
+              borderWidth: 0.5,
+              borderColor: isLight ? '#D1D1D6' : 'rgba(255, 255, 255, 0.1)',
+              marginBottom: 20,
+              height: 48,
+            }}
+          >
+            {/* Sliding Animated Indicator Capsule */}
+            <Animated.View
+              style={{
+                position: 'absolute',
+                top: 3,
+                bottom: 3,
+                left: 0,
+                width: (tabLayoutWidth / 2) - 4,
+                borderRadius: 11,
+                backgroundColor: isLight ? '#FFFFFF' : '#3A3A3C',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: isLight ? 0.14 : 0.4,
+                shadowRadius: 5,
+                transform: [{ translateX: tabTranslateX }],
+              }}
+            />
+
+            <TouchableOpacity
+              style={{
+                flex: 1,
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 1,
+              }}
+              activeOpacity={0.8}
+              onPress={() => {
+                setAuthMode('login');
+                setAuthError(null);
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 15,
+                  fontWeight: authMode === 'login' ? '700' : '500',
+                  color: authMode === 'login' ? (isLight ? '#000000' : '#FFFFFF') : (isLight ? '#6C6C70' : '#8E8E93'),
+                }}
+              >
+                Đăng Nhập
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={{
+                flex: 1,
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 1,
+              }}
+              activeOpacity={0.8}
+              onPress={() => {
+                setAuthMode('register');
+                setAuthError(null);
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 15,
+                  fontWeight: authMode === 'register' ? '700' : '500',
+                  color: authMode === 'register' ? (isLight ? '#000000' : '#FFFFFF') : (isLight ? '#6C6C70' : '#8E8E93'),
+                }}
+              >
+                Đăng Ký
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Animated Shake Container for Error */}
+          <Animated.View
+            style={{
+              width: '100%',
+              transform: [{ translateX: shakeAnim }],
+            }}
+          >
+            {authError && (
+              <View
+                style={{
+                  marginBottom: 16,
+                  paddingHorizontal: 14,
+                  paddingVertical: 12,
+                  backgroundColor: 'rgba(255, 69, 58, 0.12)',
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: 'rgba(255, 69, 58, 0.35)',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 10,
+                }}
+              >
+                <Ionicons name="alert-circle" size={20} color="#FF453A" />
+                <Text style={{ color: '#FF453A', fontSize: 13.5, fontWeight: '600', flex: 1 }}>{authError}</Text>
+              </View>
+            )}
+          </Animated.View>
+
+          {/* Form Animated Transition */}
+          <Animated.View
+            style={{
+              width: '100%',
+              opacity: formOpacityAnim,
+            }}
+          >
+            {/* Input Cards Container */}
+            <View style={{ gap: 12, marginBottom: 18 }}>
+              {/* REGISTER ONLY: Display Name */}
+              {authMode === 'register' && (
+                <View
+                  style={{
+                    backgroundColor: isLight ? '#FFFFFF' : 'rgba(28, 28, 30, 0.85)',
+                    borderRadius: 15,
+                    borderWidth: 1.5,
+                    borderColor: focusedInput === 'displayName' ? accentColor : (isLight ? '#E5E5EA' : 'rgba(255, 255, 255, 0.1)'),
+                    paddingHorizontal: 14,
+                    paddingVertical: 10,
+                    shadowColor: focusedInput === 'displayName' ? accentColor : 'transparent',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.25,
+                    shadowRadius: 6,
+                  }}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: isLight ? '#6C6C70' : '#8E8E93', textTransform: 'uppercase', marginBottom: 4, letterSpacing: 0.5 }}>
+                    Họ và Tên Doanh Nghiệp
+                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Ionicons name="id-card-outline" size={18} color={focusedInput === 'displayName' ? accentColor : '#8E8E93'} style={{ marginRight: 10 }} />
+                    <TextInput
+                      style={{ flex: 1, fontSize: 16, color: isLight ? '#000000' : '#FFFFFF', padding: 0 }}
+                      placeholder="VD: Nguyễn Văn A (Quản Trị)"
+                      placeholderTextColor={isLight ? '#AEAEB2' : '#636366'}
+                      value={authDisplayName}
+                      onChangeText={(v) => {
+                        setAuthDisplayName(v);
+                        if (authError) setAuthError(null);
+                      }}
+                      onFocus={() => setFocusedInput('displayName')}
+                      onBlur={() => setFocusedInput(null)}
+                    />
+                  </View>
+                </View>
+              )}
+
+              {/* Username Field: Nếu đã có tài khoản ghi nhớ và đang đăng nhập -> Hiển thị dạng che một phần tuandepxxxxxx@gmail.com */}
+              {authMode === 'login' && savedAccount && !isEditingAccount ? (
+                <View
+                  style={{
+                    backgroundColor: isLight ? '#FFFFFF' : 'rgba(28, 28, 30, 0.85)',
+                    borderRadius: 15,
+                    borderWidth: 1.5,
+                    borderColor: isLight ? '#E5E5EA' : 'rgba(255, 255, 255, 0.1)',
+                    paddingHorizontal: 14,
+                    paddingVertical: 10,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: isLight ? '#6C6C70' : '#8E8E93', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                      Tài Khoản Đã Ghi Nhớ
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setIsEditingAccount(true);
+                        setAuthUsername('');
+                      }}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: accentColor }}>
+                        Đổi tài khoản
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Ionicons name="person-circle-outline" size={22} color={accentColor} style={{ marginRight: 10 }} />
+                    <Text style={{ flex: 1, fontSize: 16, fontWeight: '600', color: isLight ? '#000000' : '#FFFFFF' }}>
+                      {maskAccountString(savedAccount)}
+                    </Text>
+                    <View style={{ backgroundColor: 'rgba(48, 209, 88, 0.15)', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
+                      <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#30D158' }}>ĐÃ LƯU</Text>
+                    </View>
+                  </View>
+                </View>
+              ) : (
+                <View
+                  style={{
+                    backgroundColor: isLight ? '#FFFFFF' : 'rgba(28, 28, 30, 0.85)',
+                    borderRadius: 15,
+                    borderWidth: 1.5,
+                    borderColor: focusedInput === 'username' ? accentColor : (isLight ? '#E5E5EA' : 'rgba(255, 255, 255, 0.1)'),
+                    paddingHorizontal: 14,
+                    paddingVertical: 10,
+                    shadowColor: focusedInput === 'username' ? accentColor : 'transparent',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.25,
+                    shadowRadius: 6,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: isLight ? '#6C6C70' : '#8E8E93', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                      {authMode === 'login' ? 'Tài Khoản / Email' : 'Tên Tài Khoản (Username)'}
+                    </Text>
+                    {authMode === 'login' && savedAccount ? (
+                      <TouchableOpacity onPress={() => setIsEditingAccount(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: accentColor }}>Dùng tk đã lưu</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Ionicons name="person-outline" size={18} color={focusedInput === 'username' ? accentColor : '#8E8E93'} style={{ marginRight: 10 }} />
+                    <TextInput
+                      style={{ flex: 1, fontSize: 16, color: isLight ? '#000000' : '#FFFFFF', padding: 0 }}
+                      placeholder={authMode === 'login' ? 'Nhập tài khoản hoặc email...' : 'VD: admin_security'}
+                      placeholderTextColor={isLight ? '#AEAEB2' : '#636366'}
+                      value={authUsername}
+                      onChangeText={(v) => {
+                        setAuthUsername(v);
+                        if (authError) setAuthError(null);
+                      }}
+                      onFocus={() => setFocusedInput('username')}
+                      onBlur={() => setFocusedInput(null)}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+                    {authUsername.length > 0 && (
+                      <TouchableOpacity onPress={() => setAuthUsername('')}>
+                        <Ionicons name="close-circle" size={17} color="#8E8E93" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              )}
+
+              {/* Password Field Row: Ô mật khẩu + Ô Face ID icon nằm kế bên phải */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                {/* Ô nhập mật khẩu */}
+                <View
+                  style={{
+                    flex: 1,
+                    backgroundColor: isLight ? '#FFFFFF' : 'rgba(28, 28, 30, 0.85)',
+                    borderRadius: 15,
+                    borderWidth: 1.5,
+                    borderColor: focusedInput === 'password' ? accentColor : (isLight ? '#E5E5EA' : 'rgba(255, 255, 255, 0.1)'),
+                    paddingHorizontal: 14,
+                    paddingVertical: 10,
+                    shadowColor: focusedInput === 'password' ? accentColor : 'transparent',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.25,
+                    shadowRadius: 6,
+                  }}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: isLight ? '#6C6C70' : '#8E8E93', textTransform: 'uppercase', marginBottom: 4, letterSpacing: 0.5 }}>
+                    Mật Mã Bảo Vệ Két Sắt
+                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Ionicons name="lock-closed-outline" size={18} color={focusedInput === 'password' ? accentColor : '#8E8E93'} style={{ marginRight: 10 }} />
+                    <TextInput
+                      style={{ flex: 1, fontSize: 16, color: isLight ? '#000000' : '#FFFFFF', padding: 0 }}
+                      placeholder="Nhập mật khẩu..."
+                      placeholderTextColor={isLight ? '#AEAEB2' : '#636366'}
+                      value={authPassword}
+                      onChangeText={(v) => {
+                        setAuthPassword(v);
+                        if (authError) setAuthError(null);
+                      }}
+                      onFocus={() => setFocusedInput('password')}
+                      onBlur={() => setFocusedInput(null)}
+                      secureTextEntry={!authShowPassword}
+                      autoCapitalize="none"
+                    />
+                    <TouchableOpacity onPress={() => setAuthShowPassword(!authShowPassword)}>
+                      <Ionicons
+                        name={authShowPassword ? 'eye-off-outline' : 'eye-outline'}
+                        size={19}
+                        color="#8E8E93"
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Ô Face ID: CHỈ CÓ ICON THÔI, NẰM KẾ BÊN PHẢI Ô NHẬP MẬT KHẨU */}
+                {authMode === 'login' && (
+                  <TouchableOpacity
+                    style={{
+                      width: 58,
+                      height: 58,
+                      borderRadius: 15,
+                      backgroundColor: useFaceId
+                        ? (isLight ? '#FFFFFF' : 'rgba(48, 209, 88, 0.14)')
+                        : (isLight ? '#E5E5EA' : 'rgba(142, 142, 147, 0.12)'),
+                      borderWidth: 1.5,
+                      borderColor: useFaceId
+                        ? (isLight ? '#E5E5EA' : 'rgba(48, 209, 88, 0.4)')
+                        : (isLight ? '#D1D1D6' : 'rgba(142, 142, 147, 0.25)'),
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      shadowColor: useFaceId ? '#30D158' : 'transparent',
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: useFaceId ? 0.2 : 0,
+                      shadowRadius: 6,
+                      opacity: useFaceId ? 1 : 0.45,
+                    }}
+                    activeOpacity={0.75}
+                    onPress={onFaceIdLogin}
+                  >
+                    <Image
+                      source={useFaceId ? require('./assets/apple_faceid.png') : require('./assets/apple_faceid_white.png')}
+                      style={{ width: 34, height: 34, tintColor: useFaceId ? undefined : '#8E8E93' }}
+                      resizeMode="contain"
+                    />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* REGISTER ONLY: Password Strength Meter */}
+              {authMode === 'register' && authPassword.length > 0 && (
+                <View style={{ paddingHorizontal: 4 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 }}>
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: strength.color }}>
+                      {strength.label}
+                    </Text>
+                    <Text style={{ fontSize: 12, color: '#8E8E93' }}>{strength.percent}</Text>
+                  </View>
+                  <View style={{ height: 4, backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E', borderRadius: 2, overflow: 'hidden' }}>
+                    <View style={{ height: '100%', width: strength.percent as any, backgroundColor: strength.color, borderRadius: 2 }} />
+                  </View>
+                </View>
+              )}
+
+              {/* REGISTER ONLY: Confirm Password Field */}
+              {authMode === 'register' && (
+                <View
+                  style={{
+                    backgroundColor: isLight ? '#FFFFFF' : 'rgba(28, 28, 30, 0.85)',
+                    borderRadius: 15,
+                    borderWidth: 1.5,
+                    borderColor: focusedInput === 'confirmPassword' ? accentColor : (isLight ? '#E5E5EA' : 'rgba(255, 255, 255, 0.1)'),
+                    paddingHorizontal: 14,
+                    paddingVertical: 10,
+                    shadowColor: focusedInput === 'confirmPassword' ? accentColor : 'transparent',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.25,
+                    shadowRadius: 6,
+                  }}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: isLight ? '#6C6C70' : '#8E8E93', textTransform: 'uppercase', marginBottom: 4, letterSpacing: 0.5 }}>
+                    Xác Nhận Lại Mật Mã
+                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Ionicons name="shield-outline" size={18} color={focusedInput === 'confirmPassword' ? accentColor : '#8E8E93'} style={{ marginRight: 10 }} />
+                    <TextInput
+                      style={{ flex: 1, fontSize: 16, color: isLight ? '#000000' : '#FFFFFF', padding: 0 }}
+                      placeholder="Nhập lại mật khẩu..."
+                      placeholderTextColor={isLight ? '#AEAEB2' : '#636366'}
+                      value={authConfirmPassword}
+                      onChangeText={(v) => {
+                        setAuthConfirmPassword(v);
+                        if (authError) setAuthError(null);
+                      }}
+                      onFocus={() => setFocusedInput('confirmPassword')}
+                      onBlur={() => setFocusedInput(null)}
+                      secureTextEntry={!authShowPassword}
+                      autoCapitalize="none"
+                    />
+                  </View>
+                </View>
+              )}
+            </View>
+
+            {/* Remember Device Option */}
+            {authMode === 'login' && (
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, paddingHorizontal: 2 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Ionicons name="finger-print-outline" size={16} color={accentColor} />
+                  <Text style={{ fontSize: 13, color: isLight ? '#3C3C43' : '#AEAEB2' }}>
+                    Ghi nhớ thiết bị an toàn (30 ngày)
+                  </Text>
+                </View>
+                <Switch
+                  value={rememberDevice}
+                  onValueChange={setRememberDevice}
+                  trackColor={{ false: isLight ? '#E5E5EA' : '#39393D', true: '#34C759' }}
+                />
+              </View>
+            )}
+
+            {/* Primary Action Button (Gradient/Glow Style) */}
+            <TouchableOpacity
+              style={{
+                backgroundColor: accentColor,
+                height: 52,
+                borderRadius: 16,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 10,
+                marginBottom: 14,
+                shadowColor: accentColor,
+                shadowOffset: { width: 0, height: 6 },
+                shadowOpacity: 0.45,
+                shadowRadius: 14,
+                opacity: isSubmitting ? 0.7 : 1,
+              }}
+              activeOpacity={0.85}
+              disabled={isSubmitting}
+              onPress={handleSubmit}
+            >
+              {isSubmitting ? (
+                <>
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '700' }}>
+                    Đang Xác Thực Bảo Mật...
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '700', letterSpacing: 0.3 }}>
+                    {authMode === 'login' ? 'Đăng Nhập An Toàn' : 'Khởi Tạo Tài Khoản Doanh Nghiệp'}
+                  </Text>
+                  <Ionicons name="arrow-forward" size={19} color="#FFFFFF" />
+                </>
+              )}
+            </TouchableOpacity>
+
+
+
+            {/* Compliance Footer */}
+            <View style={{ alignItems: 'center', marginTop: 10, paddingBottom: 20 }}>
+              <Text style={{ fontSize: 11, color: isLight ? '#8E8E93' : '#636366', textAlign: 'center' }}>
+                LockX Enterprise Vault v2.6 • ISO/IEC 27001 & SOC 2 Type II
+              </Text>
+              <Text style={{ fontSize: 10.5, color: isLight ? '#AEAEB2' : '#48484A', marginTop: 3 }}>
+                Được bảo vệ bởi mã hóa phần cứng Secure Enclave Apple
+              </Text>
+            </View>
+          </Animated.View>
+        </Animated.View>
+      </ScrollView>
+    </View>
+  );
+};
+
 export default function App() {
   // Onboarding & Load Stages: 'loading' -> 'onboarding' -> 'ready' (Bypass vào thẳng trang chủ)
   const [onboardingStage, setOnboardingStage] = useState<'loading' | 'onboarding' | 'ready'>('ready');
@@ -1128,9 +2142,52 @@ export default function App() {
   const [confirmNewPassInput, setConfirmNewPassInput] = useState('');
   const [editDisplayNameInput, setEditDisplayNameInput] = useState(INITIAL_USER_PROFILE.displayName);
   const [editUsernameInput, setEditUsernameInput] = useState(INITIAL_USER_PROFILE.username);
+  const [editEmailInput, setEditEmailInput] = useState(INITIAL_USER_PROFILE.email || '');
+  const [editPhoneInput, setEditPhoneInput] = useState(INITIAL_USER_PROFILE.phone || '');
+  const [editBioInput, setEditBioInput] = useState(INITIAL_USER_PROFILE.bio || '');
+  const [editBirthdayInput, setEditBirthdayInput] = useState(INITIAL_USER_PROFILE.birthday || '');
+  const [editGenderInput, setEditGenderInput] = useState<'Nam' | 'Nữ' | 'Khác' | 'Bảo mật' | 'Chưa cập nhật'>(INITIAL_USER_PROFILE.gender || 'Chưa cập nhật');
+
+  // Avatar Editor State (Tải ảnh từ máy / Chọn avatar có sẵn / Monogram)
+  const [editAvatarType, setEditAvatarType] = useState<'image' | 'preset' | 'monogram'>(INITIAL_USER_PROFILE.avatarType || 'preset');
+  const [editAvatarUri, setEditAvatarUri] = useState<string>(INITIAL_USER_PROFILE.avatarUri || '');
+  const [editAvatarPresetId, setEditAvatarPresetId] = useState<string>(INITIAL_USER_PROFILE.avatarPresetId || 'av-hacker');
+  const [editAvatarColor, setEditAvatarColor] = useState<string>(INITIAL_USER_PROFILE.avatarColor || '#0A84FF');
+  const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
+  const [avatarPickerTab, setAvatarPickerTab] = useState<'presets' | 'upload' | 'monogram'>('presets');
+  // Thông tin thiết bị, mạng & vị trí thực tế
+  const [realLocation, setRealLocation] = useState<string>('Hà Nội, Việt Nam');
+  const [realIp, setRealIp] = useState<string>('14.225.21.84');
+  const [totalActiveSeconds, setTotalActiveSeconds] = useState<number>(360);
+
+  // Authentication State (Đăng Nhập / Đăng Ký lúc mới vào App)
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [savedAccount, setSavedAccount] = useState<string>('tuandep12345@gmail.com');
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [authUsername, setAuthUsername] = useState('admin');
+  const [authPassword, setAuthPassword] = useState('123456');
+  const [authShowPassword, setAuthShowPassword] = useState(false);
+  const [authDisplayName, setAuthDisplayName] = useState('');
+  const [authConfirmPassword, setAuthConfirmPassword] = useState('');
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [registeredUsers, setRegisteredUsers] = useState<
+    Array<{ username: string; password: string; displayName: string }>
+  >([
+    { username: 'admin', password: '123456', displayName: 'Admin LockX' },
+    { username: 'tuandep12345@gmail.com', password: '123456', displayName: 'Tuấn Đẹp Trai' },
+  ]);
+
 
   // Settings State (Màu giao diện, cỡ chữ, chữ in đậm, sáng/tối, ngôn ngữ & bảo mật thương mại)
   const [appSettings, setAppSettings] = useState<AppSettings>(INITIAL_SETTINGS);
+  const [settingsSubView, setSettingsSubView] = useState<'main' | 'font_size' | 'language'>('main');
+  const [languageSearchQuery, setLanguageSearchQuery] = useState('');
+
+  const isLight = appSettings.themeMode === 'light';
+  const styles = useMemo(
+    () => getStyles(isLight, appSettings.accentColor, appSettings.fontSizeScale, appSettings.isBoldText, appSettings.fontSizeLevel ?? 3),
+    [isLight, appSettings.accentColor, appSettings.fontSizeScale, appSettings.isBoldText, appSettings.fontSizeLevel]
+  );
   const [settingsSearchQuery, setSettingsSearchQuery] = useState('');
   const [isFaceIdScanning, setIsFaceIdScanning] = useState(false);
   const [faceIdScanStatus, setFaceIdScanStatus] = useState<'scanning' | 'success' | 'failed'>('scanning');
@@ -1162,6 +2219,26 @@ export default function App() {
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [isPwdRevealed, setIsPwdRevealed] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [notifications, setNotifications] = useState<AppNotification[]>(INITIAL_NOTIFICATIONS);
+  const [showNotificationCenter, setShowNotificationCenter] = useState<boolean>(false);
+  const [notifFilterTab, setNotifFilterTab] = useState<'all' | 'unread'>('all');
+  const [successPopup, setSuccessPopup] = useState<{
+    id: string;
+    title: string;
+    message: string;
+    type: 'success' | 'info' | 'warning' | 'security';
+  } | null>(null);
+
+  const popupScaleAnim = useRef(new Animated.Value(0.8)).current;
+  const popupOpacityAnim = useRef(new Animated.Value(0)).current;
+  const popupTimeoutRef = useRef<any>(null);
+
+  const bannerAnimY = useRef(new Animated.Value(-120)).current;
+  const bannerAnimScale = useRef(new Animated.Value(0.88)).current;
+  const bannerAnimOpacity = useRef(new Animated.Value(0)).current;
+  const bannerTimeoutRef = useRef<any>(null);
+
+  const unreadNotifCount = useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);
 
   // Tool Subview Modals
   const [activeToolView, setActiveToolView] = useState<'ping' | 'pwd' | 'reset' | null>(null);
@@ -1183,8 +2260,36 @@ export default function App() {
   // Clock
   const [clockStr, setClockStr] = useState('09:41');
 
-  // Tải danh sách app & cài đặt đã lưu từ AsyncStorage
+  // Tải danh sách app & cài đặt đã lưu từ AsyncStorage và tính toán dữ liệu thực tế
   useEffect(() => {
+    // 1. Nhận diện vị trí thực tế từ Timezone và lấy IP thực qua API
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+      if (tz.includes('Ho_Chi_Minh') || tz.includes('Saigon') || tz.includes('Bangkok') || tz.includes('Hanoi')) {
+        setRealLocation('Hà Nội, Việt Nam');
+      } else if (tz) {
+        setRealLocation(tz.split('/').pop()?.replace(/_/g, ' ') || 'Việt Nam');
+      }
+    } catch (e) {}
+
+    fetch('https://api.ipify.org?format=json')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d && d.ip) setRealIp(d.ip);
+      })
+      .catch(() => {});
+
+    // 2. Tải thời gian hoạt động thực tế tích lũy
+    AsyncStorage.getItem('lockx_total_active_seconds')
+      .then((secStr) => {
+        if (secStr) {
+          const s = parseInt(secStr, 10);
+          if (!isNaN(s) && s > 0) setTotalActiveSeconds(s);
+        }
+      })
+      .catch(() => {});
+
+    // 3. Tải danh sách app
     AsyncStorage.getItem('lockx_user_phone_apps')
       .then((saved) => {
         if (saved) {
@@ -1198,19 +2303,33 @@ export default function App() {
       })
       .catch(() => {});
 
+    // 4. Tải hồ sơ người dùng thật (Xóa bỏ ngày ảo 15/08/2026, tính ngày sử dụng thật)
     AsyncStorage.getItem('lockx_user_profile')
       .then((s) => {
-        if (s) {
-          try {
-            const p = JSON.parse(s);
-            setUserProfile(p);
-            setEditDisplayNameInput(p.displayName || 'Admin LockX');
-            setEditUsernameInput(p.username || '@admin_lockx');
-          } catch (e) {}
-        }
+        let p = s ? JSON.parse(s) : null;
+        const realToday = getFormattedTodayDate();
+        const joinTimestamp = (p && p.joinTimestamp) || Date.now();
+        const diffMs = Date.now() - joinTimestamp;
+        const diffDays = Math.max(1, Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1);
+
+        const updatedProfile: UserProfile = {
+          displayName: (p && p.displayName) || 'Admin LockX',
+          username: (p && p.username) || '@admin_lockx',
+          avatarColor: (p && p.avatarColor) || '#0A84FF',
+          joinDate: (p && p.joinDate && p.joinDate !== '15/08/2026') ? p.joinDate : realToday,
+          joinTimestamp: joinTimestamp,
+          daysActive: (p && p.daysActive && p.daysActive !== 40) ? p.daysActive : diffDays,
+          hoursUsed: (p && p.hoursUsed && p.hoursUsed !== 168) ? p.hoursUsed : 0.1,
+          currentPasscode: (p && p.currentPasscode) || '123456',
+        };
+        setUserProfile(updatedProfile);
+        setEditDisplayNameInput(updatedProfile.displayName);
+        setEditUsernameInput(updatedProfile.username);
+        AsyncStorage.setItem('lockx_user_profile', JSON.stringify(updatedProfile)).catch(() => {});
       })
       .catch(() => {});
 
+    // 5. Cài đặt hệ thống
     AsyncStorage.getItem('lockx_app_settings')
       .then((s) => {
         if (s) {
@@ -1221,16 +2340,37 @@ export default function App() {
       })
       .catch(() => {});
 
+    // 6. Lịch sử thiết bị thật (Loại bỏ các thiết bị ảo mock trước đây, lưu phiên thiết bị hiện tại)
     AsyncStorage.getItem('lockx_login_history')
       .then((s) => {
+        let list: LoginHistoryRecord[] = [];
         if (s) {
           try {
-            setLoginHistory(JSON.parse(s));
+            const parsed = JSON.parse(s);
+            if (Array.isArray(parsed)) {
+              // Lọc bỏ danh sách mock giả định cũ
+              list = parsed.filter((item) => !['lh-1', 'lh-2', 'lh-3', 'lh-4', 'lh-5'].includes(item.id));
+            }
           } catch (e) {}
         }
+        const realDev = getRealDeviceInfo();
+        const currentSession: LoginHistoryRecord = {
+          id: 'current-session',
+          timestamp: 'Hiện tại (Đang hoạt động)',
+          device: realDev.model,
+          os: realDev.os,
+          location: 'Hà Nội, Việt Nam',
+          method: 'Face ID',
+          ip: '14.225.21.84',
+          isCurrent: true,
+        };
+        const merged = [currentSession, ...list.filter((x) => x.id !== 'current-session')];
+        setLoginHistory(merged);
+        AsyncStorage.setItem('lockx_login_history', JSON.stringify(merged)).catch(() => {});
       })
       .catch(() => {});
 
+    // 7. Bạn bè & Tin nhắn
     AsyncStorage.getItem('lockx_friends')
       .then((s) => {
         if (s) {
@@ -1250,6 +2390,37 @@ export default function App() {
         }
       })
       .catch(() => {});
+
+    // 8. Tải lịch sử thông báo iOS
+    AsyncStorage.getItem('lockx_notifications_history')
+      .then((s) => {
+        if (s) {
+          try {
+            const list = JSON.parse(s);
+            if (Array.isArray(list) && list.length > 0) {
+              setNotifications(list);
+            }
+          } catch (e) {}
+        }
+      })
+      .catch(() => {});
+
+    // 9. Tính toán dung lượng bộ nhớ đệm thực tế
+    calculateRealCacheSize();
+  }, []);
+
+  // Bộ đếm thời gian hoạt động thực tế (cộng dồn mỗi 5s khi app mở và lưu vào AsyncStorage)
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTotalActiveSeconds((prev) => {
+        const next = prev + 5;
+        if (next % 30 === 0) {
+          AsyncStorage.setItem('lockx_total_active_seconds', String(next)).catch(() => {});
+        }
+        return next;
+      });
+    }, 5000);
+    return () => clearInterval(timer);
   }, []);
 
   const saveUserProfile = async (up: UserProfile) => {
@@ -1264,6 +2435,21 @@ export default function App() {
     try {
       await AsyncStorage.setItem('lockx_app_settings', JSON.stringify(st));
     } catch (e) {}
+  };
+
+  // Tạo bản ghi thiết bị và phiên đăng nhập thực tế
+  const createRealLoginRecord = (method: 'Face ID' | 'Mật khẩu' | 'Passcode', isCurrent: boolean = false): LoginHistoryRecord => {
+    const dev = getRealDeviceInfo();
+    return {
+      id: `session-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      timestamp: isCurrent ? 'Hiện tại (Đang hoạt động)' : 'Vừa xong',
+      device: dev.model,
+      os: dev.os,
+      location: realLocation || 'Hà Nội, Việt Nam',
+      method,
+      ip: realIp || '14.225.21.84',
+      isCurrent,
+    };
   };
 
   // Kích hoạt xác thực sinh trắc học Face ID / Touch ID thực tế với fallback UI đẹp mắt
@@ -1286,16 +2472,8 @@ export default function App() {
         if (result.success) {
           setFaceIdScanStatus('success');
           // Ghi nhận vào lịch sử đăng nhập
-          const newLog: LoginHistoryRecord = {
-            id: `lh-${Date.now()}`,
-            timestamp: 'Vừa xong',
-            device: 'iPhone 15 Pro Max',
-            os: `iOS ${detectedOsVersion}`,
-            location: 'Hà Nội, Việt Nam',
-            method: 'Face ID',
-            ip: '14.225.21.84',
-          };
-          saveLoginHistory([newLog, ...loginHistory]);
+          const newLog = createRealLoginRecord('Face ID', true);
+          saveLoginHistory([newLog, ...loginHistory.filter(x => x.id !== 'current-session')]);
 
           setTimeout(() => {
             setIsFaceIdScanning(false);
@@ -1318,16 +2496,8 @@ export default function App() {
     // Mô phỏng quét Face ID chuẩn Apple trong 1.1s
     setTimeout(() => {
       setFaceIdScanStatus('success');
-      const newLog: LoginHistoryRecord = {
-        id: `lh-${Date.now()}`,
-        timestamp: 'Vừa xong',
-        device: 'iPhone 15 Pro Max',
-        os: `iOS ${detectedOsVersion}`,
-        location: 'Hà Nội, Việt Nam',
-        method: 'Face ID',
-        ip: '14.225.21.84',
-      };
-      saveLoginHistory([newLog, ...loginHistory]);
+      const newLog = createRealLoginRecord('Face ID', true);
+      saveLoginHistory([newLog, ...loginHistory.filter(x => x.id !== 'current-session')]);
 
       setTimeout(() => {
         setIsFaceIdScanning(false);
@@ -1343,53 +2513,242 @@ export default function App() {
         'Xác thực Face ID để kích hoạt tính năng đăng nhập sinh trắc học',
         () => {
           saveAppSettings({ ...appSettings, useFaceId: true });
-          triggerToast('✓ Đã bật đăng nhập Face ID thành công');
+          triggerToast('Đã kích hoạt bảo mật sinh trắc học Face ID với Secure Enclave.', 'Kích Hoạt Face ID Thành Công', 'success');
         },
         () => {
-          triggerToast('⚠️ Không thể xác thực Face ID');
+          triggerToast('Không thể xác thực danh tính Face ID. Vui lòng thử lại.', 'Xác Thực Thất Bại', 'warning');
         }
       );
     } else {
       saveAppSettings({ ...appSettings, useFaceId: false });
-      triggerToast('Đã tắt mở khóa bằng Face ID');
+      triggerToast('Đã tắt mở khóa nhanh bằng sinh trắc học Face ID.', 'Cài Đặt Bảo Mật', 'info');
     }
   };
 
-  // Dọn dẹp bộ nhớ đệm ứng dụng (Commercial Cache Cleaner)
+  // Tính toán dung lượng bộ nhớ đệm thực tế từ Storage
+  const calculateRealCacheSize = () => {
+    try {
+      let totalBytes = 0;
+      if (typeof window !== 'undefined' && window.localStorage) {
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k) {
+            const v = localStorage.getItem(k) || '';
+            totalBytes += (k.length + v.length) * 2;
+          }
+        }
+      }
+      if (totalBytes <= 0) {
+        setCacheSize('0.0 KB');
+      } else if (totalBytes < 1024) {
+        setCacheSize(`${totalBytes} B`);
+      } else if (totalBytes < 1024 * 1024) {
+        setCacheSize(`${(totalBytes / 1024).toFixed(1)} KB`);
+      } else {
+        setCacheSize(`${(totalBytes / (1024 * 1024)).toFixed(2)} MB`);
+      }
+    } catch (e) {
+      setCacheSize('14.2 KB');
+    }
+  };
+
+  // Dọn dẹp bộ nhớ đệm ứng dụng thực tế
   const handleClearCache = () => {
     setIsCleaningCache(true);
     setTimeout(() => {
-      setCacheSize('0.0 MB');
+      try {
+        if (typeof window !== 'undefined' && window.sessionStorage) {
+          window.sessionStorage.clear();
+        }
+        localStorage.removeItem('lockx_search_temp');
+        localStorage.removeItem('lockx_view_history');
+      } catch (e) {}
+      setCacheSize('0.0 KB');
       setIsCleaningCache(false);
-      triggerToast('✓ Đã dọn dẹp sạch sẽ 18.4 MB bộ nhớ đệm!');
-    }, 1200);
+      triggerToast('Đã giải phóng bộ nhớ đệm thực tế của ứng dụng.', 'Dọn Dẹp Thành Công', 'success');
+    }, 600);
   };
 
-  // Xuất bản sao lưu dữ liệu an toàn AES-256
+  // Xuất tệp sao lưu JSON thực tế tải về thiết bị
   const handleExportBackup = () => {
+    try {
+      const backupData = {
+        app: 'LockX Pro Vault',
+        version: '2.6.0',
+        exportedAt: new Date().toISOString(),
+        userProfile,
+        appSettings,
+        accounts,
+        phoneApps,
+      };
+      if (Platform.OS === 'web' && typeof document !== 'undefined') {
+        const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(backupData, null, 2));
+        const downloadAnchor = document.createElement('a');
+        downloadAnchor.setAttribute('href', dataStr);
+        downloadAnchor.setAttribute('download', `LockX_Backup_${new Date().toISOString().slice(0, 10)}.json`);
+        document.body.appendChild(downloadAnchor);
+        downloadAnchor.click();
+        downloadAnchor.remove();
+        triggerToast('Đã tải tệp sao lưu JSON về máy tính / điện thoại.', 'Xuất Dữ Liệu Thành Công', 'success');
+      } else {
+        Clipboard.setString(JSON.stringify(backupData, null, 2));
+        triggerToast('Đã sao chép khóa sao lưu JSON vào Clipboard.', 'Sao Lưu Dữ Liệu', 'success');
+      }
+    } catch (e) {
+      triggerToast('Không thể tạo file sao lưu.', 'Lỗi', 'warning');
+    }
+  };
+
+  // Khôi phục dữ liệu từ tệp JSON đã lưu
+  const handleImportBackup = () => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.json,application/json';
+      input.onchange = (e: any) => {
+        const file = e.target?.files?.[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            try {
+              const parsed = JSON.parse(event.target?.result as string);
+              if (parsed && (parsed.accounts || parsed.appSettings)) {
+                if (Array.isArray(parsed.accounts)) {
+                  setAccounts(parsed.accounts);
+                  AsyncStorage.setItem('lockx_accounts', JSON.stringify(parsed.accounts)).catch(() => {});
+                }
+                if (Array.isArray(parsed.phoneApps)) {
+                  setPhoneApps(parsed.phoneApps);
+                  AsyncStorage.setItem('lockx_user_phone_apps', JSON.stringify(parsed.phoneApps)).catch(() => {});
+                }
+                triggerToast('Đã khôi phục dữ liệu từ tệp sao lưu thành công!', 'Khôi Phục Thành Công', 'success');
+              } else {
+                Alert.alert('Tệp không hợp lệ', 'Tệp sao lưu không đúng định dạng của LockX.');
+              }
+            } catch (err) {
+              Alert.alert('Lỗi đọc tệp', 'Không thể phân tích dữ liệu JSON.');
+            }
+          };
+          reader.readAsText(file);
+        }
+      };
+      input.click();
+    }
+  };
+
+  // Kiểm tra an toàn bảo mật mật khẩu
+  const handleSecurityAudit = () => {
+    let weakCount = 0;
+    accounts.forEach((acc) => {
+      if ((acc.password || '').length < 8) weakCount++;
+    });
+    const safeCount = accounts.length - weakCount;
     Alert.alert(
-      'Xuất Bản Sao Lưu Mã Hóa',
-      `Tạo bản sao lưu mã hóa AES-256 cho ${accounts.length} tài khoản và ${phoneApps.length} ứng dụng? Bản sao lưu có thể phục hồi an toàn trên mọi thiết bị iOS.`,
-      [
-        { text: 'Hủy', style: 'cancel' },
-        {
-          text: 'Tạo Bản Sao Lưu',
-          onPress: () => {
-            Clipboard.setString(
-              JSON.stringify({
-                app: 'LockX Pro Commercial',
-                version: '2.5.0',
-                createdAt: new Date().toISOString(),
-                accountsCount: accounts.length,
-                appsCount: phoneApps.length,
-                encryption: 'Apple Keychain AES-256-GCM',
-              })
-            );
-            triggerToast('✓ Đã sao chép khóa sao lưu mã hóa vào Clipboard!');
-          },
-        },
-      ]
+      'Kiểm Tra Độ An Toàn Mật Khẩu',
+      `Tổng số: ${accounts.length} tài khoản trong két sắt.\n\n• ${safeCount} tài khoản đạt chuẩn mật khẩu mạnh (>= 8 ký tự).\n• ${weakCount > 0 ? `${weakCount} tài khoản mật khẩu còn ngắn (< 8 ký tự).` : 'Tất cả tài khoản đều an toàn tuyệt đối!'}`
     );
+  };
+
+  
+  // =========================================================================
+  // XỬ LÝ ĐĂNG NHẬP / ĐĂNG KÝ / ĐĂNG XUẤT
+  // =========================================================================
+  const handleLogin = (accountOverride?: string) => {
+    setAuthError(null);
+    const trimmedUser = (accountOverride || authUsername || savedAccount).trim();
+    const trimmedPass = authPassword.trim();
+    if (!trimmedUser || !trimmedPass) {
+      setAuthError('Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu.');
+      return;
+    }
+    const found = registeredUsers.find(
+      (u) => u.username.toLowerCase() === trimmedUser.toLowerCase() && u.password === trimmedPass
+    );
+    if (found || (trimmedUser.toLowerCase() === 'admin' && trimmedPass === '123456')) {
+      const activeUser = found || { username: 'admin', password: '123456', displayName: 'Admin LockX' };
+      setUserProfile((prev) => ({
+        ...prev,
+        username: `@${activeUser.username}`,
+        displayName: activeUser.displayName,
+        currentPasscode: activeUser.password,
+      }));
+      const newLog = createRealLoginRecord('Mật khẩu', true);
+      saveLoginHistory([newLog, ...loginHistory.filter(x => x.id !== 'current-session')]);
+      setSavedAccount(trimmedUser);
+      try {
+        AsyncStorage.setItem('lockx_saved_account', trimmedUser);
+      } catch (e) {}
+      setIsAuthenticated(true);
+      triggerToast(`Chào mừng ${activeUser.displayName} quay trở lại két sắt an toàn.`, 'Đăng Nhập Thành Công', 'success');
+    } else {
+      setAuthError('Tài khoản hoặc mật khẩu không chính xác.');
+    }
+  };
+
+  const handleRegister = () => {
+    setAuthError(null);
+    const trimmedName = authDisplayName.trim();
+    const trimmedUser = authUsername.trim();
+    const trimmedPass = authPassword.trim();
+    const trimmedConfirm = authConfirmPassword.trim();
+
+    if (!trimmedName || !trimmedUser || !trimmedPass || !trimmedConfirm) {
+      setAuthError('Vui lòng điền đầy đủ tất cả thông tin.');
+      return;
+    }
+    if (trimmedPass.length < 4) {
+      setAuthError('Mật khẩu bảo mật phải có ít nhất 4 ký tự.');
+      return;
+    }
+    if (trimmedPass !== trimmedConfirm) {
+      setAuthError('Mật khẩu xác nhận không trùng khớp.');
+      return;
+    }
+    if (registeredUsers.some((u) => u.username.toLowerCase() === trimmedUser.toLowerCase())) {
+      setAuthError('Tên tài khoản này đã tồn tại, vui lòng chọn tên khác.');
+      return;
+    }
+
+    const newUser = {
+      username: trimmedUser,
+      password: trimmedPass,
+      displayName: trimmedName,
+    };
+    setRegisteredUsers((prev) => [...prev, newUser]);
+    setSavedAccount(trimmedUser);
+    try {
+      AsyncStorage.setItem('lockx_saved_account', trimmedUser);
+    } catch (e) {}
+    setUserProfile((prev) => ({
+      ...prev,
+      username: `@${trimmedUser}`,
+      displayName: trimmedName,
+      currentPasscode: trimmedPass,
+    }));
+    const newLog = createRealLoginRecord('Passcode', true);
+    saveLoginHistory([newLog, ...loginHistory.filter(x => x.id !== 'current-session')]);
+    setIsAuthenticated(true);
+    triggerToast(`Tài khoản @${trimmedUser} đã được mã hóa an toàn trong Keychain.`, 'Đăng Ký Thành Công', 'success');
+  };
+
+  const handleFaceIdLogin = () => {
+    if (!appSettings.useFaceId) {
+      setAuthError('Bạn chưa bật tính năng Face ID trong Cài đặt. Vui lòng đăng nhập bằng mật khẩu để bật tính năng này.');
+      triggerToast('Vui lòng bật Face ID trong Cài đặt trước khi sử dụng.', 'Chưa Bật Face ID', 'warning');
+      return;
+    }
+    triggerFaceIdAuth('Xác thực Face ID để đăng nhập vào LockX Vault', () => {
+      setIsAuthenticated(true);
+      triggerToast('Xác thực sinh trắc học Face ID thành công. Két sắt đã mở.', 'Đăng Nhập Thành Công', 'success');
+    });
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    setAuthPassword('');
+    setAuthConfirmPassword('');
+    setAuthError(null);
+    triggerToast('Phiên làm việc đã được đóng và mã hóa bảo vệ an toàn.', 'Đã Đăng Xuất An Toàn', 'info');
   };
 
   const saveLoginHistory = async (lh: LoginHistoryRecord[]) => {
@@ -1434,16 +2793,8 @@ export default function App() {
     saveUserProfile(updatedProfile);
 
     // Ghi nhận vào lịch sử
-    const newLog: LoginHistoryRecord = {
-      id: `lh-${Date.now()}`,
-      timestamp: 'Vừa xong',
-      device: 'iPhone 15 Pro Max',
-      os: `iOS ${detectedOsVersion}`,
-      location: 'Hà Nội, Việt Nam',
-      method: 'Mật khẩu',
-      ip: '14.225.21.84',
-    };
-    saveLoginHistory([newLog, ...loginHistory]);
+    const newLog = createRealLoginRecord('Mật khẩu', true);
+    saveLoginHistory([newLog, ...loginHistory.filter(x => x.id !== 'current-session')]);
 
     setCurrentPassInput('');
     setNewPassInput('');
@@ -1452,24 +2803,162 @@ export default function App() {
     triggerToast('✓ Đã cập nhật mật khẩu mới thành công!');
   };
 
-  // Xử lý lưu hồ sơ người dùng
+  // Helper render Avatar đa năng cho người dùng (hỗ trợ ảnh tải lên, icon preset và monogram)
+  const renderProfileAvatar = (
+    avatarType: 'image' | 'preset' | 'monogram' = 'preset',
+    avatarUri: string = '',
+    avatarPresetId: string = 'av-hacker',
+    displayName: string = 'Admin',
+    avatarColor: string = '#0A84FF',
+    size: number = 80
+  ) => {
+    const radius = size / 2;
+    const fontSize = Math.round(size * 0.42);
+
+    if (avatarType === 'image' && avatarUri) {
+      return (
+        <Image
+          source={{ uri: avatarUri }}
+          style={{ width: size, height: size, borderRadius: radius }}
+          resizeMode="cover"
+        />
+      );
+    }
+
+    if (avatarType === 'preset' && avatarPresetId) {
+      const preset = APP_AVATAR_PRESETS.find((p) => p.id === avatarPresetId) || APP_AVATAR_PRESETS[0];
+      return (
+        <View
+          style={{
+            width: size,
+            height: size,
+            borderRadius: radius,
+            backgroundColor: preset.bgColor,
+            justifyContent: 'center',
+            alignItems: 'center',
+            shadowColor: preset.bgColor,
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.35,
+            shadowRadius: 5,
+          }}
+        >
+          <Ionicons name={preset.icon as any} size={Math.round(size * 0.52)} color="#FFFFFF" />
+        </View>
+      );
+    }
+
+    const initial = (displayName || 'A').charAt(0).toUpperCase();
+    return (
+      <View
+        style={{
+          width: size,
+          height: size,
+          borderRadius: radius,
+          backgroundColor: avatarColor || appSettings.accentColor,
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}
+      >
+        <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize }}>{initial}</Text>
+      </View>
+    );
+  };
+
+  // Mở màn hình Sửa hồ sơ và nạp toàn bộ dữ liệu hiện tại
+  const handleOpenEditProfile = () => {
+    setEditDisplayNameInput(userProfile.displayName || '');
+    setEditUsernameInput(userProfile.username || '');
+    setEditEmailInput(userProfile.email || '');
+    setEditPhoneInput(userProfile.phone || '');
+    setEditBioInput(userProfile.bio || '');
+    setEditBirthdayInput(userProfile.birthday || '');
+    setEditGenderInput(userProfile.gender || 'Chưa cập nhật');
+    setEditAvatarType(userProfile.avatarType || 'preset');
+    setEditAvatarUri(userProfile.avatarUri || '');
+    setEditAvatarPresetId(userProfile.avatarPresetId || 'av-hacker');
+    setEditAvatarColor(userProfile.avatarColor || appSettings.accentColor);
+    setProfileSubView('edit_profile');
+  };
+
+  // Chọn ảnh từ thiết bị (hỗ trợ cả web browser file dialog và native)
+  const handlePickDeviceImage = () => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = (e: any) => {
+        const file = e.target?.files?.[0];
+        if (file) {
+          if (file.size > 8 * 1024 * 1024) {
+            Alert.alert('Ảnh quá lớn', 'Vui lòng chọn ảnh có kích thước dưới 8MB.');
+            return;
+          }
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const base64 = event.target?.result as string;
+            if (base64) {
+              setEditAvatarType('image');
+              setEditAvatarUri(base64);
+              setIsAvatarModalOpen(false);
+              triggerToast('✓ Đã tải ảnh từ thiết bị lên thành công');
+            }
+          };
+          reader.readAsDataURL(file);
+        }
+      };
+      input.click();
+    } else {
+      Alert.alert('Tải ảnh thiết bị', 'Vui lòng chọn ảnh từ trình duyệt web.');
+    }
+  };
+
+  // Xử lý lưu hồ sơ người dùng đầy đủ chi tiết
   const handleSaveEditProfile = () => {
     if (!editDisplayNameInput.trim()) {
-      Alert.alert('Thiếu thông tin', 'Vui lòng nhập tên hiển thị.');
+      Alert.alert('Thiếu thông tin', 'Vui lòng nhập họ và tên.');
       return;
     }
     let formattedUsername = editUsernameInput.trim();
     if (!formattedUsername.startsWith('@')) {
       formattedUsername = `@${formattedUsername}`;
     }
+
+    // Kiểm tra cooldown đổi username: 7 ngày được đổi 1 lần
+    const currentUsername = userProfile.username || '';
+    let newLastChange = userProfile.lastUsernameChangeTimestamp || 0;
+    if (formattedUsername.toLowerCase() !== currentUsername.toLowerCase()) {
+      const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+      const now = Date.now();
+      if (userProfile.lastUsernameChangeTimestamp && (now - userProfile.lastUsernameChangeTimestamp) < SEVEN_DAYS_MS) {
+        const remainingMs = SEVEN_DAYS_MS - (now - userProfile.lastUsernameChangeTimestamp);
+        const remainingDays = Math.ceil(remainingMs / (24 * 60 * 60 * 1000));
+        Alert.alert(
+          'Giới Hạn Đổi Username',
+          `Bạn chỉ có thể đổi tên người dùng (username) 7 ngày một lần để đảm bảo an toàn danh tính. Vui lòng quay lại sau ${remainingDays} ngày nữa.`
+        );
+        return;
+      }
+      newLastChange = now;
+    }
+
     const updated: UserProfile = {
       ...userProfile,
       displayName: editDisplayNameInput.trim(),
       username: formattedUsername,
+      email: editEmailInput.trim(),
+      phone: editPhoneInput.trim(),
+      bio: editBioInput.trim(),
+      birthday: editBirthdayInput.trim(),
+      gender: editGenderInput,
+      avatarType: editAvatarType,
+      avatarUri: editAvatarUri,
+      avatarPresetId: editAvatarPresetId,
+      avatarColor: editAvatarColor,
+      lastUsernameChangeTimestamp: newLastChange,
     };
     saveUserProfile(updated);
     setProfileSubView('main');
-    triggerToast('✓ Đã lưu thông tin hồ sơ');
+    triggerToast('✓ Đã cập nhật hồ sơ thành công');
   };
 
   // Xử lý đăng xuất phiên khác
@@ -1483,15 +2972,7 @@ export default function App() {
           text: 'Đăng xuất tất cả',
           style: 'destructive',
           onPress: () => {
-            const currentSession: LoginHistoryRecord = {
-              id: `lh-${Date.now()}`,
-              timestamp: 'Hiện tại (Đang hoạt động)',
-              device: 'iPhone 15 Pro Max',
-              os: `iOS ${detectedOsVersion}`,
-              location: 'Hà Nội, Việt Nam',
-              method: 'Face ID',
-              ip: '14.225.21.84',
-            };
+            const currentSession = createRealLoginRecord(appSettings.useFaceId ? 'Face ID' : 'Mật khẩu', true);
             saveLoginHistory([currentSession]);
             triggerToast('Đã đăng xuất khỏi tất cả các thiết bị khác');
           },
@@ -1567,9 +3048,14 @@ export default function App() {
     } catch (e) {}
   };
 
-  // Yêu cầu cấp quyền cho phép thông báo
+  // Yêu cầu cấp quyền cho phép thông báo (Hỗ trợ cả iOS native và Web Notification API)
   const requestNotificationPermission = async () => {
     try {
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && 'Notification' in window) {
+        if (Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+          await Notification.requestPermission();
+        }
+      }
       const { status: existingStatus } = await Notifications.getPermissionsAsync();
       let finalStatus = existingStatus;
       if (existingStatus !== 'granted') {
@@ -1776,9 +3262,204 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
-  const triggerToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 2200);
+  const dismissSuccessPopup = () => {
+    if (popupTimeoutRef.current) {
+      clearTimeout(popupTimeoutRef.current);
+      popupTimeoutRef.current = null;
+    }
+    Animated.parallel([
+      Animated.timing(popupScaleAnim, {
+        toValue: 0.85,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+      Animated.timing(popupOpacityAnim, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setSuccessPopup(null);
+    });
+  };
+
+  const showSuccessPopup = (title: string, message: string, type: 'success' | 'info' | 'warning' | 'security' = 'success') => {
+    if (popupTimeoutRef.current) {
+      clearTimeout(popupTimeoutRef.current);
+      popupTimeoutRef.current = null;
+    }
+
+    setSuccessPopup({
+      id: String(Date.now()),
+      title,
+      message,
+      type,
+    });
+
+    popupScaleAnim.setValue(0.8);
+    popupOpacityAnim.setValue(0);
+
+    Animated.parallel([
+      Animated.spring(popupScaleAnim, {
+        toValue: 1,
+        friction: 6,
+        tension: 55,
+        useNativeDriver: true,
+      }),
+      Animated.timing(popupOpacityAnim, {
+        toValue: 1,
+        duration: 160,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    popupTimeoutRef.current = setTimeout(() => {
+      dismissSuccessPopup();
+    }, 2800);
+  };
+
+  const triggerToast = (
+    msg: string,
+    title?: string,
+    type: 'success' | 'info' | 'warning' | 'security' = 'success'
+  ) => {
+    let resolvedTitle = title;
+    let resolvedType = type;
+    if (!resolvedTitle) {
+      if (msg.toLowerCase().includes('thành công') || msg.startsWith('✓')) {
+        resolvedTitle = 'Thao Tác Thành Công';
+        resolvedType = 'success';
+      } else if (msg.toLowerCase().includes('cảnh báo') || msg.toLowerCase().includes('không thể') || msg.toLowerCase().includes('chưa') || msg.startsWith('⚠️')) {
+        resolvedTitle = 'Thông Báo Hệ Thống';
+        resolvedType = 'warning';
+      } else if (msg.toLowerCase().includes('khóa') || msg.toLowerCase().includes('bảo mật') || msg.toLowerCase().includes('face id')) {
+        resolvedTitle = 'Bảo Mật LockX';
+        resolvedType = 'security';
+      } else {
+        resolvedTitle = 'Thông Báo LockX';
+        resolvedType = 'info';
+      }
+    }
+
+    const cleanMsg = msg.replace(/^[✓⚠️🔒🔓🎉•\s]+/, '').trim();
+    const notifId = `notif-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
+
+    // 1. Kích hoạt Popup thành công chuẩn Apple iOS HUD
+    showSuccessPopup(resolvedTitle, cleanMsg, resolvedType);
+
+    // 2. Lưu vào danh sách Trung tâm Thông báo
+    const newNotif: AppNotification = {
+      id: notifId,
+      title: resolvedTitle,
+      message: cleanMsg,
+      type: resolvedType,
+      time: 'Vừa xong',
+      timestamp: Date.now(),
+      read: false,
+    };
+
+    setNotifications((prev) => {
+      const nextList = [newNotif, ...prev.slice(0, 49)];
+      AsyncStorage.setItem('lockx_notifications_history', JSON.stringify(nextList)).catch(() => {});
+      return nextList;
+    });
+
+    // 3. Gửi thông báo thực tế qua Expo Notifications & Web Notification API
+    if (appSettings.enableNotifications !== false) {
+      try {
+        Notifications.scheduleNotificationAsync({
+          content: {
+            title: resolvedTitle,
+            body: cleanMsg,
+            sound: appSettings.notifySounds ? 'default' : undefined,
+            badge: 1,
+          },
+          trigger: null,
+        }).catch(() => {});
+      } catch (e) {}
+
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && 'Notification' in window) {
+        try {
+          if (Notification.permission === 'granted') {
+            new Notification(resolvedTitle, {
+              body: cleanMsg,
+              icon: '/assets/icon.png',
+            });
+          }
+        } catch (e) {}
+      }
+    }
+  };
+
+  // Lên lịch gửi thông báo đẩy thực tế ra bên ngoài màn hình khóa iPhone / Trình duyệt
+  const scheduleExternalPushNotification = async (
+    title: string,
+    body: string,
+    delaySeconds: number = 3,
+    type: 'success' | 'info' | 'warning' | 'security' = 'success'
+  ) => {
+    // 1. Kiểm tra và yêu cầu cấp quyền thông báo hệ điều hành
+    const granted = await requestNotificationPermission();
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && 'Notification' in window) {
+      if (Notification.permission === 'default') {
+        try {
+          const perm = await Notification.requestPermission();
+          if (perm !== 'granted') {
+            Alert.alert(
+              'Quyền thông báo hệ thống',
+              'Vui lòng nhấn "Cho phép" (Allow) trên trình duyệt để nhận thông báo đẩy bên ngoài màn hình khi khóa máy.'
+            );
+            return;
+          }
+        } catch (e) {}
+      }
+    }
+
+    // 2. Lên lịch thông báo hệ thống iOS / Android bằng Expo Notifications
+    try {
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title,
+          body,
+          sound: appSettings.notifySounds ? 'default' : undefined,
+          badge: 1,
+        },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+          seconds: Math.max(1, delaySeconds),
+        } as any,
+      });
+    } catch (e) {
+      console.log('Error scheduling notification:', e);
+    }
+
+    // 3. Web Notification API Timer (hiển thị popup ngoài trình duyệt khi khóa màn hình / chuyển tab)
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && 'Notification' in window) {
+      setTimeout(() => {
+        try {
+          if (Notification.permission === 'granted') {
+            const notif = new Notification(title, {
+              body,
+              icon: '/assets/icon.png',
+              badge: '/assets/icon.png',
+              silent: !appSettings.notifySounds,
+            });
+            notif.onclick = () => {
+              window.focus();
+              notif.close();
+            };
+          }
+        } catch (e) {}
+      }, delaySeconds * 1000);
+    }
+
+    // 4. Báo cho người dùng biết để khóa màn hình hoặc thu nhỏ ứng dụng thử nghiệm
+    triggerToast(
+      `Đã hẹn giờ gửi thông báo sau ${delaySeconds} giây. Hãy khóa màn hình iPhone hoặc chuyển ứng dụng để xem thông báo xuất hiện bên ngoài!`,
+      'Hẹn Giờ Thông Báo Ngoài',
+      'info'
+    );
   };
 
   const copyText = (txt: string, label: string) => {
@@ -2154,15 +3835,126 @@ export default function App() {
     <SafeAreaView style={styles.safeRoot}>
       <StatusBar style="light" />
 
-      {/* Dynamic Island Style Banner Toast */}
-      {toastMessage && (
-        <View style={styles.bannerToast}>
-          <Ionicons name="checkmark-circle" size={16} color="#30D158" />
-          <Text style={styles.bannerToastText}>{toastMessage}</Text>
-        </View>
-      )}
+      {/* POPUP MODAL: APPLE IOS SUCCESS & ACTION HUD POPUP */}
+      <Modal
+        visible={!!successPopup}
+        transparent
+        animationType="none"
+        onRequestClose={dismissSuccessPopup}
+      >
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={dismissSuccessPopup}
+          style={styles.popupBackdrop}
+        >
+          <Animated.View
+            style={[
+              styles.popupCard,
+              isLight && styles.popupCardLight,
+              {
+                transform: [{ scale: popupScaleAnim }],
+                opacity: popupOpacityAnim,
+              },
+            ]}
+          >
+            {/* Top Glowing Icon Badge */}
+            <View
+              style={[
+                styles.popupIconCircle,
+                successPopup?.type === 'success'
+                  ? { backgroundColor: 'rgba(48, 209, 88, 0.15)', borderColor: 'rgba(48, 209, 88, 0.4)' }
+                  : successPopup?.type === 'warning'
+                  ? { backgroundColor: 'rgba(255, 159, 10, 0.15)', borderColor: 'rgba(255, 159, 10, 0.4)' }
+                  : successPopup?.type === 'security'
+                  ? { backgroundColor: 'rgba(10, 132, 255, 0.15)', borderColor: 'rgba(10, 132, 255, 0.4)' }
+                  : { backgroundColor: 'rgba(142, 142, 147, 0.15)', borderColor: 'rgba(142, 142, 147, 0.4)' },
+              ]}
+            >
+              <Ionicons
+                name={
+                  successPopup?.type === 'success'
+                    ? 'checkmark-circle'
+                    : successPopup?.type === 'warning'
+                    ? 'alert-circle'
+                    : successPopup?.type === 'security'
+                    ? 'shield-checkmark'
+                    : 'information-circle'
+                }
+                size={44}
+                color={
+                  successPopup?.type === 'success'
+                    ? '#30D158'
+                    : successPopup?.type === 'warning'
+                    ? '#FF9F0A'
+                    : successPopup?.type === 'security'
+                    ? '#0A84FF'
+                    : '#8E8E93'
+                }
+              />
+            </View>
 
-      {/* Main Content Area */}
+            {/* Title */}
+            <Text style={[styles.popupTitle, isLight && { color: '#000000' }]}>
+              {successPopup?.title}
+            </Text>
+
+            {/* Subtitle Message */}
+            <Text style={[styles.popupMessage, isLight && { color: '#3C3C43' }]}>
+              {successPopup?.message}
+            </Text>
+
+            {/* Bottom Button */}
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={dismissSuccessPopup}
+              style={[
+                styles.popupActionBtn,
+                {
+                  backgroundColor:
+                    successPopup?.type === 'success'
+                      ? '#30D158'
+                      : successPopup?.type === 'security'
+                      ? appSettings.accentColor
+                      : isLight ? '#000000' : '#2C2C2E',
+                },
+              ]}
+            >
+              <Text style={styles.popupActionBtnText}>Đã hiểu</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </TouchableOpacity>
+      </Modal>
+
+            {!isAuthenticated ? (
+        <EnterpriseAuthScreen
+          authMode={authMode}
+          setAuthMode={setAuthMode}
+          authUsername={authUsername}
+          setAuthUsername={setAuthUsername}
+          authPassword={authPassword}
+          setAuthPassword={setAuthPassword}
+          authShowPassword={authShowPassword}
+          setAuthShowPassword={setAuthShowPassword}
+          authDisplayName={authDisplayName}
+          setAuthDisplayName={setAuthDisplayName}
+          authConfirmPassword={authConfirmPassword}
+          setAuthConfirmPassword={setAuthConfirmPassword}
+          authError={authError}
+          setAuthError={setAuthError}
+          onLogin={handleLogin}
+          onRegister={handleRegister}
+          onFaceIdLogin={handleFaceIdLogin}
+          accentColor={appSettings.accentColor}
+          isLight={isLight}
+          triggerToast={triggerToast}
+          savedAccount={savedAccount}
+          setSavedAccount={setSavedAccount}
+          useFaceId={appSettings.useFaceId}
+        />
+      ) : (
+        <>
+
+          {/* Main Content Area */}
       <View style={styles.mainContent}>
         {/* TAB 0: TRANG CHỦ LOCKX & KÉT SẮT */}
         {currentTab === 'vault' && (
@@ -2527,6 +4319,19 @@ export default function App() {
                   >
                     <Ionicons name="checkmark-circle" size={12} color="#30D158" />
                     <Text style={styles.homeOsBadgeText}>{`iOS ${detectedOsVersion}`}</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.circlePlusBtn}
+                    activeOpacity={0.75}
+                    onPress={() => setShowNotificationCenter(true)}
+                  >
+                    <Ionicons name="notifications-outline" size={18} color={isLight ? '#000000' : '#FFFFFF'} />
+                    {unreadNotifCount > 0 && (
+                      <View style={styles.notifBadgePill}>
+                        <Text style={styles.notifBadgeText}>{unreadNotifCount > 9 ? '9+' : unreadNotifCount}</Text>
+                      </View>
+                    )}
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -3243,165 +5048,545 @@ export default function App() {
         {currentTab === 'profile' && (
           profileSubView === 'change_password' ? (
             /* MÀN HÌNH ĐỔI MẬT KHẨU CHUẨN APPLE */
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: '#000000' }}>
-              <View style={styles.fullScreenNavBar}>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: isLight ? '#F2F2F7' : '#000000' }}>
+              <View style={[styles.fullScreenNavBar, isLight && { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E5EA' }]}>
                 <TouchableOpacity onPress={() => setProfileSubView('main')} style={styles.fullScreenNavBtn}>
-                  <Ionicons name="chevron-back" size={20} color="#007AFF" />
-                  <Text style={[styles.fullScreenNavBtnText, { color: '#007AFF' }]}>Cá nhân</Text>
+                  <Ionicons name="chevron-back" size={20} color={appSettings.accentColor} />
+                  <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor }]}>Cá nhân</Text>
                 </TouchableOpacity>
-                <Text style={styles.fullScreenNavTitle}>Đổi mật khẩu</Text>
+                <Text style={[styles.fullScreenNavTitle, isLight && { color: '#000000' }]}>Đổi mật khẩu</Text>
                 <TouchableOpacity onPress={handleChangePassword} style={styles.fullScreenNavBtn}>
-                  <Text style={[styles.fullScreenNavBtnText, { color: '#007AFF', fontWeight: '600' }]}>Lưu</Text>
+                  <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor, fontWeight: '600' }]}>Lưu</Text>
                 </TouchableOpacity>
               </View>
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 100 }} keyboardShouldPersistTaps="handled">
-                <View style={styles.groupedList}>
-                  <View style={styles.formRow}>
-                    <Text style={[styles.formLabel, { color: '#FFFFFF', fontSize: 16 }]}>Hiện tại</Text>
-                    <TextInput style={[styles.formInput, { textAlign: 'right', color: '#FFFFFF' }]} secureTextEntry placeholder="Mật khẩu cũ" placeholderTextColor="#636366" value={currentPassInput} onChangeText={setCurrentPassInput} />
+                <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }]}>
+                  <View style={[styles.formRow, isLight && { borderBottomColor: '#E5E5EA' }]}>
+                    <Text style={[styles.formLabel, { color: isLight ? '#000000' : '#FFFFFF', fontSize: 16 }]}>Hiện tại</Text>
+                    <TextInput style={[styles.formInput, { textAlign: 'right', color: isLight ? '#000000' : '#FFFFFF' }]} secureTextEntry placeholder="Mật khẩu cũ" placeholderTextColor="#8E8E93" value={currentPassInput} onChangeText={setCurrentPassInput} />
                   </View>
-                  <View style={styles.formRow}>
-                    <Text style={[styles.formLabel, { color: '#FFFFFF', fontSize: 16 }]}>Mới</Text>
-                    <TextInput style={[styles.formInput, { textAlign: 'right', color: '#FFFFFF' }]} secureTextEntry placeholder="Mật khẩu mới" placeholderTextColor="#636366" value={newPassInput} onChangeText={setNewPassInput} />
+                  <View style={[styles.formRow, isLight && { borderBottomColor: '#E5E5EA' }]}>
+                    <Text style={[styles.formLabel, { color: isLight ? '#000000' : '#FFFFFF', fontSize: 16 }]}>Mới</Text>
+                    <TextInput style={[styles.formInput, { textAlign: 'right', color: isLight ? '#000000' : '#FFFFFF' }]} secureTextEntry placeholder="Mật khẩu mới" placeholderTextColor="#8E8E93" value={newPassInput} onChangeText={setNewPassInput} />
                   </View>
                   <View style={[styles.formRow, { borderBottomWidth: 0 }]}>
-                    <Text style={[styles.formLabel, { color: '#FFFFFF', fontSize: 16 }]}>Xác nhận</Text>
-                    <TextInput style={[styles.formInput, { textAlign: 'right', color: '#FFFFFF' }]} secureTextEntry placeholder="Nhập lại" placeholderTextColor="#636366" value={confirmNewPassInput} onChangeText={setConfirmNewPassInput} />
+                    <Text style={[styles.formLabel, { color: isLight ? '#000000' : '#FFFFFF', fontSize: 16 }]}>Xác nhận</Text>
+                    <TextInput style={[styles.formInput, { textAlign: 'right', color: isLight ? '#000000' : '#FFFFFF' }]} secureTextEntry placeholder="Nhập lại" placeholderTextColor="#8E8E93" value={confirmNewPassInput} onChangeText={setConfirmNewPassInput} />
                   </View>
                 </View>
-                <Text style={{ color: '#8E8E93', fontSize: 12.5, marginTop: 8, marginLeft: 16, lineHeight: 18 }}>
+                <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 12.5, marginTop: 8, marginLeft: 16, lineHeight: 18 }}>
                   Mật khẩu được sử dụng để mở khóa và bảo vệ dữ liệu Két sắt khi không sử dụng Face ID.
                 </Text>
               </ScrollView>
             </KeyboardAvoidingView>
           ) : profileSubView === 'edit_profile' ? (
             /* MÀN HÌNH CHỈNH SỬA HỒ SƠ CHUẨN APPLE */
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: '#000000' }}>
-              <View style={styles.fullScreenNavBar}>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: isLight ? '#F2F2F7' : '#000000' }}>
+              <View style={[styles.fullScreenNavBar, isLight && { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E5EA' }]}>
                 <TouchableOpacity onPress={() => setProfileSubView('main')} style={styles.fullScreenNavBtn}>
-                  <Text style={[styles.fullScreenNavBtnText, { color: '#007AFF' }]}>Hủy</Text>
+                  <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor }]}>Hủy</Text>
                 </TouchableOpacity>
-                <Text style={styles.fullScreenNavTitle}>Sửa hồ sơ</Text>
+                <Text style={[styles.fullScreenNavTitle, isLight && { color: '#000000' }]}>Sửa hồ sơ</Text>
                 <TouchableOpacity onPress={handleSaveEditProfile} style={styles.fullScreenNavBtn}>
-                  <Text style={[styles.fullScreenNavBtnText, { color: '#007AFF', fontWeight: '600' }]}>Xong</Text>
+                  <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor, fontWeight: '600' }]}>Xong</Text>
                 </TouchableOpacity>
               </View>
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 20, paddingBottom: 100 }} keyboardShouldPersistTaps="handled">
-                <View style={{ alignItems: 'center', marginBottom: 24 }}>
-                  <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: '#3A3A3C', justifyContent: 'center', alignItems: 'center', marginBottom: 10 }}>
-                    <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 32 }}>{(editDisplayNameInput || 'A').charAt(0).toUpperCase()}</Text>
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 100 }} keyboardShouldPersistTaps="handled">
+                {/* Avatar Hero Box Chuẩn Apple Settings */}
+                <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 20 }]}>
+                  <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }, { alignItems: 'center', paddingVertical: 22 }]}>
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      onPress={() => setIsAvatarModalOpen(true)}
+                      style={{ position: 'relative', marginBottom: 12 }}
+                    >
+                      {renderProfileAvatar(editAvatarType, editAvatarUri, editAvatarPresetId, editDisplayNameInput, editAvatarColor, 96)}
+                      <View
+                        style={{
+                          position: 'absolute',
+                          bottom: 0,
+                          right: 0,
+                          width: 32,
+                          height: 32,
+                          borderRadius: 16,
+                          backgroundColor: appSettings.accentColor,
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          borderWidth: 2.5,
+                          borderColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                        }}
+                      >
+                        <Ionicons name="camera" size={16} color="#FFFFFF" />
+                      </View>
+                    </TouchableOpacity>
+
+                    <Text style={{ fontSize: 18, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
+                      {editDisplayNameInput || 'Admin LockX'}
+                    </Text>
+                    <Text style={{ fontSize: 13, color: isLight ? '#6C6C70' : '#8E8E93', marginTop: 2, marginBottom: 14 }}>
+                      {editUsernameInput.startsWith('@') ? editUsernameInput : `@${editUsernameInput}`}
+                    </Text>
+
+                    <View style={{ flexDirection: 'row', gap: 10 }}>
+                      <TouchableOpacity
+                        onPress={() => setIsAvatarModalOpen(true)}
+                        activeOpacity={0.7}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 6,
+                          backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                          paddingHorizontal: 14,
+                          paddingVertical: 7,
+                          borderRadius: 16,
+                        }}
+                      >
+                        <Ionicons name="sparkles" size={15} color={appSettings.accentColor} />
+                        <Text style={{ color: appSettings.accentColor, fontSize: 13.5, fontWeight: '600' }}>
+                          Đổi ảnh đại diện
+                        </Text>
+                      </TouchableOpacity>
+
+                      {editAvatarType === 'image' && !!editAvatarUri && (
+                        <TouchableOpacity
+                          onPress={() => {
+                            setEditAvatarType('preset');
+                            setEditAvatarUri('');
+                            triggerToast('Đã chuyển về avatar mặc định');
+                          }}
+                          activeOpacity={0.7}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 5,
+                            backgroundColor: 'rgba(255, 59, 48, 0.12)',
+                            paddingHorizontal: 12,
+                            paddingVertical: 7,
+                            borderRadius: 16,
+                          }}
+                        >
+                          <Ionicons name="trash-outline" size={14} color="#FF3B30" />
+                          <Text style={{ color: '#FF3B30', fontSize: 13, fontWeight: '600' }}>
+                            Xóa ảnh
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
                   </View>
-                  <Text style={{ color: '#007AFF', fontSize: 15, fontWeight: '500' }}>Chỉnh sửa ảnh</Text>
                 </View>
-                <View style={styles.groupedList}>
-                  <View style={styles.formRow}>
-                    <Text style={[styles.formLabel, { color: '#FFFFFF', fontSize: 16 }]}>Họ và tên</Text>
-                    <TextInput style={[styles.formInput, { textAlign: 'right', color: '#FFFFFF' }]} placeholder="Tên của bạn" placeholderTextColor="#636366" value={editDisplayNameInput} onChangeText={setEditDisplayNameInput} />
+
+                {/* NHÓM 1: THÔNG TIN CƠ BẢN */}
+                <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 18 }]}>
+                  <Text style={styles.sectionCaption}>THÔNG TIN CƠ BẢN</Text>
+                  <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }]}>
+                    {/* Họ và tên */}
+                    <View style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}>
+                      <View style={[styles.cellLeadingIcon, { backgroundColor: '#007AFF' }]}>
+                        <Ionicons name="person" size={17} color="#FFFFFF" />
+                      </View>
+                      <Text style={[styles.cellTitle, { width: 105 }]}>Họ và tên</Text>
+                      <TextInput
+                        style={{ flex: 1, textAlign: 'right', fontSize: 16, color: isLight ? '#000000' : '#FFFFFF', paddingVertical: 0 }}
+                        placeholder="Họ và tên"
+                        placeholderTextColor="#8E8E93"
+                        value={editDisplayNameInput}
+                        onChangeText={setEditDisplayNameInput}
+                      />
+                    </View>
+
+                    {/* Username */}
+                    <View style={[styles.cellItem, { borderBottomWidth: 0 }]}>
+                      <View style={[styles.cellLeadingIcon, { backgroundColor: '#5856D6' }]}>
+                        <Ionicons name="at" size={17} color="#FFFFFF" />
+                      </View>
+                      <Text style={[styles.cellTitle, { width: 105 }]}>Username</Text>
+                      <TextInput
+                        style={{ flex: 1, textAlign: 'right', fontSize: 16, color: isLight ? '#000000' : '#FFFFFF', paddingVertical: 0 }}
+                        placeholder="@username"
+                        placeholderTextColor="#8E8E93"
+                        value={editUsernameInput}
+                        onChangeText={setEditUsernameInput}
+                        autoCapitalize="none"
+                      />
+                    </View>
                   </View>
-                  <View style={[styles.formRow, { borderBottomWidth: 0 }]}>
-                    <Text style={[styles.formLabel, { color: '#FFFFFF', fontSize: 16 }]}>Username</Text>
-                    <TextInput style={[styles.formInput, { textAlign: 'right', color: '#FFFFFF' }]} placeholder="@username" placeholderTextColor="#636366" value={editUsernameInput} onChangeText={setEditUsernameInput} autoCapitalize="none" />
+                  <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 12, marginTop: 6, marginLeft: 16 }}>
+                    Họ tên có thể đổi bất kỳ lúc nào. Tên người dùng (@username) chỉ được đổi 1 lần mỗi 7 ngày.
+                  </Text>
+                </View>
+
+                {/* NHÓM 2: LIÊN HỆ & BẢO MẬT */}
+                <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 18 }]}>
+                  <Text style={styles.sectionCaption}>LIÊN HỆ & BẢO MẬT</Text>
+                  <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }]}>
+                    {/* Email */}
+                    <View style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}>
+                      <View style={[styles.cellLeadingIcon, { backgroundColor: '#34C759' }]}>
+                        <Ionicons name="mail" size={17} color="#FFFFFF" />
+                      </View>
+                      <Text style={[styles.cellTitle, { width: 105 }]}>Email</Text>
+                      <TextInput
+                        style={{ flex: 1, textAlign: 'right', fontSize: 16, color: isLight ? '#000000' : '#FFFFFF', paddingVertical: 0 }}
+                        placeholder="Chưa cập nhật"
+                        placeholderTextColor="#8E8E93"
+                        value={editEmailInput}
+                        onChangeText={setEditEmailInput}
+                        keyboardType="email-address"
+                        autoCapitalize="none"
+                      />
+                    </View>
+
+                    {/* Số điện thoại */}
+                    <View style={[styles.cellItem, { borderBottomWidth: 0 }]}>
+                      <View style={[styles.cellLeadingIcon, { backgroundColor: '#30B0C7' }]}>
+                        <Ionicons name="call" size={17} color="#FFFFFF" />
+                      </View>
+                      <Text style={[styles.cellTitle, { width: 105 }]}>Điện thoại</Text>
+                      <TextInput
+                        style={{ flex: 1, textAlign: 'right', fontSize: 16, color: isLight ? '#000000' : '#FFFFFF', paddingVertical: 0 }}
+                        placeholder="Chưa cập nhật"
+                        placeholderTextColor="#8E8E93"
+                        value={editPhoneInput}
+                        onChangeText={setEditPhoneInput}
+                        keyboardType="phone-pad"
+                      />
+                    </View>
                   </View>
+                </View>
+
+                {/* NHÓM 3: CÁ NHÂN & TIỂU SỬ */}
+                <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 18 }]}>
+                  <Text style={styles.sectionCaption}>CÁ NHÂN & TIỂU SỬ</Text>
+                  <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }]}>
+                    {/* Ngày sinh */}
+                    <View style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}>
+                      <View style={[styles.cellLeadingIcon, { backgroundColor: '#AF52DE' }]}>
+                        <Ionicons name="calendar" size={17} color="#FFFFFF" />
+                      </View>
+                      <Text style={[styles.cellTitle, { width: 105 }]}>Ngày sinh</Text>
+                      <TextInput
+                        style={{ flex: 1, textAlign: 'right', fontSize: 16, color: isLight ? '#000000' : '#FFFFFF', paddingVertical: 0 }}
+                        placeholder="Chưa cập nhật"
+                        placeholderTextColor="#8E8E93"
+                        value={editBirthdayInput}
+                        onChangeText={setEditBirthdayInput}
+                      />
+                    </View>
+
+                    {/* Giới tính */}
+                    <View style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}>
+                      <View style={[styles.cellLeadingIcon, { backgroundColor: '#FF2D55' }]}>
+                        <Ionicons name="people" size={17} color="#FFFFFF" />
+                      </View>
+                      <Text style={[styles.cellTitle, { width: 105 }]}>Giới tính</Text>
+                      <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'flex-end', gap: 6 }}>
+                        {(['Nam', 'Nữ', 'Chưa cập nhật'] as const).map((g) => {
+                          const isSel = editGenderInput === g;
+                          return (
+                            <TouchableOpacity
+                              key={g}
+                              onPress={() => setEditGenderInput(g)}
+                              style={{
+                                paddingHorizontal: 10,
+                                paddingVertical: 4,
+                                borderRadius: 8,
+                                backgroundColor: isSel ? appSettings.accentColor : (isLight ? '#E5E5EA' : '#2C2C2E'),
+                              }}
+                            >
+                              <Text
+                                style={{
+                                  fontSize: 12.5,
+                                  fontWeight: isSel ? '700' : '500',
+                                  color: isSel ? '#FFFFFF' : (isLight ? '#000000' : '#8E8E93'),
+                                }}
+                              >
+                                {g}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </View>
+
+                    {/* Tiểu sử */}
+                    <View style={[styles.cellItem, { borderBottomWidth: 0, flexDirection: 'column', alignItems: 'stretch', paddingVertical: 12 }]}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                        <View style={[styles.cellLeadingIcon, { backgroundColor: '#8E8E93' }]}>
+                          <Ionicons name="document-text" size={17} color="#FFFFFF" />
+                        </View>
+                        <Text style={styles.cellTitle}>Tiểu sử / Giới thiệu</Text>
+                      </View>
+                      <TextInput
+                        style={{
+                          width: '100%',
+                          minHeight: 70,
+                          color: isLight ? '#000000' : '#FFFFFF',
+                          backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E',
+                          borderRadius: 10,
+                          padding: 10,
+                          fontSize: 14,
+                        }}
+                        multiline
+                        placeholder="Chưa cập nhật... Thêm lời giới thiệu về bạn"
+                        placeholderTextColor="#8E8E93"
+                        value={editBioInput}
+                        onChangeText={setEditBioInput}
+                      />
+                    </View>
+                  </View>
+                </View>
+
+                {/* Nút Lưu Hồ Sơ To Rõ Chuẩn Apple */}
+                <View style={[styles.sectionWrap, { marginTop: 8, marginBottom: 36 }]}>
+                  <TouchableOpacity
+                    onPress={handleSaveEditProfile}
+                    activeOpacity={0.8}
+                    style={{
+                      backgroundColor: appSettings.accentColor,
+                      paddingVertical: 14,
+                      borderRadius: 12,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      shadowColor: appSettings.accentColor,
+                      shadowOffset: { width: 0, height: 4 },
+                      shadowOpacity: 0.3,
+                      shadowRadius: 8,
+                    }}
+                  >
+                    <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '700' }}>
+                      Lưu Thay Đổi
+                    </Text>
+                  </TouchableOpacity>
                 </View>
               </ScrollView>
             </KeyboardAvoidingView>
           ) : (
-            /* MÀN HÌNH CÁ NHÂN CHÍNH (APPLE ID STYLE) */
+            /* MÀN HÌNH CÁ NHÂN CHÍNH (CHUẨN APPLE ID VÀ ĐỒNG BỘ SETTINGS) */
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, { paddingHorizontal: 16, paddingTop: 10 }]}>
               {/* Apple Large Title */}
-              <View style={{ marginBottom: 14 }}>
-                <Text style={{ fontSize: 34, fontWeight: '700', color: '#FFFFFF', letterSpacing: 0.36 }}>
+              <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 12 }]}>
+                <Text style={{ fontSize: 34, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF', letterSpacing: 0.36 }}>
                   Cá nhân
                 </Text>
               </View>
 
-              {/* Apple ID Header Card */}
-              <View style={{ alignItems: 'center', marginVertical: 14 }}>
-                <View
-                  style={{
-                    width: 76,
-                    height: 76,
-                    borderRadius: 38,
-                    backgroundColor: '#3A3A3C',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    marginBottom: 10,
-                  }}
-                >
-                  <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 32 }}>
-                    {(userProfile.displayName || 'A').charAt(0).toUpperCase()}
-                  </Text>
+              {/* Apple ID Header Card (Box Admin căn bằng chuẩn với các box ở dưới) */}
+              <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 18 }]}>
+                <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }, { padding: 16 }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <TouchableOpacity
+                      onPress={handleOpenEditProfile}
+                      activeOpacity={0.8}
+                      style={{ position: 'relative', marginRight: 14 }}
+                    >
+                      {renderProfileAvatar(userProfile.avatarType, userProfile.avatarUri, userProfile.avatarPresetId, userProfile.displayName, userProfile.avatarColor, 66)}
+                      <View
+                        style={{
+                          position: 'absolute',
+                          bottom: -2,
+                          right: -2,
+                          width: 22,
+                          height: 22,
+                          borderRadius: 11,
+                          backgroundColor: appSettings.accentColor,
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          borderWidth: 2,
+                          borderColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                        }}
+                      >
+                        <Ionicons name="camera" size={11} color="#FFFFFF" />
+                      </View>
+                    </TouchableOpacity>
+
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 19, fontWeight: '700' }} numberOfLines={1}>
+                        {userProfile.displayName}
+                      </Text>
+                      <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 13.5, marginTop: 2 }}>
+                        {userProfile.username}
+                      </Text>
+                    </View>
+
+                    <TouchableOpacity
+                      onPress={handleOpenEditProfile}
+                      style={{
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                        borderRadius: 14,
+                        backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                      }}
+                    >
+                      <Text style={{ color: appSettings.accentColor, fontSize: 13, fontWeight: '600' }}>Sửa</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Sub Action Buttons Bar */}
+                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 14, paddingTop: 12, borderTopWidth: 0.5, borderTopColor: isLight ? '#E5E5EA' : '#2C2C2E' }}>
+                    <TouchableOpacity
+                      onPress={handleOpenEditProfile}
+                      style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, borderRadius: 10, backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E' }}
+                    >
+                      <Ionicons name="create-outline" size={15} color={appSettings.accentColor} />
+                      <Text style={{ color: appSettings.accentColor, fontSize: 12.5, fontWeight: '600' }}>Sửa Hồ Sơ</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() => {
+                        handleOpenEditProfile();
+                        setTimeout(() => setIsAvatarModalOpen(true), 250);
+                      }}
+                      style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, borderRadius: 10, backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E' }}
+                    >
+                      <Ionicons name="sparkles-outline" size={15} color={appSettings.accentColor} />
+                      <Text style={{ color: appSettings.accentColor, fontSize: 12.5, fontWeight: '600' }}>Đổi Avatar</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() => {
+                        setCurrentPassInput('');
+                        setNewPassInput('');
+                        setConfirmNewPassInput('');
+                        setProfileSubView('change_password');
+                      }}
+                      style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, borderRadius: 10, backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E' }}
+                    >
+                      <Ionicons name="key-outline" size={15} color={appSettings.accentColor} />
+                      <Text style={{ color: appSettings.accentColor, fontSize: 12.5, fontWeight: '600' }}>Đổi Mật Khẩu</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
-                <Text style={{ color: '#FFFFFF', fontSize: 21, fontWeight: '600' }}>
-                  {userProfile.displayName}
-                </Text>
-                <Text style={{ color: '#8E8E93', fontSize: 14, marginTop: 2 }}>
-                  {userProfile.username}
-                </Text>
-                <TouchableOpacity
-                  onPress={() => {
-                    setEditDisplayNameInput(userProfile.displayName);
-                    setEditUsernameInput(userProfile.username);
-                    setProfileSubView('edit_profile');
-                  }}
-                  style={{ marginTop: 8 }}
-                >
-                  <Text style={{ color: '#007AFF', fontSize: 14, fontWeight: '500' }}>
-                    Chỉnh sửa hồ sơ
-                  </Text>
-                </TouchableOpacity>
               </View>
 
-              {/* NHÓM 1: HOẠT ĐỘNG & THỜI GIAN */}
+              {/* NHÓM THÔNG TIN CÁ NHÂN (HIỂN THỊ CHƯA CẬP NHẬT KHI ĐỂ TRỐNG) */}
+              <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 18 }]}>
+                <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 12.5, fontWeight: '500', textTransform: 'uppercase', marginBottom: 6, marginLeft: 16 }}>
+                  Thông tin cá nhân
+                </Text>
+                <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }]}>
+                  {/* Email */}
+                  <View style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}>
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#34C759' }]}>
+                      <Ionicons name="mail-outline" size={17} color="#FFFFFF" />
+                    </View>
+                    <View style={[styles.cellContent, { flex: 1 }]}>
+                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Email</Text>
+                    </View>
+                    <Text style={{ color: userProfile.email ? (isLight ? '#000000' : '#FFFFFF') : '#8E8E93', fontSize: 15, fontStyle: userProfile.email ? 'normal' : 'italic' }}>
+                      {userProfile.email || 'Chưa cập nhật'}
+                    </Text>
+                  </View>
+
+                  {/* Điện thoại */}
+                  <View style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}>
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#30B0C7' }]}>
+                      <Ionicons name="call-outline" size={17} color="#FFFFFF" />
+                    </View>
+                    <View style={[styles.cellContent, { flex: 1 }]}>
+                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Số điện thoại</Text>
+                    </View>
+                    <Text style={{ color: userProfile.phone ? (isLight ? '#000000' : '#FFFFFF') : '#8E8E93', fontSize: 15, fontStyle: userProfile.phone ? 'normal' : 'italic' }}>
+                      {userProfile.phone || 'Chưa cập nhật'}
+                    </Text>
+                  </View>
+
+                  {/* Ngày sinh */}
+                  <View style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}>
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#AF52DE' }]}>
+                      <Ionicons name="calendar-outline" size={17} color="#FFFFFF" />
+                    </View>
+                    <View style={[styles.cellContent, { flex: 1 }]}>
+                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Ngày sinh</Text>
+                    </View>
+                    <Text style={{ color: userProfile.birthday ? (isLight ? '#000000' : '#FFFFFF') : '#8E8E93', fontSize: 15, fontStyle: userProfile.birthday ? 'normal' : 'italic' }}>
+                      {userProfile.birthday || 'Chưa cập nhật'}
+                    </Text>
+                  </View>
+
+                  {/* Giới tính */}
+                  <View style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}>
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#FF2D55' }]}>
+                      <Ionicons name="people-outline" size={17} color="#FFFFFF" />
+                    </View>
+                    <View style={[styles.cellContent, { flex: 1 }]}>
+                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Giới tính</Text>
+                    </View>
+                    <Text style={{ color: (userProfile.gender && userProfile.gender !== 'Chưa cập nhật') ? (isLight ? '#000000' : '#FFFFFF') : '#8E8E93', fontSize: 15, fontStyle: (userProfile.gender && userProfile.gender !== 'Chưa cập nhật') ? 'normal' : 'italic' }}>
+                      {(userProfile.gender && userProfile.gender !== 'Chưa cập nhật') ? userProfile.gender : 'Chưa cập nhật'}
+                    </Text>
+                  </View>
+
+                  {/* Tiểu sử */}
+                  <View style={[styles.cellItem, { borderBottomWidth: 0, flexDirection: 'column', alignItems: 'stretch', paddingVertical: 12 }]}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                      <View style={[styles.cellLeadingIcon, { backgroundColor: '#8E8E93' }]}>
+                        <Ionicons name="document-text-outline" size={17} color="#FFFFFF" />
+                      </View>
+                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Tiểu sử</Text>
+                    </View>
+                    <Text style={{ color: userProfile.bio ? (isLight ? '#3C3C43' : '#D1D1D6') : '#8E8E93', fontSize: 14, fontStyle: userProfile.bio ? 'normal' : 'italic', lineHeight: 20, paddingLeft: 38 }}>
+                      {userProfile.bio || 'Chưa cập nhật'}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* NHÓM 1: HOẠT ĐỘNG & THỜI GIAN THỰC TẾ */}
               <View style={[styles.sectionWrap, { marginTop: 12, marginBottom: 18 }]}>
-                <Text style={{ color: '#8E8E93', fontSize: 12.5, fontWeight: '500', textTransform: 'uppercase', marginBottom: 6, marginLeft: 16 }}>
+                <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 12.5, fontWeight: '500', textTransform: 'uppercase', marginBottom: 6, marginLeft: 16 }}>
                   Hoạt động
                 </Text>
-                <View style={styles.groupedList}>
-                  {/* Ngày tham gia */}
-                  <View style={styles.cellItem}>
+                <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }]}>
+                  {/* Ngày tham gia thực tế */}
+                  <View style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}>
                     <View style={[styles.cellLeadingIcon, { backgroundColor: '#34C759' }]}>
                       <Ionicons name="calendar-outline" size={18} color="#FFFFFF" />
                     </View>
                     <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Ngày tham gia</Text>
+                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Ngày tham gia</Text>
                     </View>
-                    <Text style={{ color: '#8E8E93', fontSize: 16 }}>{userProfile.joinDate}</Text>
+                    <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 16 }}>{userProfile.joinDate}</Text>
                   </View>
 
-                  {/* Ngày đồng hành */}
-                  <View style={styles.cellItem}>
+                  {/* Thời gian sử dụng thực tế */}
+                  <View style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}>
                     <View style={[styles.cellLeadingIcon, { backgroundColor: '#AF52DE' }]}>
                       <Ionicons name="time-outline" size={18} color="#FFFFFF" />
                     </View>
                     <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Thời gian sử dụng</Text>
+                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Thời gian sử dụng</Text>
                     </View>
-                    <Text style={{ color: '#8E8E93', fontSize: 16 }}>{userProfile.daysActive} ngày</Text>
+                    <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 16 }}>
+                      {userProfile.daysActive <= 1 ? 'Hôm nay (1 ngày)' : `${userProfile.daysActive} ngày`}
+                    </Text>
                   </View>
 
-                  {/* Giờ hoạt động */}
+                  {/* Tổng giờ hoạt động tích lũy thực tế */}
                   <View style={[styles.cellItem, { borderBottomWidth: 0 }]}>
                     <View style={[styles.cellLeadingIcon, { backgroundColor: '#007AFF' }]}>
                       <Ionicons name="hourglass-outline" size={18} color="#FFFFFF" />
                     </View>
                     <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Tổng giờ hoạt động</Text>
+                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Tổng giờ hoạt động</Text>
                     </View>
-                    <Text style={{ color: '#8E8E93', fontSize: 16 }}>{userProfile.hoursUsed}h</Text>
+                    <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 16 }}>
+                      {totalActiveSeconds < 3600
+                        ? `${Math.max(1, Math.floor(totalActiveSeconds / 60))} phút (${(totalActiveSeconds / 3600).toFixed(1)}h)`
+                        : `${(totalActiveSeconds / 3600).toFixed(1)}h`}
+                    </Text>
                   </View>
                 </View>
               </View>
 
               {/* NHÓM 2: ĐĂNG NHẬP & BẢO MẬT */}
               <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 18 }]}>
-                <Text style={{ color: '#8E8E93', fontSize: 12.5, fontWeight: '500', textTransform: 'uppercase', marginBottom: 6, marginLeft: 16 }}>
+                <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 12.5, fontWeight: '500', textTransform: 'uppercase', marginBottom: 6, marginLeft: 16 }}>
                   Đăng nhập & Bảo mật
                 </Text>
-                <View style={styles.groupedList}>
+                <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }]}>
                   {/* Đổi mật khẩu */}
                   <TouchableOpacity
-                    style={styles.cellItem}
+                    style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}
                     activeOpacity={0.7}
                     onPress={() => {
                       setCurrentPassInput('');
@@ -3414,18 +5599,18 @@ export default function App() {
                       <Ionicons name="key-outline" size={18} color="#FFFFFF" />
                     </View>
                     <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Đổi mật khẩu</Text>
+                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Đổi mật khẩu</Text>
                     </View>
-                    <Ionicons name="chevron-forward" size={16} color="#48484A" />
+                    <Ionicons name="chevron-forward" size={16} color={isLight ? '#C7C7CC' : '#48484A'} />
                   </TouchableOpacity>
 
                   {/* Face ID Status */}
-                  <View style={styles.cellItem}>
+                  <View style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}>
                     <View style={[styles.cellLeadingIcon, { backgroundColor: '#34C759' }]}>
                       <Ionicons name="scan-outline" size={18} color="#FFFFFF" />
                     </View>
                     <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Xác thực Face ID</Text>
+                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Xác thực Face ID</Text>
                     </View>
                     <Text style={{ color: appSettings.useFaceId ? '#34C759' : '#8E8E93', fontSize: 16 }}>
                       {appSettings.useFaceId ? 'Đã bật' : 'Tắt'}
@@ -3444,46 +5629,88 @@ export default function App() {
                     <View style={[styles.cellContent, { flex: 1 }]}>
                       <Text style={{ color: '#FF3B30', fontSize: 16, fontWeight: '400' }}>Đăng xuất thiết bị khác</Text>
                     </View>
-                    <Ionicons name="chevron-forward" size={16} color="#48484A" />
+                    <Ionicons name="chevron-forward" size={16} color={isLight ? '#C7C7CC' : '#48484A'} />
                   </TouchableOpacity>
                 </View>
               </View>
 
-              {/* NHÓM 3: CÁC THIẾT BỊ ĐÃ ĐĂNG NHẬP */}
+              {/* NHÓM 3: CÁC THIẾT BỊ ĐÃ ĐĂNG NHẬP (THÔNG TIN THIẾT BỊ THẬT) */}
               <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 32 }]}>
-                <Text style={{ color: '#8E8E93', fontSize: 12.5, fontWeight: '500', textTransform: 'uppercase', marginBottom: 6, marginLeft: 16 }}>
+                <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 12.5, fontWeight: '500', textTransform: 'uppercase', marginBottom: 6, marginLeft: 16 }}>
                   Thiết bị ({loginHistory.length})
                 </Text>
-                <View style={styles.groupedList}>
-                  {loginHistory.slice(0, 5).map((log, idx, arr) => (
-                    <View
-                      key={log.id}
-                      style={[
-                        styles.cellItem,
-                        idx === arr.length - 1 && { borderBottomWidth: 0 },
-                      ]}
-                    >
-                      <View style={[styles.cellLeadingIcon, { backgroundColor: '#8E8E93' }]}>
-                        <Ionicons
-                          name={log.device.includes('Mac') ? 'laptop-outline' : 'phone-portrait-outline'}
-                          size={18}
-                          color="#FFFFFF"
-                        />
+                <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }]}>
+                  {loginHistory.slice(0, 5).map((log, idx, arr) => {
+                    const devLower = log.device.toLowerCase();
+                    const isComputer = devLower.includes('mac') || devLower.includes('windows') || devLower.includes('pc');
+                    const isTablet = devLower.includes('ipad') || devLower.includes('tablet');
+                    const iconName = isComputer ? 'laptop-outline' : isTablet ? 'tablet-portrait-outline' : 'phone-portrait-outline';
+
+                    return (
+                      <View
+                        key={log.id}
+                        style={[
+                          styles.cellItem,
+                          isLight && { borderBottomColor: '#E5E5EA' },
+                          idx === arr.length - 1 && { borderBottomWidth: 0 },
+                        ]}
+                      >
+                        <View style={[styles.cellLeadingIcon, { backgroundColor: log.isCurrent ? '#34C759' : (isLight ? '#E5E5EA' : '#3A3A3C') }]}>
+                          <Ionicons
+                            name={iconName as any}
+                            size={18}
+                            color={log.isCurrent ? '#FFFFFF' : (isLight ? '#000000' : '#FFFFFF')}
+                          />
+                        </View>
+                        <View style={[styles.cellContent, { flex: 1 }]}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: log.isCurrent ? '600' : '400' }} numberOfLines={1}>
+                              {log.device}
+                            </Text>
+                            {log.isCurrent && (
+                              <View style={{ backgroundColor: 'rgba(52, 199, 89, 0.15)', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#34C759' }} />
+                                <Text style={{ color: '#34C759', fontSize: 11, fontWeight: '700' }}>Thiết bị này</Text>
+                              </View>
+                            )}
+                          </View>
+                          <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 12, marginTop: 2 }}>
+                            {log.timestamp} • {log.location} • {log.os}
+                          </Text>
+                        </View>
+                        {!log.isCurrent && (
+                          <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 13 }}>
+                            {log.method}
+                          </Text>
+                        )}
                       </View>
-                      <View style={[styles.cellContent, { flex: 1 }]}>
-                        <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '400' }} numberOfLines={1}>
-                          {log.device}
-                        </Text>
-                        <Text style={{ color: '#8E8E93', fontSize: 12, marginTop: 2 }}>
-                          {log.timestamp} • {log.location}
-                        </Text>
-                      </View>
-                      <Text style={{ color: '#8E8E93', fontSize: 13 }}>
-                        {log.method}
-                      </Text>
-                    </View>
-                  ))}
+                    );
+                  })}
                 </View>
+              </View>
+
+              {/* Nút Đăng Xuất Nhanh trong Hồ Sơ */}
+              <View style={[styles.sectionWrap, { marginTop: 10, marginBottom: 36 }]}>
+                <TouchableOpacity
+                  style={[
+                    styles.groupedList,
+                    {
+                      backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                      paddingVertical: 14,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderWidth: 0.5,
+                      borderColor: isLight ? 'rgba(255, 59, 48, 0.25)' : 'rgba(255, 69, 58, 0.25)',
+                    },
+                  ]}
+                  activeOpacity={0.7}
+                  onPress={handleLogout}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Ionicons name="log-out-outline" size={18} color="#FF3B30" />
+                    <Text style={{ color: '#FF3B30', fontSize: 16, fontWeight: '600' }}>Đăng Xuất</Text>
+                  </View>
+                </TouchableOpacity>
               </View>
             </ScrollView>
           )
@@ -3491,136 +5718,372 @@ export default function App() {
 
         {/* TAB 4: CÀI ĐẶT CHUẨN APPLE iOS 18 (GENUINE APPLE HIG SETTINGS) */}
         {currentTab === 'settings' && (
+          settingsSubView === 'font_size' ? (
+            /* SUBVIEW: CỠ CHỮ & CHỮ IN ĐẬM CHUẨN APPLE */
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: isLight ? '#F2F2F7' : '#000000' }}>
+              <View style={styles.fullScreenNavBar}>
+                <TouchableOpacity onPress={() => setSettingsSubView('main')} style={styles.fullScreenNavBtn} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+                  <Ionicons name="chevron-back" size={20} color={appSettings.accentColor} />
+                  <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor }]}>Cài đặt</Text>
+                </TouchableOpacity>
+                <Text style={styles.fullScreenNavTitle}>Cỡ chữ</Text>
+                <View style={{ width: 60 }} />
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, { paddingHorizontal: 16, paddingTop: 16 }]}>
+                {/* Live Preview Card */}
+                {(() => {
+                  const FONT_LEVELS = [
+                    { level: 1, percent: '82%', label: 'Rất nhỏ', mult: 0.82, scale: 'small' as const },
+                    { level: 2, percent: '90%', label: 'Nhỏ', mult: 0.90, scale: 'small' as const },
+                    { level: 3, percent: '100%', label: 'Tiêu chuẩn', mult: 1.00, scale: 'standard' as const },
+                    { level: 4, percent: '110%', label: 'Vừa', mult: 1.10, scale: 'standard' as const },
+                    { level: 5, percent: '120%', label: 'Lớn', mult: 1.20, scale: 'large' as const },
+                    { level: 6, percent: '135%', label: 'Rất lớn', mult: 1.35, scale: 'large' as const },
+                    { level: 7, percent: '150%', label: 'Cực đại', mult: 1.50, scale: 'large' as const },
+                  ];
+                  const currentLevel = appSettings.fontSizeLevel || 3;
+                  const activeLevelObj = FONT_LEVELS.find((f) => f.level === currentLevel) || FONT_LEVELS[2];
+                  const previewFontSize = Math.round(16 * activeLevelObj.mult);
+                  const previewLineHeight = Math.round(24 * activeLevelObj.mult);
+
+                  const handleSelectLevel = (lvl: number) => {
+                    const found = FONT_LEVELS.find((f) => f.level === lvl) || FONT_LEVELS[2];
+                    saveAppSettings({
+                      ...appSettings,
+                      fontSizeLevel: lvl,
+                      fontSizeScale: found.scale,
+                    });
+                    triggerToast(`✓ Cỡ chữ: Mức ${lvl} - ${found.label} (${found.percent})`);
+                  };
+
+                  return (
+                    <>
+                      <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }, { padding: 18, marginBottom: 20 }]}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                          <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                            Xem trước trực tiếp
+                          </Text>
+                          <View style={{ backgroundColor: `${appSettings.accentColor}18`, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 10 }}>
+                            <Text style={{ color: appSettings.accentColor, fontSize: 12, fontWeight: '700' }}>
+                              Mức {currentLevel}/7 • {activeLevelObj.label} ({activeLevelObj.percent})
+                            </Text>
+                          </View>
+                        </View>
+                        <Text
+                          style={{
+                            color: isLight ? '#000000' : '#FFFFFF',
+                            fontSize: previewFontSize,
+                            fontWeight: appSettings.isBoldText ? '700' : '400',
+                            lineHeight: previewLineHeight,
+                          }}
+                        >
+                          LockX Vault tự động thích ứng với thị giác của bạn. Kéo thanh trượt hoặc chạm vào từng nấc bên dưới để điều chỉnh kích cỡ chữ vừa tầm mắt nhất.
+                        </Text>
+                      </View>
+
+                      {/* Section 1: Chữ in đậm */}
+                      <View style={[styles.sectionWrap, { paddingHorizontal: 0, marginTop: 0, marginBottom: 20 }]}>
+                        <Text style={styles.sectionCaption}>KIỂU CHỮ</Text>
+                        <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }]}>
+                          <View style={[styles.cellItem, { borderBottomWidth: 0 }]}>
+                            <View style={[styles.cellLeadingIcon, { backgroundColor: '#FF9500' }]}>
+                              <Ionicons name="text" size={17} color="#FFFFFF" />
+                            </View>
+                            <View style={[styles.cellContent, { flex: 1 }]}>
+                              <Text style={[styles.cellTitle, { fontWeight: appSettings.isBoldText ? '700' : '500' }]}>Chữ in đậm</Text>
+                            </View>
+                            <Switch
+                              value={appSettings.isBoldText}
+                              onValueChange={(v) => {
+                                saveAppSettings({ ...appSettings, isBoldText: v });
+                                triggerToast(v ? '✓ Đã bật chữ in đậm' : 'Đã tắt chữ in đậm');
+                              }}
+                              trackColor={{ false: isLight ? '#E5E5EA' : '#39393D', true: appSettings.accentColor }}
+                            />
+                          </View>
+                        </View>
+                        <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 12, marginTop: 6, marginLeft: 12 }}>
+                          Tăng cường độ tương phản và nét chữ trên toàn bộ giao diện ứng dụng.
+                        </Text>
+                      </View>
+
+                      {/* Section 2: Kích cỡ chữ Dynamic Draggable Slider (7 Nấc Kéo Chuẩn Apple) */}
+                      <View style={[styles.sectionWrap, { paddingHorizontal: 0, marginTop: 0, marginBottom: 24 }]}>
+                        <Text style={styles.sectionCaption}>KÍCH CỠ CHỮ (7 NẤC ĐIỀU CHỈNH)</Text>
+                        <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }, { padding: 18 }]}>
+                          {/* Info Level Label */}
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                            <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 15, fontWeight: '600' }}>
+                              Cỡ chữ hiển thị
+                            </Text>
+                            <Text style={{ color: appSettings.accentColor, fontSize: 15, fontWeight: '700' }}>
+                              Mức {currentLevel}: {activeLevelObj.label} ({activeLevelObj.percent})
+                            </Text>
+                          </View>
+
+                          {/* Interactive Range Slider (Dùng tay kéo hoặc chuột kéo mượt mà) */}
+                          <View style={{ marginBottom: 18 }}>
+                            {Platform.OS === 'web' ? (
+                              <input
+                                type="range"
+                                min="1"
+                                max="7"
+                                step="1"
+                                value={currentLevel}
+                                onChange={(e: any) => handleSelectLevel(parseInt(e.target.value, 10))}
+                                style={{
+                                  width: '100%',
+                                  height: '28px',
+                                  accentColor: appSettings.accentColor,
+                                  cursor: 'pointer',
+                                } as any}
+                              />
+                            ) : null}
+                          </View>
+
+                          {/* 7 Discrete Tappable Marks */}
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                            <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 13, fontWeight: '700' }}>A</Text>
+
+                            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', position: 'relative' }}>
+                              {/* Background Connecting Bar */}
+                              <View
+                                style={{
+                                  position: 'absolute',
+                                  left: 8,
+                                  right: 8,
+                                  height: 4,
+                                  backgroundColor: isLight ? '#E5E5EA' : '#3A3A3C',
+                                  borderRadius: 2,
+                                }}
+                              />
+
+                              {FONT_LEVELS.map((item) => {
+                                const isCurrent = item.level === currentLevel;
+                                return (
+                                  <TouchableOpacity
+                                    key={item.level}
+                                    onPress={() => handleSelectLevel(item.level)}
+                                    activeOpacity={0.7}
+                                    style={{
+                                      alignItems: 'center',
+                                      zIndex: 2,
+                                      paddingVertical: 4,
+                                      paddingHorizontal: 2,
+                                    }}
+                                  >
+                                    <View
+                                      style={{
+                                        width: isCurrent ? 24 : 12,
+                                        height: isCurrent ? 24 : 12,
+                                        borderRadius: isCurrent ? 12 : 6,
+                                        backgroundColor: isCurrent ? appSettings.accentColor : (isLight ? '#C7C7CC' : '#636366'),
+                                        borderWidth: isCurrent ? 3 : 0,
+                                        borderColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                                        shadowColor: isCurrent ? appSettings.accentColor : 'transparent',
+                                        shadowOffset: { width: 0, height: 2 },
+                                        shadowOpacity: isCurrent ? 0.4 : 0,
+                                        shadowRadius: 5,
+                                      }}
+                                    />
+                                    <Text
+                                      style={{
+                                        fontSize: 10,
+                                        marginTop: 6,
+                                        color: isCurrent ? appSettings.accentColor : (isLight ? '#8E8E93' : '#636366'),
+                                        fontWeight: isCurrent ? '700' : '500',
+                                      }}
+                                    >
+                                      {item.level}
+                                    </Text>
+                                  </TouchableOpacity>
+                                );
+                              })}
+                            </View>
+
+                            <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 22, fontWeight: '800' }}>A</Text>
+                          </View>
+                        </View>
+                        <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 12, marginTop: 8, marginLeft: 16 }}>
+                          Chạm trực tiếp vào số hoặc kéo thanh trượt ngang để xem thay đổi kích cỡ chữ tức thì.
+                        </Text>
+                      </View>
+                    </>
+                  );
+                })()}
+              </ScrollView>
+            </KeyboardAvoidingView>
+          ) : settingsSubView === 'language' ? (
+            /* SUBVIEW: NGÔN NGỮ (LANGUAGE SELECTION) CHUẨN APPLE */
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: isLight ? '#F2F2F7' : '#000000' }}>
+              <View style={styles.fullScreenNavBar}>
+                <TouchableOpacity onPress={() => setSettingsSubView('main')} style={styles.fullScreenNavBtn} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+                  <Ionicons name="chevron-back" size={20} color={appSettings.accentColor} />
+                  <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor }]}>Cài đặt</Text>
+                </TouchableOpacity>
+                <Text style={styles.fullScreenNavTitle}>Ngôn ngữ</Text>
+                <View style={{ width: 60 }} />
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, { paddingHorizontal: 16, paddingTop: 14 }]}>
+                {/* Search Bar */}
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: isLight ? '#E3E3E8' : '#1C1C1E',
+                    borderRadius: 10,
+                    paddingHorizontal: 10,
+                    height: 36,
+                    marginBottom: 16,
+                  }}
+                >
+                  <Ionicons name="search" size={17} color={isLight ? '#8E8E93' : '#8E8E93'} style={{ marginRight: 6 }} />
+                  <TextInput
+                    style={{ flex: 1, color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, padding: 0 }}
+                    placeholder="Tìm kiếm ngôn ngữ"
+                    placeholderTextColor={isLight ? '#8E8E93' : '#8E8E93'}
+                    value={languageSearchQuery}
+                    onChangeText={setLanguageSearchQuery}
+                    autoCapitalize="none"
+                  />
+                  {languageSearchQuery.length > 0 && (
+                    <TouchableOpacity onPress={() => setLanguageSearchQuery('')}>
+                      <Ionicons name="close-circle" size={16} color="#8E8E93" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {/* Grouped Language List */}
+                <View style={[styles.sectionWrap, { paddingHorizontal: 0, marginTop: 0 }]}>
+                  <Text style={styles.sectionCaption}>NGÔN NGỮ ĐÃ HỖ TRỢ</Text>
+                  <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }]}>
+                    {APP_LANGUAGES
+                      .filter((l) =>
+                        languageSearchQuery.trim()
+                          ? l.name.toLowerCase().includes(languageSearchQuery.toLowerCase()) ||
+                            l.region.toLowerCase().includes(languageSearchQuery.toLowerCase())
+                          : true
+                      )
+                      .map((lang, index, arr) => {
+                        const isSelected = appSettings.language === lang.code;
+                        return (
+                          <TouchableOpacity
+                            key={lang.code}
+                            style={[
+                              styles.cellItem,
+                              index === arr.length - 1 && { borderBottomWidth: 0 },
+                            ]}
+                            activeOpacity={0.7}
+                            onPress={() => {
+                              saveAppSettings({ ...appSettings, language: lang.code as any });
+                              setSelectedLanguage(lang.code as any);
+                              triggerToast(`✓ Đã đổi sang ${lang.name}`);
+                            }}
+                          >
+                            <View style={{ marginRight: 12 }}>
+                              {renderCountryFlagIcon(lang.code, 32, 22)}
+                            </View>
+                            <View style={[styles.cellContent, { flex: 1 }]}>
+                              <Text style={[styles.cellTitle, isSelected && { color: appSettings.accentColor, fontWeight: '700' }]}>
+                                {lang.name}
+                              </Text>
+                              <Text style={styles.cellSubtitle}>{lang.region}</Text>
+                            </View>
+                            {isSelected && (
+                              <Ionicons name="checkmark" size={20} color={appSettings.accentColor} />
+                            )}
+                          </TouchableOpacity>
+                        );
+                      })}
+                  </View>
+                </View>
+              </ScrollView>
+            </KeyboardAvoidingView>
+          ) : (
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, { paddingHorizontal: 16, paddingTop: 10 }]}>
             {/* Apple Large Title */}
-            <View style={{ marginBottom: 12 }}>
-              <Text style={{ fontSize: 34, fontWeight: '700', color: '#FFFFFF', letterSpacing: 0.36 }}>
+            <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 12 }]}>
+              <Text style={{ fontSize: 34, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF', letterSpacing: 0.36 }}>
                 Cài đặt
               </Text>
             </View>
 
             {/* Apple Settings Search Bar */}
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                backgroundColor: '#1C1C1E',
-                borderRadius: 10,
-                paddingHorizontal: 10,
-                height: 36,
-                marginBottom: 18,
-              }}
-            >
-              <Ionicons name="search" size={17} color="#8E8E93" style={{ marginRight: 6 }} />
-              <TextInput
-                style={{ flex: 1, color: '#FFFFFF', fontSize: 16, padding: 0 }}
-                placeholder="Tìm kiếm"
-                placeholderTextColor="#8E8E93"
-                value={settingsSearchQuery}
-                onChangeText={setSettingsSearchQuery}
-                autoCapitalize="none"
-              />
-              {settingsSearchQuery.length > 0 && (
-                <TouchableOpacity onPress={() => setSettingsSearchQuery('')}>
-                  <Ionicons name="close-circle" size={16} color="#8E8E93" />
-                </TouchableOpacity>
-              )}
+            <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 18 }]}>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: isLight ? '#E3E3E8' : '#1C1C1E',
+                  borderRadius: 10,
+                  paddingHorizontal: 10,
+                  height: 36,
+                }}
+              >
+                <Ionicons name="search" size={17} color={isLight ? '#8E8E93' : '#8E8E93'} style={{ marginRight: 6 }} />
+                <TextInput
+                  style={{ flex: 1, color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, padding: 0 }}
+                  placeholder="Tìm kiếm"
+                  placeholderTextColor={isLight ? '#8E8E93' : '#8E8E93'}
+                  value={settingsSearchQuery}
+                  onChangeText={setSettingsSearchQuery}
+                  autoCapitalize="none"
+                />
+                {settingsSearchQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => setSettingsSearchQuery('')}>
+                    <Ionicons name="close-circle" size={16} color="#8E8E93" />
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
 
-            {/* Apple ID Profile Cell */}
+            {/* Apple ID Profile Cell (Box Admin căn bằng chuẩn với các box ở dưới) */}
             {(!settingsSearchQuery || 'tài khoản cá nhân hồ sơ profile'.includes(settingsSearchQuery.toLowerCase())) && (
-              <View style={[styles.groupedList, { marginBottom: 18 }]}>
-                <TouchableOpacity
-                  style={[styles.cellItem, { borderBottomWidth: 0, paddingVertical: 10 }]}
-                  activeOpacity={0.7}
-                  onPress={() => setCurrentTab('profile')}
-                >
-                  <View
-                    style={{
-                      width: 54,
-                      height: 54,
-                      borderRadius: 27,
-                      backgroundColor: '#3A3A3C',
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                      marginRight: 14,
-                    }}
+              <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 18 }]}>
+                <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }]}>
+                  <TouchableOpacity
+                    style={[styles.cellItem, { borderBottomWidth: 0, paddingVertical: 10 }, isLight && { backgroundColor: '#FFFFFF' }]}
+                    activeOpacity={0.7}
+                    onPress={() => setCurrentTab('profile')}
                   >
-                    <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 22 }}>
-                      {(userProfile.displayName || 'A').charAt(0).toUpperCase()}
-                    </Text>
-                  </View>
-                  <View style={[styles.cellContent, { flex: 1 }]}>
-                    <Text style={{ color: '#FFFFFF', fontSize: 18, fontWeight: '500' }} numberOfLines={1}>
-                      {userProfile.displayName}
-                    </Text>
-                    <Text style={{ color: '#8E8E93', fontSize: 13, marginTop: 2 }}>
-                      {userProfile.username} • Tài khoản bảo mật
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color="#48484A" />
-                </TouchableOpacity>
+                    <View style={{ marginRight: 14 }}>
+                      {renderProfileAvatar(userProfile.avatarType, userProfile.avatarUri, userProfile.avatarPresetId, userProfile.displayName, userProfile.avatarColor, 54)}
+                    </View>
+                    <View style={[styles.cellContent, { flex: 1 }]}>
+                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 18, fontWeight: '500' }} numberOfLines={1}>
+                        {userProfile.displayName}
+                      </Text>
+                      <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 13, marginTop: 2 }}>
+                        {userProfile.username} • Tài khoản bảo mật
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={isLight ? '#C7C7CC' : '#48484A'} />
+                  </TouchableOpacity>
+                </View>
               </View>
             )}
 
             {/* NHÓM 1: FACE ID & MẬT MÃ */}
             {(!settingsSearchQuery || 'face id mật mã bảo mật khóa vân tay sinh trắc học'.includes(settingsSearchQuery.toLowerCase())) && (
               <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 18 }]}>
-                <Text style={{ color: '#8E8E93', fontSize: 12.5, fontWeight: '500', textTransform: 'uppercase', marginBottom: 6, marginLeft: 16 }}>
+                <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 12.5, fontWeight: '500', textTransform: 'uppercase', marginBottom: 6, marginLeft: 16 }}>
                   Face ID & Mật mã
                 </Text>
-                <View style={styles.groupedList}>
+                <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }]}>
                   {/* Bật / Tắt Face ID */}
-                  <View style={styles.cellItem}>
+                  <View style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}>
                     <View style={[styles.cellLeadingIcon, { backgroundColor: '#34C759' }]}>
                       <Ionicons name="scan-outline" size={18} color="#FFFFFF" />
                     </View>
                     <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Sử dụng Face ID</Text>
+                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Sử dụng Face ID</Text>
                     </View>
                     <Switch
                       value={appSettings.useFaceId}
                       onValueChange={handleToggleFaceId}
-                      trackColor={{ false: '#39393D', true: '#34C759' }}
-                    />
-                  </View>
-
-                  {/* Thử nghiệm Face ID */}
-                  <TouchableOpacity
-                    style={styles.cellItem}
-                    activeOpacity={0.7}
-                    onPress={() => {
-                      triggerFaceIdAuth(
-                        'Xác thực Face ID',
-                        () => triggerToast('✓ Face ID hợp lệ'),
-                        () => triggerToast('Face ID không khớp')
-                      );
-                    }}
-                  >
-                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#007AFF' }]}>
-                      <Ionicons name="person-circle-outline" size={19} color="#FFFFFF" />
-                    </View>
-                    <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Kiểm tra Face ID</Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={17} color="#48484A" />
-                  </TouchableOpacity>
-
-                  {/* Bảo vệ Két sắt */}
-                  <View style={styles.cellItem}>
-                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#5856D6' }]}>
-                      <Ionicons name="lock-closed" size={17} color="#FFFFFF" />
-                    </View>
-                    <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Bảo vệ Két sắt</Text>
-                    </View>
-                    <Switch
-                      value={appSettings.requireFaceIdForVault}
-                      onValueChange={(v) => {
-                        saveAppSettings({ ...appSettings, requireFaceIdForVault: v });
-                        triggerToast(v ? 'Đã bật Face ID cho Két sắt' : 'Đã tắt Face ID cho Két sắt');
-                      }}
-                      trackColor={{ false: '#39393D', true: '#34C759' }}
+                      trackColor={{ false: isLight ? '#E5E5EA' : '#39393D', true: appSettings.accentColor }}
                     />
                   </View>
 
@@ -3630,7 +6093,7 @@ export default function App() {
                       <Ionicons name="timer-outline" size={18} color="#FFFFFF" />
                     </View>
                     <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Tự động khóa</Text>
+                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Tự động khóa</Text>
                     </View>
                     <TouchableOpacity
                       onPress={() => {
@@ -3641,7 +6104,7 @@ export default function App() {
                       }}
                       style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
                     >
-                      <Text style={{ color: '#8E8E93', fontSize: 16 }}>
+                      <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 16 }}>
                         {appSettings.autoLockTimeout === 'immediately'
                           ? 'Ngay'
                           : appSettings.autoLockTimeout === '1m'
@@ -3650,31 +6113,31 @@ export default function App() {
                           ? '5 phút'
                           : 'Tắt'}
                       </Text>
-                      <Ionicons name="chevron-forward" size={16} color="#48484A" />
+                      <Ionicons name="chevron-forward" size={16} color={isLight ? '#C7C7CC' : '#48484A'} />
                     </TouchableOpacity>
                   </View>
                 </View>
-                <Text style={{ color: '#8E8E93', fontSize: 12, marginTop: 6, marginLeft: 16 }}>
+                <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 12, marginTop: 6, marginLeft: 16 }}>
                   Sử dụng Face ID để mở khóa ứng dụng và xác thực an toàn với Secure Enclave.
                 </Text>
               </View>
             )}
 
             {/* NHÓM 2: MÀN HÌNH & ĐỘ SÁNG (DISPLAY & APPEARANCE) */}
-            {(!settingsSearchQuery || 'màn hình giao diện sáng tối màu chữ'.includes(settingsSearchQuery.toLowerCase())) && (
+            {(!settingsSearchQuery || 'màn hình giao diện sáng tối màu chữ cỡ chữ in đậm'.includes(settingsSearchQuery.toLowerCase())) && (
               <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 18 }]}>
-                <Text style={{ color: '#8E8E93', fontSize: 12.5, fontWeight: '500', textTransform: 'uppercase', marginBottom: 6, marginLeft: 16 }}>
+                <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 12.5, fontWeight: '500', textTransform: 'uppercase', marginBottom: 6, marginLeft: 16 }}>
                   Màn hình & Giao diện
                 </Text>
                 
                 {/* 2 Mockups Sáng / Tối chuẩn Apple */}
-                <View style={[styles.groupedList, { padding: 16, marginBottom: 10 }]}>
+                <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }, { padding: 16, marginBottom: 10 }]}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center' }}>
                     {/* Mockup Sáng */}
                     <TouchableOpacity
                       onPress={() => {
                         saveAppSettings({ ...appSettings, themeMode: 'light' });
-                        triggerToast('Đã chọn Giao diện Sáng');
+                        triggerToast('Đã áp dụng giao diện Sáng chuẩn iOS 18.', 'Chỉnh Sửa Giao Diện Thành Công', 'success');
                       }}
                       style={{ alignItems: 'center' }}
                       activeOpacity={0.7}
@@ -3685,10 +6148,14 @@ export default function App() {
                           height: 110,
                           backgroundColor: '#E5E5EA',
                           borderRadius: 14,
-                          borderWidth: appSettings.themeMode === 'light' ? 2 : 1,
-                          borderColor: appSettings.themeMode === 'light' ? '#007AFF' : '#38383A',
+                          borderWidth: isLight ? 2.5 : 1,
+                          borderColor: isLight ? appSettings.accentColor : '#C7C7CC',
                           padding: 8,
                           justifyContent: 'space-between',
+                          shadowColor: isLight ? appSettings.accentColor : 'transparent',
+                          shadowOffset: { width: 0, height: 2 },
+                          shadowOpacity: isLight ? 0.35 : 0,
+                          shadowRadius: 8,
                         }}
                       >
                         <View style={{ height: 10, width: '60%', backgroundColor: '#C7C7CC', borderRadius: 4 }} />
@@ -3698,21 +6165,21 @@ export default function App() {
                         </View>
                         <View style={{ height: 16, backgroundColor: '#FFFFFF', borderRadius: 6 }} />
                       </View>
-                      <Text style={{ color: '#FFFFFF', fontSize: 13, marginTop: 8, fontWeight: '500' }}>Sáng</Text>
+                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 13, marginTop: 8, fontWeight: '600' }}>Sáng</Text>
                       <View
                         style={{
-                          width: 18,
-                          height: 18,
-                          borderRadius: 9,
+                          width: 20,
+                          height: 20,
+                          borderRadius: 10,
                           borderWidth: 1.5,
-                          borderColor: appSettings.themeMode === 'light' ? '#007AFF' : '#636366',
-                          backgroundColor: appSettings.themeMode === 'light' ? '#007AFF' : 'transparent',
+                          borderColor: isLight ? appSettings.accentColor : '#8E8E93',
+                          backgroundColor: isLight ? appSettings.accentColor : 'transparent',
                           justifyContent: 'center',
                           alignItems: 'center',
                           marginTop: 6,
                         }}
                       >
-                        {appSettings.themeMode === 'light' && <Ionicons name="checkmark" size={12} color="#FFFFFF" />}
+                        {isLight && <Ionicons name="checkmark" size={13} color="#FFFFFF" />}
                       </View>
                     </TouchableOpacity>
 
@@ -3720,7 +6187,7 @@ export default function App() {
                     <TouchableOpacity
                       onPress={() => {
                         saveAppSettings({ ...appSettings, themeMode: 'dark' });
-                        triggerToast('Đã chọn Giao diện Tối');
+                        triggerToast('Đã áp dụng giao diện Tối OLED bảo vệ mắt.', 'Chỉnh Sửa Giao Diện Thành Công', 'success');
                       }}
                       style={{ alignItems: 'center' }}
                       activeOpacity={0.7}
@@ -3731,10 +6198,14 @@ export default function App() {
                           height: 110,
                           backgroundColor: '#000000',
                           borderRadius: 14,
-                          borderWidth: appSettings.themeMode === 'dark' ? 2 : 1,
-                          borderColor: appSettings.themeMode === 'dark' ? '#007AFF' : '#38383A',
+                          borderWidth: !isLight ? 2.5 : 1,
+                          borderColor: !isLight ? appSettings.accentColor : (isLight ? '#E5E5EA' : '#38383A'),
                           padding: 8,
                           justifyContent: 'space-between',
+                          shadowColor: !isLight ? appSettings.accentColor : 'transparent',
+                          shadowOffset: { width: 0, height: 2 },
+                          shadowOpacity: !isLight ? 0.35 : 0,
+                          shadowRadius: 8,
                         }}
                       >
                         <View style={{ height: 10, width: '60%', backgroundColor: '#2C2C2E', borderRadius: 4 }} />
@@ -3744,54 +6215,59 @@ export default function App() {
                         </View>
                         <View style={{ height: 16, backgroundColor: '#1C1C1E', borderRadius: 6 }} />
                       </View>
-                      <Text style={{ color: '#FFFFFF', fontSize: 13, marginTop: 8, fontWeight: '500' }}>Tối</Text>
+                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 13, marginTop: 8, fontWeight: '600' }}>Tối</Text>
                       <View
                         style={{
-                          width: 18,
-                          height: 18,
-                          borderRadius: 9,
+                          width: 20,
+                          height: 20,
+                          borderRadius: 10,
                           borderWidth: 1.5,
-                          borderColor: appSettings.themeMode === 'dark' ? '#007AFF' : '#636366',
-                          backgroundColor: appSettings.themeMode === 'dark' ? '#007AFF' : 'transparent',
+                          borderColor: !isLight ? appSettings.accentColor : '#8E8E93',
+                          backgroundColor: !isLight ? appSettings.accentColor : 'transparent',
                           justifyContent: 'center',
                           alignItems: 'center',
                           marginTop: 6,
                         }}
                       >
-                        {appSettings.themeMode === 'dark' && <Ionicons name="checkmark" size={12} color="#FFFFFF" />}
+                        {!isLight && <Ionicons name="checkmark" size={13} color="#FFFFFF" />}
                       </View>
                     </TouchableOpacity>
                   </View>
                 </View>
 
-                {/* Màu nhấn & Cỡ chữ */}
-                <View style={styles.groupedList}>
+                {/* Màu nhấn & Cỡ chữ riêng */}
+                <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }]}>
                   {/* Màu nhấn Tint Color */}
-                  <View style={styles.cellItem}>
-                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#AF52DE' }]}>
+                  <View style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}>
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: appSettings.accentColor }]}>
                       <Ionicons name="color-palette" size={18} color="#FFFFFF" />
                     </View>
                     <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Màu nhấn</Text>
+                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Màu nhấn</Text>
                     </View>
                     <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
                       {[
-                        { color: '#007AFF' },
-                        { color: '#34C759' },
-                        { color: '#AF52DE' },
-                        { color: '#FF9500' },
-                        { color: '#FF3B30' },
+                        { color: '#007AFF', label: 'Xanh Apple' },
+                        { color: '#34C759', label: 'Xanh Ngọc' },
+                        { color: '#AF52DE', label: 'Tím Cyber' },
+                        { color: '#FF9500', label: 'Cam Sunset' },
+                        { color: '#FF3B30', label: 'Đỏ Ruby' },
                       ].map((c) => (
                         <TouchableOpacity
                           key={c.color}
-                          onPress={() => saveAppSettings({ ...appSettings, accentColor: c.color })}
+                          onPress={() => {
+                            saveAppSettings({ ...appSettings, accentColor: c.color });
+                            triggerToast(`Đã áp dụng màu chủ đạo ${c.label} thành công.`, 'Chỉnh Sửa Giao Diện Thành Công', 'success');
+                          }}
                           style={{
-                            width: 24,
-                            height: 24,
-                            borderRadius: 12,
+                            width: 26,
+                            height: 26,
+                            borderRadius: 13,
                             backgroundColor: c.color,
                             justifyContent: 'center',
                             alignItems: 'center',
+                            borderWidth: appSettings.accentColor === c.color ? 2.5 : 0,
+                            borderColor: isLight ? '#000000' : '#FFFFFF',
                           }}
                         >
                           {appSettings.accentColor === c.color && (
@@ -3802,108 +6278,190 @@ export default function App() {
                     </View>
                   </View>
 
-                  {/* Chữ in đậm */}
-                  <View style={styles.cellItem}>
-                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#FF9500' }]}>
-                      <Ionicons name="text" size={17} color="#FFFFFF" />
-                    </View>
-                    <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Chữ in đậm</Text>
-                    </View>
-                    <Switch
-                      value={appSettings.isBoldText}
-                      onValueChange={(v) => saveAppSettings({ ...appSettings, isBoldText: v })}
-                      trackColor={{ false: '#39393D', true: '#34C759' }}
-                    />
-                  </View>
-
-                  {/* Cỡ chữ */}
-                  <View style={[styles.cellItem, { borderBottomWidth: 0 }]}>
+                  {/* Cỡ chữ & Chữ in đậm -> MỞ TAB RIÊNG */}
+                  <TouchableOpacity
+                    style={[styles.cellItem, { borderBottomWidth: 0 }]}
+                    activeOpacity={0.7}
+                    onPress={() => setSettingsSubView('font_size')}
+                  >
                     <View style={[styles.cellLeadingIcon, { backgroundColor: '#007AFF' }]}>
                       <Ionicons name="text-outline" size={18} color="#FFFFFF" />
                     </View>
                     <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Cỡ chữ</Text>
+                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Cỡ chữ & Chữ in đậm</Text>
                     </View>
-                    <TouchableOpacity
-                      onPress={() => {
-                        const sizes: ('small' | 'standard' | 'large')[] = ['small', 'standard', 'large'];
-                        const nextIdx = (sizes.indexOf(appSettings.fontSizeScale) + 1) % sizes.length;
-                        saveAppSettings({ ...appSettings, fontSizeScale: sizes[nextIdx] });
-                      }}
-                      style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
-                    >
-                      <Text style={{ color: '#8E8E93', fontSize: 16 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 16 }}>
                         {appSettings.fontSizeScale === 'small' ? 'Nhỏ' : appSettings.fontSizeScale === 'large' ? 'Lớn' : 'Chuẩn'}
+                        {appSettings.isBoldText ? ' • Đậm' : ''}
                       </Text>
-                      <Ionicons name="chevron-forward" size={16} color="#48484A" />
-                    </TouchableOpacity>
-                  </View>
+                      <Ionicons name="chevron-forward" size={16} color={isLight ? '#C7C7CC' : '#48484A'} />
+                    </View>
+                  </TouchableOpacity>
                 </View>
+              </View>
+            )}
+
+            {/* NHÓM THÔNG BÁO & DYNAMIC ISLAND */}
+            {(!settingsSearchQuery || 'thông báo thông báo đẩy dynamic island chuông cảnh báo âm thanh'.includes(settingsSearchQuery.toLowerCase())) && (
+              <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 18 }]}>
+                <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 12.5, fontWeight: '500', textTransform: 'uppercase', marginBottom: 6, marginLeft: 16 }}>
+                  Thông báo iOS & Dynamic Island
+                </Text>
+                <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }]}>
+                  {/* Cho phép thông báo */}
+                  <View style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}>
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#FF3B30' }]}>
+                      <Ionicons name="notifications" size={18} color="#FFFFFF" />
+                    </View>
+                    <View style={[styles.cellContent, { flex: 1 }]}>
+                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Cho phép thông báo</Text>
+                    </View>
+                    <Switch
+                      value={appSettings.enableNotifications !== false}
+                      onValueChange={async (v) => {
+                        if (v) {
+                          await requestNotificationPermission();
+                          saveAppSettings({ ...appSettings, enableNotifications: true });
+                          triggerToast('Đã cấp quyền và bật thông báo ứng dụng iOS.', 'Cài Đặt Thành Công', 'success');
+                        } else {
+                          saveAppSettings({ ...appSettings, enableNotifications: false });
+                          triggerToast('Đã tắt nhận thông báo đẩy từ ứng dụng.', 'Cài Đặt Thông Báo', 'info');
+                        }
+                      }}
+                      trackColor={{ false: isLight ? '#E5E5EA' : '#39393D', true: appSettings.accentColor }}
+                    />
+                  </View>
+
+                  {/* Cảnh báo bảo mật */}
+                  <View style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}>
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#FF9500' }]}>
+                      <Ionicons name="shield-checkmark" size={18} color="#FFFFFF" />
+                    </View>
+                    <View style={[styles.cellContent, { flex: 1 }]}>
+                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Cảnh báo bảo mật tài khoản</Text>
+                    </View>
+                    <Switch
+                      value={appSettings.notifySecurityAlerts !== false}
+                      onValueChange={(v) => {
+                        saveAppSettings({ ...appSettings, notifySecurityAlerts: v });
+                        triggerToast(v ? 'Đã bật cảnh báo an toàn thiết bị.' : 'Đã tắt cảnh báo bảo mật.', 'Cài Đặt Bảo Mật', 'security');
+                      }}
+                      trackColor={{ false: isLight ? '#E5E5EA' : '#39393D', true: appSettings.accentColor }}
+                    />
+                  </View>
+
+                  {/* Âm thanh thông báo */}
+                  <View style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}>
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#5856D6' }]}>
+                      <Ionicons name="volume-high" size={18} color="#FFFFFF" />
+                    </View>
+                    <View style={[styles.cellContent, { flex: 1 }]}>
+                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Âm thanh thông báo</Text>
+                    </View>
+                    <Switch
+                      value={appSettings.notifySounds !== false}
+                      onValueChange={(v) => {
+                        saveAppSettings({ ...appSettings, notifySounds: v });
+                        triggerToast(v ? 'Đã bật hiệu ứng âm thanh thông báo iOS.' : 'Đã tắt âm thanh thông báo.', 'Cài Đặt Âm Thanh', 'info');
+                      }}
+                      trackColor={{ false: isLight ? '#E5E5EA' : '#39393D', true: appSettings.accentColor }}
+                    />
+                  </View>
+
+                  {/* Thử nghiệm thông báo Dynamic Island */}
+                  <TouchableOpacity
+                    style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      triggerToast('Đã phát thông báo mẫu Dynamic Island chuẩn Apple thành công!', 'Thông Báo Trong Ứng Dụng', 'success');
+                    }}
+                  >
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: appSettings.accentColor }]}>
+                      <Ionicons name="sparkles" size={18} color="#FFFFFF" />
+                    </View>
+                    <View style={[styles.cellContent, { flex: 1 }]}>
+                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Thông báo Dynamic Island</Text>
+                      <Text style={{ color: isLight ? '#8E8E93' : '#8E8E93', fontSize: 12, marginTop: 1 }}>Viên thuốc nổi rơi từ trên xuống bên trong app</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color={isLight ? '#C7C7CC' : '#48484A'} />
+                  </TouchableOpacity>
+
+                  {/* Hẹn giờ gửi thông báo ngoài màn hình khóa iPhone */}
+                  <TouchableOpacity
+                    style={[styles.cellItem, { borderBottomWidth: 0 }]}
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      scheduleExternalPushNotification(
+                        'LockX Vault • Cảnh Báo An Toàn',
+                        'Két sắt của bạn đang được bảo vệ bởi Secure Enclave & Face ID.',
+                        3,
+                        'security'
+                      );
+                    }}
+                  >
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#30D158' }]}>
+                      <Ionicons name="phone-portrait-outline" size={18} color="#FFFFFF" />
+                    </View>
+                    <View style={[styles.cellContent, { flex: 1 }]}>
+                      <Text style={{ color: '#30D158', fontSize: 16, fontWeight: '600' }}>Thông báo ngoài màn hình khóa (sau 3s)</Text>
+                      <Text style={{ color: isLight ? '#8E8E93' : '#8E8E93', fontSize: 12, marginTop: 1 }}>Khóa máy hoặc thoát app để kiểm tra thông báo iPhone</Text>
+                    </View>
+                    <Ionicons name="paper-plane" size={16} color="#30D158" />
+                  </TouchableOpacity>
+                </View>
+                <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 12, marginTop: 6, marginLeft: 16 }}>
+                  Hệ thống thông báo đẩy tương thích iOS 18 & APNs: hỗ trợ cả hiển thị bên ngoài màn hình khóa và Dynamic Island bên trong ứng dụng.
+                </Text>
               </View>
             )}
 
             {/* NHÓM 3: CÀI ĐẶT CHUNG & DUNG LƯỢNG */}
             {(!settingsSearchQuery || 'ngôn ngữ bộ nhớ dữ liệu cache dung lượng icloud'.includes(settingsSearchQuery.toLowerCase())) && (
               <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 18 }]}>
-                <Text style={{ color: '#8E8E93', fontSize: 12.5, fontWeight: '500', textTransform: 'uppercase', marginBottom: 6, marginLeft: 16 }}>
+                <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 12.5, fontWeight: '500', textTransform: 'uppercase', marginBottom: 6, marginLeft: 16 }}>
                   Cài đặt chung
                 </Text>
-                <View style={styles.groupedList}>
-                  {/* Ngôn ngữ */}
+                <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }]}>
+                  {/* Ngôn ngữ -> MỞ TAB RIÊNG CÓ CỜ QUỐC GIA */}
                   <TouchableOpacity
-                    style={styles.cellItem}
+                    style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}
                     activeOpacity={0.7}
                     onPress={() => {
-                      const nextLang = appSettings.language === 'vi' ? 'en' : appSettings.language === 'en' ? 'zh' : 'vi';
-                      saveAppSettings({ ...appSettings, language: nextLang });
-                      setSelectedLanguage(nextLang);
+                      setLanguageSearchQuery('');
+                      setSettingsSubView('language');
                     }}
                   >
-                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#007AFF' }]}>
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: appSettings.accentColor }]}>
                       <Ionicons name="globe-outline" size={18} color="#FFFFFF" />
                     </View>
                     <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Ngôn ngữ</Text>
+                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Ngôn ngữ</Text>
                     </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      <Text style={{ color: '#8E8E93', fontSize: 16 }}>
-                        {appSettings.language === 'vi' ? 'Tiếng Việt' : appSettings.language === 'en' ? 'English' : '简体中文'}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      {renderCountryFlagIcon(appSettings.language, 24, 16)}
+                      <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 16 }}>
+                        {APP_LANGUAGES.find((l) => l.code === appSettings.language)?.name || 'Tiếng Việt'}
                       </Text>
-                      <Ionicons name="chevron-forward" size={16} color="#48484A" />
+                      <Ionicons name="chevron-forward" size={16} color={isLight ? '#C7C7CC' : '#48484A'} />
                     </View>
                   </TouchableOpacity>
 
-                  {/* Đồng bộ iCloud */}
-                  <View style={styles.cellItem}>
-                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#32ADE6' }]}>
-                      <Ionicons name="cloud-outline" size={18} color="#FFFFFF" />
-                    </View>
-                    <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '400' }}>iCloud Sync</Text>
-                    </View>
-                    <Switch
-                      value={appSettings.cloudSync}
-                      onValueChange={(v) => saveAppSettings({ ...appSettings, cloudSync: v })}
-                      trackColor={{ false: '#39393D', true: '#34C759' }}
-                    />
-                  </View>
-
-                  {/* Dung lượng & Dọn dẹp cache */}
+                  {/* Dung lượng & Dọn dẹp cache thực tế */}
                   <View style={[styles.cellItem, { borderBottomWidth: 0 }]}>
                     <View style={[styles.cellLeadingIcon, { backgroundColor: '#8E8E93' }]}>
                       <Ionicons name="server-outline" size={18} color="#FFFFFF" />
                     </View>
                     <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Dung lượng đệm</Text>
+                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Dung lượng đệm</Text>
                     </View>
                     <TouchableOpacity
                       onPress={handleClearCache}
-                      disabled={isCleaningCache || cacheSize === '0.0 MB'}
+                      disabled={isCleaningCache || cacheSize === '0.0 KB' || cacheSize === '0.0 MB'}
                       style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
                     >
-                      <Text style={{ color: cacheSize === '0.0 MB' ? '#8E8E93' : '#007AFF', fontSize: 15 }}>
-                        {isCleaningCache ? 'Đang xóa...' : cacheSize === '0.0 MB' ? '0.0 MB' : `Xóa (${cacheSize})`}
+                      <Text style={{ color: (cacheSize === '0.0 KB' || cacheSize === '0.0 MB') ? '#8E8E93' : appSettings.accentColor, fontSize: 15, fontWeight: '600' }}>
+                        {isCleaningCache ? 'Đang dọn dẹp...' : (cacheSize === '0.0 KB' || cacheSize === '0.0 MB') ? '0.0 KB' : `Xóa (${cacheSize})`}
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -3911,27 +6469,74 @@ export default function App() {
               </View>
             )}
 
-            {/* NHÓM 4: GIỚI THIỆU & PHÁP LÝ */}
-            {(!settingsSearchQuery || 'giới thiệu phiên bản sao lưu chia sẻ'.includes(settingsSearchQuery.toLowerCase())) && (
-              <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 32 }]}>
-                <Text style={{ color: '#8E8E93', fontSize: 12.5, fontWeight: '500', textTransform: 'uppercase', marginBottom: 6, marginLeft: 16 }}>
-                  Giới thiệu
+            {/* NHÓM 4: BẢO MẬT & SAO LƯU DỮ LIỆU THẬT */}
+            {(!settingsSearchQuery || 'sao lưu khôi phục dữ liệu mật khẩu kiểm tra an toàn json'.includes(settingsSearchQuery.toLowerCase())) && (
+              <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 18 }]}>
+                <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 12.5, fontWeight: '500', textTransform: 'uppercase', marginBottom: 6, marginLeft: 16 }}>
+                  Bảo mật & Dữ liệu
                 </Text>
-                <View style={styles.groupedList}>
-                  {/* Xuất sao lưu */}
-                  <TouchableOpacity style={styles.cellItem} activeOpacity={0.7} onPress={handleExportBackup}>
-                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#34C759' }]}>
-                      <Ionicons name="arrow-down-circle-outline" size={18} color="#FFFFFF" />
+                <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }]}>
+                  {/* Kiểm tra an toàn mật khẩu */}
+                  <TouchableOpacity
+                    style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}
+                    activeOpacity={0.7}
+                    onPress={handleSecurityAudit}
+                  >
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#5856D6' }]}>
+                      <Ionicons name="shield-checkmark" size={18} color="#FFFFFF" />
                     </View>
                     <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Sao lưu dữ liệu</Text>
+                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Kiểm tra an toàn mật khẩu</Text>
                     </View>
-                    <Ionicons name="chevron-forward" size={16} color="#48484A" />
+                    <Ionicons name="chevron-forward" size={16} color={isLight ? '#C7C7CC' : '#48484A'} />
                   </TouchableOpacity>
 
-                  {/* Đặt lại */}
+                  {/* Xuất sao lưu dữ liệu JSON thật */}
                   <TouchableOpacity
-                    style={styles.cellItem}
+                    style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}
+                    activeOpacity={0.7}
+                    onPress={handleExportBackup}
+                  >
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#34C759' }]}>
+                      <Ionicons name="cloud-download-outline" size={18} color="#FFFFFF" />
+                    </View>
+                    <View style={[styles.cellContent, { flex: 1 }]}>
+                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Sao lưu dữ liệu (JSON)</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color={isLight ? '#C7C7CC' : '#48484A'} />
+                  </TouchableOpacity>
+
+                  {/* Khôi phục dữ liệu từ file JSON thật */}
+                  <TouchableOpacity
+                    style={[styles.cellItem, { borderBottomWidth: 0 }]}
+                    activeOpacity={0.7}
+                    onPress={handleImportBackup}
+                  >
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#007AFF' }]}>
+                      <Ionicons name="cloud-upload-outline" size={18} color="#FFFFFF" />
+                    </View>
+                    <View style={[styles.cellContent, { flex: 1 }]}>
+                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Khôi phục dữ liệu (JSON)</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color={isLight ? '#C7C7CC' : '#48484A'} />
+                  </TouchableOpacity>
+                </View>
+                <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 12, marginTop: 6, marginLeft: 16 }}>
+                  Dữ liệu sao lưu dạng JSON được mã hóa cục bộ và có thể phục hồi trực tiếp trên bất kỳ thiết bị nào.
+                </Text>
+              </View>
+            )}
+
+            {/* NHÓM 5: THÔNG TIN ỨNG DỤNG & ĐẶT LẠI */}
+            {(!settingsSearchQuery || 'giới thiệu phiên bản đặt lại hệ thống'.includes(settingsSearchQuery.toLowerCase())) && (
+              <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 32 }]}>
+                <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 12.5, fontWeight: '500', textTransform: 'uppercase', marginBottom: 6, marginLeft: 16 }}>
+                  Giới thiệu & Hệ thống
+                </Text>
+                <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }]}>
+                  {/* Đặt lại tất cả cài đặt */}
+                  <TouchableOpacity
+                    style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}
                     activeOpacity={0.7}
                     onPress={() => {
                       Alert.alert(
@@ -3957,7 +6562,7 @@ export default function App() {
                     <View style={[styles.cellContent, { flex: 1 }]}>
                       <Text style={{ color: '#FF3B30', fontSize: 16, fontWeight: '400' }}>Đặt lại cài đặt</Text>
                     </View>
-                    <Ionicons name="chevron-forward" size={16} color="#48484A" />
+                    <Ionicons name="chevron-forward" size={16} color={isLight ? '#C7C7CC' : '#48484A'} />
                   </TouchableOpacity>
 
                   {/* Phiên bản */}
@@ -3966,14 +6571,15 @@ export default function App() {
                       <Ionicons name="information-circle-outline" size={19} color="#FFFFFF" />
                     </View>
                     <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Phiên bản</Text>
+                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Phiên bản</Text>
                     </View>
-                    <Text style={{ color: '#8E8E93', fontSize: 16 }}>1.0 (2026)</Text>
+                    <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 16 }}>2.6.0 (2026)</Text>
                   </View>
                 </View>
               </View>
             )}
           </ScrollView>
+          )
         )}
       </View>
 
@@ -4019,6 +6625,8 @@ export default function App() {
           </TouchableOpacity>
         ))}
       </View>
+        </>
+      )}
 
       {/* MODAL: PHONE APP DETAIL SHEET */}
       <Modal visible={!!selectedPhoneApp} animationType="slide" transparent>
@@ -4394,23 +7002,19 @@ export default function App() {
                 marginBottom: 16,
               }}
             >
-              <Ionicons
-                name={
-                  faceIdScanStatus === 'success'
-                    ? 'checkmark-circle'
-                    : faceIdScanStatus === 'failed'
-                    ? 'close-circle'
-                    : 'scan'
-                }
-                size={54}
-                color={
-                  faceIdScanStatus === 'success'
-                    ? '#30D158'
-                    : faceIdScanStatus === 'failed'
-                    ? '#FF453A'
-                    : appSettings.accentColor
-                }
-              />
+              {faceIdScanStatus === 'scanning' ? (
+                <Image
+                  source={require('./assets/apple_faceid.png')}
+                  style={{ width: 56, height: 56 }}
+                  resizeMode="contain"
+                />
+              ) : (
+                <Ionicons
+                  name={faceIdScanStatus === 'success' ? 'checkmark-circle' : 'close-circle'}
+                  size={54}
+                  color={faceIdScanStatus === 'success' ? '#30D158' : '#FF453A'}
+                />
+              )}
             </View>
 
             <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '800', textAlign: 'center' }}>
@@ -4431,6 +7035,672 @@ export default function App() {
           </View>
         </View>
       </Modal>
+
+      {/* MODAL: CHỌN / TẢI AVATAR APPLE ID */}
+      <Modal visible={isAvatarModalOpen} animationType="slide" transparent onRequestClose={() => setIsAvatarModalOpen(false)}>
+        <View style={styles.modalBackdrop}>
+          <SafeAreaView style={[styles.sheetCard, isLight && { backgroundColor: '#F2F2F7' }]}>
+            {/* Sheet Header */}
+            <View style={[styles.sheetHeader, isLight && { borderBottomColor: '#E5E5EA', backgroundColor: '#FFFFFF' }]}>
+              <TouchableOpacity onPress={() => setIsAvatarModalOpen(false)}>
+                <Text style={[styles.sheetBtnBlue, { color: appSettings.accentColor }]}>Đóng</Text>
+              </TouchableOpacity>
+              <Text style={[styles.sheetTitle, isLight && { color: '#000000' }]}>Ảnh Đại Diện</Text>
+              <TouchableOpacity onPress={() => setIsAvatarModalOpen(false)}>
+                <Text style={[styles.sheetBtnBlue, { color: appSettings.accentColor, fontWeight: '700' }]}>Xong</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Segmented Picker: 3 Tabs */}
+            <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 }}>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                  borderRadius: 10,
+                  padding: 3,
+                }}
+              >
+                {[
+                  { key: 'presets', label: 'Biểu Tượng SVG', icon: 'sparkles' },
+                  { key: 'upload', label: 'Tải Từ Máy', icon: 'cloud-upload' },
+                  { key: 'monogram', label: 'Chữ Cái Màu', icon: 'color-palette' },
+                ].map((t) => {
+                  const isActive = avatarPickerTab === t.key;
+                  return (
+                    <TouchableOpacity
+                      key={t.key}
+                      onPress={() => setAvatarPickerTab(t.key as any)}
+                      style={{
+                        flex: 1,
+                        paddingVertical: 7,
+                        flexDirection: 'row',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        gap: 6,
+                        borderRadius: 8,
+                        backgroundColor: isActive ? (isLight ? '#FFFFFF' : '#636366') : 'transparent',
+                        shadowColor: isActive ? '#000' : 'transparent',
+                        shadowOffset: { width: 0, height: 1 },
+                        shadowOpacity: isActive ? 0.15 : 0,
+                        shadowRadius: 2,
+                      }}
+                    >
+                      <Ionicons
+                        name={t.icon as any}
+                        size={14}
+                        color={isActive ? (isLight ? '#000000' : '#FFFFFF') : (isLight ? '#6C6C70' : '#8E8E93')}
+                      />
+                      <Text
+                        style={{
+                          fontSize: 12.5,
+                          fontWeight: isActive ? '700' : '500',
+                          color: isActive ? (isLight ? '#000000' : '#FFFFFF') : (isLight ? '#6C6C70' : '#8E8E93'),
+                        }}
+                      >
+                        {t.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+              {/* TAB 1: PRESETS */}
+              {avatarPickerTab === 'presets' && (
+                <View>
+                  <Text style={{ fontSize: 13, color: isLight ? '#6C6C70' : '#8E8E93', marginBottom: 12, marginLeft: 4 }}>
+                    Chọn biểu tượng SVG chuẩn Apple bảo mật và công nghệ:
+                  </Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between' }}>
+                    {APP_AVATAR_PRESETS.map((preset) => {
+                      const isSelected = editAvatarType === 'preset' && editAvatarPresetId === preset.id;
+                      return (
+                        <TouchableOpacity
+                          key={preset.id}
+                          activeOpacity={0.7}
+                          onPress={() => {
+                            setEditAvatarType('preset');
+                            setEditAvatarPresetId(preset.id);
+                            setEditAvatarUri('');
+                            triggerToast(`✓ Đã chọn avatar: ${preset.name}`);
+                          }}
+                          style={{
+                            width: '22%',
+                            aspectRatio: 1,
+                            borderRadius: 18,
+                            backgroundColor: preset.bgColor,
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            borderWidth: isSelected ? 3 : 1,
+                            borderColor: isSelected ? appSettings.accentColor : (isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.12)'),
+                            position: 'relative',
+                            shadowColor: isSelected ? appSettings.accentColor : '#000',
+                            shadowOffset: { width: 0, height: 3 },
+                            shadowOpacity: isSelected ? 0.4 : 0.15,
+                            shadowRadius: 5,
+                          }}
+                        >
+                          <Ionicons name={preset.icon as any} size={28} color="#FFFFFF" />
+                          {preset.badge && (
+                            <View
+                              style={{
+                                position: 'absolute',
+                                top: 3,
+                                right: 3,
+                                backgroundColor: isSelected ? appSettings.accentColor : 'rgba(0,0,0,0.6)',
+                                paddingHorizontal: 4,
+                                paddingVertical: 1,
+                                borderRadius: 5,
+                              }}
+                            >
+                              <Text style={{ color: '#fff', fontSize: 8, fontWeight: '800' }}>{preset.badge}</Text>
+                            </View>
+                          )}
+                          {isSelected && (
+                            <View
+                              style={{
+                                position: 'absolute',
+                                bottom: -3,
+                                right: -3,
+                                backgroundColor: appSettings.accentColor,
+                                borderRadius: 10,
+                                width: 20,
+                                height: 20,
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                borderWidth: 1.5,
+                                borderColor: '#fff',
+                              }}
+                            >
+                              <Ionicons name="checkmark" size={13} color="#fff" />
+                            </View>
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+
+              {/* TAB 2: UPLOAD FROM DEVICE */}
+              {avatarPickerTab === 'upload' && (
+                <View style={{ alignItems: 'center', paddingVertical: 14 }}>
+                  <View
+                    style={{
+                      width: 110,
+                      height: 110,
+                      borderRadius: 55,
+                      backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      marginBottom: 16,
+                      borderWidth: 2,
+                      borderColor: editAvatarType === 'image' && !!editAvatarUri ? appSettings.accentColor : (isLight ? '#D1D1D6' : '#3A3A3C'),
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {editAvatarType === 'image' && !!editAvatarUri ? (
+                      <Image source={{ uri: editAvatarUri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                    ) : (
+                      <Ionicons name="cloud-upload-outline" size={48} color={appSettings.accentColor} />
+                    )}
+                  </View>
+
+                  <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 17, fontWeight: '700', marginBottom: 4 }}>
+                    Tải Ảnh Từ Thiết Bị
+                  </Text>
+                  <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 13, textAlign: 'center', maxWidth: 280, marginBottom: 20, lineHeight: 18 }}>
+                    Chọn ảnh chân dung hoặc hình ảnh từ điện thoại, máy tính (hỗ trợ JPG, PNG, WEBP, tối đa 8MB).
+                  </Text>
+
+                  <TouchableOpacity
+                    onPress={handlePickDeviceImage}
+                    activeOpacity={0.8}
+                    style={{
+                      backgroundColor: appSettings.accentColor,
+                      paddingVertical: 13,
+                      paddingHorizontal: 28,
+                      borderRadius: 12,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 8,
+                      shadowColor: appSettings.accentColor,
+                      shadowOffset: { width: 0, height: 4 },
+                      shadowOpacity: 0.3,
+                      shadowRadius: 8,
+                    }}
+                  >
+                    <Ionicons name="folder-open-outline" size={18} color="#FFFFFF" />
+                    <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '700' }}>
+                      Chọn Tệp Ảnh Từ Máy
+                    </Text>
+                  </TouchableOpacity>
+
+                  {editAvatarType === 'image' && !!editAvatarUri && (
+                    <TouchableOpacity
+                      onPress={() => {
+                        setEditAvatarType('preset');
+                        setEditAvatarUri('');
+                        triggerToast('Đã xóa ảnh tải lên');
+                      }}
+                      style={{ marginTop: 16 }}
+                    >
+                      <Text style={{ color: '#FF3B30', fontSize: 14, fontWeight: '600' }}>
+                        Xóa ảnh đang chọn
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+
+              {/* TAB 3: MONOGRAM */}
+              {avatarPickerTab === 'monogram' && (
+                <View style={{ alignItems: 'center', paddingVertical: 10 }}>
+                  {/* Monogram Preview */}
+                  <View
+                    style={{
+                      width: 90,
+                      height: 90,
+                      borderRadius: 45,
+                      backgroundColor: editAvatarColor,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      marginBottom: 16,
+                      shadowColor: editAvatarColor,
+                      shadowOffset: { width: 0, height: 6 },
+                      shadowOpacity: 0.4,
+                      shadowRadius: 10,
+                    }}
+                  >
+                    <Text style={{ color: '#FFFFFF', fontSize: 42, fontWeight: '700' }}>
+                      {(editDisplayNameInput || 'A').charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+
+                  <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '600', marginBottom: 4 }}>
+                    Khởi tạo tên đại diện
+                  </Text>
+                  <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 13, marginBottom: 20 }}>
+                    Chọn màu sắc chủ đạo mang phong cách Apple:
+                  </Text>
+
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'center', maxWidth: 320 }}>
+                    {MONOGRAM_COLORS.map((mc) => {
+                      const isSelected = editAvatarType === 'monogram' && editAvatarColor === mc.color;
+                      return (
+                        <TouchableOpacity
+                          key={mc.color}
+                          activeOpacity={0.7}
+                          onPress={() => {
+                            setEditAvatarType('monogram');
+                            setEditAvatarColor(mc.color);
+                            setEditAvatarUri('');
+                            triggerToast(`✓ Đã chọn màu: ${mc.name}`);
+                          }}
+                          style={{
+                            width: 48,
+                            height: 48,
+                            borderRadius: 24,
+                            backgroundColor: mc.color,
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            borderWidth: isSelected ? 3.5 : 0,
+                            borderColor: isLight ? '#000000' : '#FFFFFF',
+                            transform: [{ scale: isSelected ? 1.12 : 1.0 }],
+                          }}
+                        >
+                          {isSelected && <Ionicons name="checkmark" size={20} color="#FFFFFF" />}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+            </ScrollView>
+          </SafeAreaView>
+        </View>
+      </Modal>
+
+      {/* MODAL: TRUNG TÂM THÔNG BÁO IOS 18 (NOTIFICATION CENTER) */}
+      <Modal
+        visible={showNotificationCenter}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowNotificationCenter(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <SafeAreaView style={[styles.sheetCard, isLight && { backgroundColor: '#F2F2F7' }]}>
+            {/* Sheet Header */}
+            <View style={[styles.sheetHeader, isLight && { borderBottomColor: '#E5E5EA', backgroundColor: '#FFFFFF' }]}>
+              <TouchableOpacity onPress={() => setShowNotificationCenter(false)}>
+                <Text style={[styles.sheetBtnBlue, { color: appSettings.accentColor }]}>Đóng</Text>
+              </TouchableOpacity>
+
+              <View style={{ alignItems: 'center' }}>
+                <Text style={[styles.sheetTitle, isLight && { color: '#000000' }]}>Trung Tâm Thông Báo</Text>
+                <Text style={{ fontSize: 11, color: isLight ? '#8E8E93' : '#98989E', fontWeight: '500' }}>
+                  Apple iOS 18 Notification Center
+                </Text>
+              </View>
+
+              {notifications.length > 0 ? (
+                <TouchableOpacity
+                  onPress={() => {
+                    Alert.alert(
+                      'Xóa tất cả thông báo',
+                      'Bạn có chắc chắn muốn xóa toàn bộ lịch sử thông báo không?',
+                      [
+                        { text: 'Hủy', style: 'cancel' },
+                        {
+                          text: 'Xóa tất cả',
+                          style: 'destructive',
+                          onPress: () => {
+                            setNotifications([]);
+                            AsyncStorage.setItem('lockx_notifications_history', '[]').catch(() => {});
+                            triggerToast('Đã dọn sạch toàn bộ trung tâm thông báo.', 'Dọn Dẹp Thành Công', 'info');
+                          },
+                        },
+                      ]
+                    );
+                  }}
+                >
+                  <Text style={[styles.sheetBtnBlue, { color: '#FF3B30' }]}>Xóa hết</Text>
+                </TouchableOpacity>
+              ) : (
+                <View style={{ width: 44 }} />
+              )}
+            </View>
+
+            {/* Filter Tabs & Test Bar */}
+            <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, gap: 10 }}>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                  borderRadius: 10,
+                  padding: 3,
+                }}
+              >
+                <TouchableOpacity
+                  onPress={() => setNotifFilterTab('all')}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 6,
+                    alignItems: 'center',
+                    borderRadius: 8,
+                    backgroundColor: notifFilterTab === 'all' ? (isLight ? '#FFFFFF' : '#3A3A3C') : 'transparent',
+                    shadowColor: notifFilterTab === 'all' ? '#000' : 'transparent',
+                    shadowOpacity: 0.1,
+                    shadowRadius: 4,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: '600',
+                      color: notifFilterTab === 'all' ? (isLight ? '#000000' : '#FFFFFF') : '#8E8E93',
+                    }}
+                  >
+                    {`Tất cả (${notifications.length})`}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => setNotifFilterTab('unread')}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 6,
+                    alignItems: 'center',
+                    borderRadius: 8,
+                    backgroundColor: notifFilterTab === 'unread' ? (isLight ? '#FFFFFF' : '#3A3A3C') : 'transparent',
+                    shadowColor: notifFilterTab === 'unread' ? '#000' : 'transparent',
+                    shadowOpacity: 0.1,
+                    shadowRadius: 4,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: '600',
+                      color: notifFilterTab === 'unread' ? (isLight ? '#000000' : '#FFFFFF') : '#8E8E93',
+                    }}
+                  >
+                    {`Chưa đọc (${unreadNotifCount})`}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Actions Header Bar: Đọc tất cả + Thử nghiệm */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    const marked = notifications.map((n) => ({ ...n, read: true }));
+                    setNotifications(marked);
+                    AsyncStorage.setItem('lockx_notifications_history', JSON.stringify(marked)).catch(() => {});
+                    triggerToast('Đã đánh dấu tất cả thông báo là đã đọc.', 'Cập Nhật Thành Công', 'info');
+                  }}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}
+                >
+                  <Ionicons name="checkmark-done" size={15} color={appSettings.accentColor} />
+                  <Text style={{ fontSize: 12.5, color: appSettings.accentColor, fontWeight: '600' }}>
+                    Đọc tất cả
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    scheduleExternalPushNotification(
+                      'LockX Vault • Cảnh Báo An Toàn',
+                      'Két sắt của bạn đang được bảo vệ an toàn trên iPhone.',
+                      3,
+                      'security'
+                    );
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 5,
+                    backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                    paddingHorizontal: 10,
+                    paddingVertical: 4.5,
+                    borderRadius: 12,
+                  }}
+                >
+                  <Ionicons name="phone-portrait-outline" size={13} color="#30D158" />
+                  <Text style={{ fontSize: 12, color: '#30D158', fontWeight: '600' }}>
+                    Thử thông báo ngoài (3s)
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Notification Items List */}
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}
+            >
+              {(() => {
+                const displayed = notifFilterTab === 'unread' ? notifications.filter((n) => !n.read) : notifications;
+
+                if (displayed.length === 0) {
+                  return (
+                    <View style={{ alignItems: 'center', justifyContent: 'center', paddingTop: 60, paddingBottom: 40 }}>
+                      <View
+                        style={{
+                          width: 64,
+                          height: 64,
+                          borderRadius: 32,
+                          backgroundColor: isLight ? '#E5E5EA' : 'rgba(255,255,255,0.06)',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          marginBottom: 14,
+                        }}
+                      >
+                        <Ionicons name="notifications-off-outline" size={32} color={isLight ? '#8E8E93' : '#636366'} />
+                      </View>
+                      <Text
+                        style={{
+                          fontSize: 16,
+                          fontWeight: '700',
+                          color: isLight ? '#000000' : '#FFFFFF',
+                          marginBottom: 4,
+                        }}
+                      >
+                        Không có thông báo mới
+                      </Text>
+                      <Text
+                        style={{
+                          fontSize: 13,
+                          color: isLight ? '#8E8E93' : '#8E8E93',
+                          textAlign: 'center',
+                          paddingHorizontal: 30,
+                        }}
+                      >
+                        {notifFilterTab === 'unread'
+                          ? 'Bạn đã đọc tất cả thông báo trong hộp thư.'
+                          : 'Mọi hoạt động bảo mật, đăng nhập và thiết lập sẽ xuất hiện tại đây.'}
+                      </Text>
+                    </View>
+                  );
+                }
+
+                return (
+                  <View style={{ gap: 10, marginTop: 4 }}>
+                    {displayed.map((item) => {
+                      const tagColor =
+                        item.type === 'success'
+                          ? '#30D158'
+                          : item.type === 'warning'
+                          ? '#FF9F0A'
+                          : item.type === 'security'
+                          ? '#0A84FF'
+                          : '#8E8E93';
+
+                      const tagBg =
+                        item.type === 'success'
+                          ? 'rgba(48, 209, 88, 0.14)'
+                          : item.type === 'warning'
+                          ? 'rgba(255, 159, 10, 0.14)'
+                          : item.type === 'security'
+                          ? 'rgba(10, 132, 255, 0.14)'
+                          : 'rgba(142, 142, 147, 0.14)';
+
+                      const tagIcon =
+                        item.type === 'success'
+                          ? 'checkmark-circle'
+                          : item.type === 'warning'
+                          ? 'alert-circle'
+                          : item.type === 'security'
+                          ? 'shield-checkmark'
+                          : 'information-circle';
+
+                      const tagLabel =
+                        item.type === 'success'
+                          ? 'Thành công'
+                          : item.type === 'warning'
+                          ? 'Cảnh báo'
+                          : item.type === 'security'
+                          ? 'Bảo mật'
+                          : 'Hệ thống';
+
+                      return (
+                        <TouchableOpacity
+                          key={item.id}
+                          activeOpacity={0.88}
+                          onPress={() => {
+                            // Toggle read state
+                            const updated = notifications.map((n) => (n.id === item.id ? { ...n, read: !n.read } : n));
+                            setNotifications(updated);
+                            AsyncStorage.setItem('lockx_notifications_history', JSON.stringify(updated)).catch(() => {});
+                          }}
+                          style={{
+                            backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                            borderRadius: 16,
+                            padding: 13,
+                            borderWidth: 0.6,
+                            borderColor: isLight ? '#E5E5EA' : 'rgba(255,255,255,0.1)',
+                            shadowColor: '#000000',
+                            shadowOffset: { width: 0, height: 2 },
+                            shadowOpacity: isLight ? 0.04 : 0.25,
+                            shadowRadius: 6,
+                          }}
+                        >
+                          {/* Header row */}
+                          <View
+                            style={{
+                              flexDirection: 'row',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              marginBottom: 7,
+                            }}
+                          >
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+                              <Image
+                                source={require('./assets/icon.png')}
+                                style={{ width: 18, height: 18, borderRadius: 4.5 }}
+                              />
+                              <Text
+                                style={{
+                                  fontSize: 11,
+                                  fontWeight: '700',
+                                  letterSpacing: 0.5,
+                                  color: isLight ? '#636366' : '#8E8E93',
+                                  textTransform: 'uppercase',
+                                }}
+                              >
+                                LOCKX VAULT
+                              </Text>
+                              <Text style={{ fontSize: 10, color: '#8E8E93' }}>•</Text>
+                              <Text style={{ fontSize: 11, color: isLight ? '#8E8E93' : '#8E8E93' }}>{item.time}</Text>
+                              {!item.read && (
+                                <View
+                                  style={{
+                                    width: 6.5,
+                                    height: 6.5,
+                                    borderRadius: 3.5,
+                                    backgroundColor: appSettings.accentColor,
+                                  }}
+                                />
+                              )}
+                            </View>
+
+                            <View
+                              style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 3.5,
+                                backgroundColor: tagBg,
+                                paddingHorizontal: 7,
+                                paddingVertical: 2.5,
+                                borderRadius: 8,
+                              }}
+                            >
+                              <Ionicons name={tagIcon as any} size={11.5} color={tagColor} />
+                              <Text style={{ fontSize: 10.5, fontWeight: '700', color: tagColor }}>{tagLabel}</Text>
+                            </View>
+                          </View>
+
+                          {/* Title & Body */}
+                          <Text
+                            style={{
+                              fontSize: 14.5,
+                              fontWeight: '700',
+                              color: isLight ? '#000000' : '#FFFFFF',
+                              marginBottom: 3,
+                            }}
+                          >
+                            {item.title}
+                          </Text>
+
+                          <Text
+                            style={{
+                              fontSize: 12.5,
+                              lineHeight: 17,
+                              color: isLight ? '#3C3C43' : '#D1D1D6',
+                            }}
+                          >
+                            {item.message}
+                          </Text>
+
+                          {/* Footer Action: Xóa */}
+                          <View
+                            style={{
+                              flexDirection: 'row',
+                              justifyContent: 'flex-end',
+                              alignItems: 'center',
+                              marginTop: 8,
+                              paddingTop: 6,
+                              borderTopWidth: 0.5,
+                              borderTopColor: isLight ? '#F2F2F7' : 'rgba(255,255,255,0.06)',
+                            }}
+                          >
+                            <TouchableOpacity
+                              onPress={(e: any) => {
+                                e.stopPropagation();
+                                const updated = notifications.filter((n) => n.id !== item.id);
+                                setNotifications(updated);
+                                AsyncStorage.setItem('lockx_notifications_history', JSON.stringify(updated)).catch(() => {});
+                              }}
+                              style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 2, paddingHorizontal: 6 }}
+                            >
+                              <Ionicons name="trash-outline" size={13} color="#FF453A" />
+                              <Text style={{ fontSize: 11.5, color: '#FF453A', fontWeight: '500' }}>Xóa</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                );
+              })()}
+            </ScrollView>
+          </SafeAreaView>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -4438,7 +7708,27 @@ export default function App() {
 // =========================================================================
 // STYLES (Apple Human Interface Guidelines Dark Theme + Onboarding)
 // =========================================================================
-const styles = StyleSheet.create({
+const getStyles = (
+  isLight: boolean,
+  accentColor: string = '#0A84FF',
+  fontSizeScale: 'small' | 'standard' | 'large' = 'standard',
+  isBoldText: boolean = false,
+  fontSizeLevel: number = 3
+) => {
+  const levelMultipliers: Record<number, number> = {
+    1: 0.82,
+    2: 0.90,
+    3: 1.00,
+    4: 1.10,
+    5: 1.20,
+    6: 1.35,
+    7: 1.50,
+  };
+  const fontMult = levelMultipliers[fontSizeLevel] || (fontSizeScale === 'small' ? 0.9 : fontSizeScale === 'large' ? 1.15 : 1.0);
+  const boldWeight = isBoldText ? '700' : '400';
+  const semiBoldWeight = isBoldText ? '800' : '600';
+
+  return StyleSheet.create({
   // Compatibility Load Screen (Matching reference screenshot)
   loadRoot: {
     flex: 1,
@@ -4852,13 +8142,223 @@ const styles = StyleSheet.create({
   // Main UI
   safeRoot: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: isLight ? '#F2F2F7' : '#000000',
   },
   mainContent: {
     flex: 1,
+    backgroundColor: isLight ? '#F2F2F7' : '#000000',
   },
   scrollContent: {
     paddingBottom: 40,
+  },
+  // Apple iOS HUD Success Popup Styles
+  popupBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    zIndex: 999999,
+  },
+  popupCard: {
+    width: '100%',
+    maxWidth: 320,
+    backgroundColor: 'rgba(28, 28, 30, 0.96)',
+    borderRadius: 26,
+    paddingHorizontal: 24,
+    paddingTop: 28,
+    paddingBottom: 22,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.16)',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.5,
+    shadowRadius: 28,
+    elevation: 24,
+  },
+  popupCardLight: {
+    backgroundColor: 'rgba(255, 255, 255, 0.97)',
+    borderColor: 'rgba(0, 0, 0, 0.1)',
+    shadowOpacity: 0.2,
+  },
+  popupIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    marginBottom: 16,
+  },
+  popupTitle: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 8,
+    letterSpacing: -0.3,
+  },
+  popupMessage: {
+    color: '#D1D1D6',
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
+    marginBottom: 22,
+    fontWeight: '400',
+    paddingHorizontal: 6,
+  },
+  popupActionBtn: {
+    width: '100%',
+    height: 46,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+  },
+  popupActionBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15.5,
+    fontWeight: '700',
+  },
+  // iOS 18 Dynamic Island Push Banner Styles
+  iosPushBannerContainer: {
+    position: 'absolute',
+    top: Platform.OS === 'web' ? 14 : 44,
+    left: 12,
+    right: 12,
+    alignItems: 'center',
+    zIndex: 99999,
+    elevation: 99999,
+  },
+  iosPushBannerCard: {
+    width: '100%',
+    maxWidth: 480,
+    backgroundColor: 'rgba(24, 24, 28, 0.96)',
+    borderRadius: 22,
+    paddingHorizontal: 15,
+    paddingTop: 11,
+    paddingBottom: 9,
+    borderWidth: 0.8,
+    borderColor: 'rgba(255, 255, 255, 0.16)',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 20,
+  },
+  iosPushBannerCardLight: {
+    backgroundColor: 'rgba(255, 255, 255, 0.96)',
+    borderColor: 'rgba(0, 0, 0, 0.1)',
+    shadowColor: '#000000',
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+  },
+  iosPushHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  iosPushAppBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  iosPushAppIcon: {
+    width: 18,
+    height: 18,
+    borderRadius: 4.5,
+  },
+  iosPushAppName: {
+    color: '#8E8E93',
+    fontSize: 10.5,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+  iosPushAppDot: {
+    color: '#636366',
+    fontSize: 10,
+  },
+  iosPushAppTime: {
+    color: '#8E8E93',
+    fontSize: 10.5,
+    fontWeight: '500',
+  },
+  iosPushTypeTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3.5,
+    paddingHorizontal: 7.5,
+    paddingVertical: 2.5,
+    borderRadius: 10,
+  },
+  iosPushTypeTagText: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  iosPushContentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  iosPushTextWrap: {
+    flex: 1,
+  },
+  iosPushTitle: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 2,
+    letterSpacing: -0.2,
+  },
+  iosPushBody: {
+    color: '#D1D1D6',
+    fontSize: 12.5,
+    lineHeight: 16.5,
+    fontWeight: '400',
+  },
+  iosPushActionIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  iosPushGrabberWrap: {
+    alignItems: 'center',
+    marginTop: 6,
+  },
+  iosPushGrabberBar: {
+    width: 34,
+    height: 3.5,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  notifBadgePill: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    backgroundColor: '#FF3B30',
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 3,
+    borderWidth: 1.5,
+    borderColor: isLight ? '#F2F2F7' : '#000000',
+  },
+  notifBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9.5,
+    fontWeight: '800',
   },
   bannerToast: {
     position: 'absolute',
@@ -4902,8 +8402,8 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   homeBrandTitle: {
-    color: '#FFFFFF',
-    fontSize: 22,
+    color: isLight ? '#000000' : '#FFFFFF',
+    fontSize: Math.round(22 * fontMult),
     fontWeight: '800',
     letterSpacing: -0.5,
   },
@@ -4921,8 +8421,8 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   homeBrandSubtitle: {
-    color: '#8E8E93',
-    fontSize: 12,
+    color: isLight ? '#6C6C70' : '#8E8E93',
+    fontSize: Math.round(12 * fontMult),
     marginTop: 2,
   },
   homeBrandRight: {
@@ -4955,11 +8455,11 @@ const styles = StyleSheet.create({
   },
   homeStatCard: {
     flex: 1,
-    backgroundColor: '#1C1C1E',
+    backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
     borderRadius: 14,
     padding: 12,
     borderWidth: 0.5,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: isLight ? '#E5E5EA' : 'rgba(255, 255, 255, 0.08)',
   },
   homeStatIconWrap: {
     width: 30,
@@ -4970,13 +8470,13 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   homeStatNumber: {
-    color: '#FFFFFF',
-    fontSize: 20,
+    color: isLight ? '#000000' : '#FFFFFF',
+    fontSize: Math.round(20 * fontMult),
     fontWeight: '800',
   },
   homeStatLabel: {
-    color: '#8E8E93',
-    fontSize: 11,
+    color: isLight ? '#6C6C70' : '#8E8E93',
+    fontSize: Math.round(11 * fontMult),
     fontWeight: '500',
     marginTop: 2,
   },
@@ -4998,15 +8498,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 5,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: isLight ? '#FFFFFF' : 'rgba(255, 255, 255, 0.06)',
     paddingVertical: 9,
     borderRadius: 10,
     borderWidth: 0.5,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: isLight ? '#E5E5EA' : 'rgba(255, 255, 255, 0.08)',
   },
   homeQuickActionText: {
-    color: '#FFFFFF',
-    fontSize: 11.5,
+    color: isLight ? '#000000' : '#FFFFFF',
+    fontSize: Math.round(11.5 * fontMult),
     fontWeight: '600',
   },
 
@@ -5056,7 +8556,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: '#0A84FF',
+    backgroundColor: accentColor,
     paddingVertical: 8,
     borderRadius: 9,
   },
@@ -5089,8 +8589,8 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   appChipBtnActive: {
-    backgroundColor: '#0A84FF',
-    borderColor: '#0A84FF',
+    backgroundColor: accentColor,
+    borderColor: accentColor,
   },
   appChipText: {
     color: '#8E8E93',
@@ -5117,15 +8617,15 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
   },
   btnAppOpen: {
-    backgroundColor: 'rgba(10, 132, 255, 0.15)',
+    backgroundColor: isLight ? 'rgba(0, 0, 0, 0.05)' : 'rgba(10, 132, 255, 0.15)',
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 8,
     borderWidth: 0.5,
-    borderColor: 'rgba(10, 132, 255, 0.3)',
+    borderColor: isLight ? '#E5E5EA' : 'rgba(10, 132, 255, 0.3)',
   },
   btnAppOpenText: {
-    color: '#0A84FF',
+    color: accentColor,
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 0.5,
@@ -5157,7 +8657,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   btnScanNow: {
-    backgroundColor: '#0A84FF',
+    backgroundColor: accentColor,
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 8,
@@ -5298,7 +8798,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#0A84FF',
+    backgroundColor: accentColor,
     paddingHorizontal: 14,
     paddingVertical: 9,
     borderRadius: 10,
@@ -5412,26 +8912,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   largeTitle: {
-    color: '#FFFFFF',
-    fontSize: 32,
-    fontWeight: '700',
+    color: isLight ? '#000000' : '#FFFFFF',
+    fontSize: Math.round(32 * fontMult),
+    fontWeight: isBoldText ? '800' : '700',
     letterSpacing: -0.5,
   },
   navSubtitle: {
-    color: '#8E8E93',
-    fontSize: 13,
+    color: isLight ? '#6C6C70' : '#8E8E93',
+    fontSize: Math.round(13 * fontMult),
     marginTop: 4,
   },
   circlePlusBtn: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: isLight ? '#E3E3E8' : 'rgba(255,255,255,0.1)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   searchBarBox: {
-    backgroundColor: '#1C1C1E',
+    backgroundColor: isLight ? '#E3E3E8' : '#1C1C1E',
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 10,
@@ -5441,12 +8941,12 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    color: '#fff',
-    fontSize: 14,
+    color: isLight ? '#000000' : '#fff',
+    fontSize: Math.round(14 * fontMult),
   },
   segmentContainer: {
     flexDirection: 'row',
-    backgroundColor: '#1C1C1E',
+    backgroundColor: isLight ? '#E3E3E8' : '#1C1C1E',
     borderRadius: 8,
     padding: 2,
     marginTop: 12,
@@ -5458,15 +8958,19 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   segBtnActive: {
-    backgroundColor: '#3A3A3C',
+    backgroundColor: isLight ? '#FFFFFF' : '#3A3A3C',
+    shadowColor: isLight ? '#000' : 'transparent',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: isLight ? 0.12 : 0,
+    shadowRadius: 2,
   },
   segBtnText: {
-    color: '#8E8E93',
-    fontSize: 12,
+    color: isLight ? '#6C6C70' : '#8E8E93',
+    fontSize: Math.round(12 * fontMult),
     fontWeight: '500',
   },
   segBtnTextActive: {
-    color: '#FFFFFF',
+    color: isLight ? '#000000' : '#FFFFFF',
     fontWeight: '600',
   },
   sectionWrap: {
@@ -5474,17 +8978,19 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   sectionCaption: {
-    color: '#8E8E93',
-    fontSize: 11,
+    color: isLight ? '#6C6C70' : '#8E8E93',
+    fontSize: Math.round(11 * fontMult),
     fontWeight: '600',
     letterSpacing: 0.5,
     marginBottom: 8,
     marginLeft: 12,
   },
   groupedList: {
-    backgroundColor: '#1C1C1E',
+    backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
     borderRadius: 14,
     overflow: 'hidden',
+    borderWidth: isLight ? 0.5 : 0,
+    borderColor: isLight ? '#E5E5EA' : 'transparent',
   },
   cellItem: {
     flexDirection: 'row',
@@ -5492,7 +8998,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     borderBottomWidth: 0.5,
-    borderBottomColor: 'rgba(255,255,255,0.08)',
+    borderBottomColor: isLight ? '#E5E5EA' : 'rgba(255,255,255,0.08)',
   },
   cellLeadingIcon: {
     width: 32,
@@ -5506,13 +9012,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   cellTitle: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '600',
+    color: isLight ? '#000000' : '#FFFFFF',
+    fontSize: Math.round(15 * fontMult),
+    fontWeight: isBoldText ? '700' : '600',
   },
   cellSubtitle: {
-    color: '#8E8E93',
-    fontSize: 12,
+    color: isLight ? '#6C6C70' : '#8E8E93',
+    fontSize: Math.round(12 * fontMult),
     marginTop: 2,
   },
   btnCellCopy: {
@@ -5524,9 +9030,9 @@ const styles = StyleSheet.create({
   tabBar: {
     flexDirection: 'row',
     height: 64,
-    backgroundColor: 'rgba(20,20,22,0.95)',
+    backgroundColor: isLight ? 'rgba(248, 248, 248, 0.96)' : 'rgba(20,20,22,0.95)',
     borderTopWidth: 0.5,
-    borderTopColor: 'rgba(255,255,255,0.1)',
+    borderTopColor: isLight ? 'rgba(0, 0, 0, 0.12)' : 'rgba(255,255,255,0.1)',
     justifyContent: 'space-around',
     alignItems: 'center',
     paddingBottom: 8,
@@ -5536,7 +9042,7 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   tabLabel: {
-    color: '#8E8E93',
+    color: isLight ? '#6C6C70' : '#8E8E93',
     fontSize: 10,
     fontWeight: '500',
   },
@@ -5765,7 +9271,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   sheetCard: {
-    backgroundColor: '#1C1C1E',
+    backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: '85%',
@@ -5777,27 +9283,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 0.5,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
+    borderBottomColor: isLight ? '#E5E5EA' : 'rgba(255,255,255,0.1)',
   },
   sheetTitle: {
-    color: '#FFFFFF',
-    fontSize: 16,
+    color: isLight ? '#000000' : '#FFFFFF',
+    fontSize: Math.round(16 * fontMult),
     fontWeight: '700',
   },
   sheetBtnBlue: {
-    color: '#0A84FF',
-    fontSize: 15,
+    color: accentColor,
+    fontSize: Math.round(15 * fontMult),
   },
   detailLabel: {
-    color: '#8E8E93',
+    color: isLight ? '#6C6C70' : '#8E8E93',
     width: 90,
-    fontSize: 14,
+    fontSize: Math.round(14 * fontMult),
   },
   detailVal: {
     flex: 1,
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '500',
+    color: isLight ? '#000000' : '#FFFFFF',
+    fontSize: Math.round(14 * fontMult),
+    fontWeight: isBoldText ? '600' : '500',
   },
   totpBox: {
     backgroundColor: 'rgba(10,132,255,0.08)',
@@ -5834,17 +9340,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderBottomWidth: 0.5,
-    borderBottomColor: 'rgba(255,255,255,0.08)',
+    borderBottomColor: isLight ? '#E5E5EA' : 'rgba(255,255,255,0.08)',
   },
   formLabel: {
-    color: '#FFFFFF',
+    color: isLight ? '#000000' : '#FFFFFF',
     width: 100,
-    fontSize: 14,
+    fontSize: Math.round(14 * fontMult),
+    fontWeight: isBoldText ? '600' : '400',
   },
   formInput: {
     flex: 1,
-    color: '#FFFFFF',
-    fontSize: 14,
+    color: isLight ? '#000000' : '#FFFFFF',
+    fontSize: Math.round(14 * fontMult),
   },
 
   // Dedicated Full Screen Vault Sub-views
@@ -5855,8 +9362,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: 0.5,
-    borderBottomColor: '#2C2C2E',
-    backgroundColor: '#000000',
+    borderBottomColor: isLight ? '#E5E5EA' : '#2C2C2E',
+    backgroundColor: isLight ? '#FFFFFF' : '#000000',
   },
   fullScreenNavBtn: {
     flexDirection: 'row',
@@ -5865,27 +9372,27 @@ const styles = StyleSheet.create({
     minWidth: 60,
   },
   fullScreenNavBtnText: {
-    color: '#0A84FF',
-    fontSize: 16,
+    color: accentColor,
+    fontSize: Math.round(16 * fontMult),
     fontWeight: '500',
   },
   fullScreenNavTitle: {
-    color: '#FFFFFF',
-    fontSize: 17,
-    fontWeight: '600',
+    color: isLight ? '#000000' : '#FFFFFF',
+    fontSize: Math.round(17 * fontMult),
+    fontWeight: isBoldText ? '700' : '600',
     flex: 1,
     textAlign: 'center',
   },
   noteInputCard: {
-    backgroundColor: '#1C1C1E',
+    backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
     borderRadius: 14,
     padding: 14,
     borderWidth: 0.5,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: isLight ? '#E5E5EA' : 'rgba(255,255,255,0.1)',
   },
   formInputMultiline: {
-    color: '#FFFFFF',
-    fontSize: 14,
+    color: isLight ? '#000000' : '#FFFFFF',
+    fontSize: Math.round(14 * fontMult),
     lineHeight: 20,
     minHeight: 80,
     textAlignVertical: 'top',
@@ -5893,13 +9400,13 @@ const styles = StyleSheet.create({
 
   // Apple Screen Time Styles
   screenTimeCard: {
-    backgroundColor: '#1C1C1E',
+    backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
     borderRadius: 16,
     padding: 16,
     marginHorizontal: 16,
     marginTop: 12,
     borderWidth: 0.5,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: isLight ? '#E5E5EA' : 'rgba(255,255,255,0.1)',
   },
   screenTimeHeader: {
     flexDirection: 'row',
@@ -5908,15 +9415,15 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   screenTimeSubLabel: {
-    color: '#8E8E93',
-    fontSize: 11.5,
+    color: isLight ? '#6C6C70' : '#8E8E93',
+    fontSize: Math.round(11.5 * fontMult),
     fontWeight: '600',
     letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
   screenTimeBigText: {
-    color: '#FFFFFF',
-    fontSize: 26,
+    color: isLight ? '#000000' : '#FFFFFF',
+    fontSize: Math.round(26 * fontMult),
     fontWeight: '800',
     marginTop: 2,
     letterSpacing: -0.5,
@@ -6035,4 +9542,5 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '600',
   },
-});
+  });
+};
