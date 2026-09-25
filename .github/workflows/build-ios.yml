@@ -7,9 +7,9 @@ on:
 
 jobs:
   build-ios:
-    name: 📱 Build iOS IPA (EAS)
-    runs-on: ubuntu-latest
-    
+    name: 📱 Build iOS IPA
+    runs-on: macos-latest
+
     steps:
       - name: 📥 Checkout code
         uses: actions/checkout@v4
@@ -23,14 +23,46 @@ jobs:
       - name: 📦 Install dependencies
         run: npm ci
 
-      - name: 🔧 Setup EAS CLI
-        uses: expo/expo-github-action@v8
+      - name: 🔨 Generate native iOS project
+        run: npx expo prebuild --platform ios --clean
+
+      - name: 📲 Install CocoaPods
+        run: |
+          cd ios
+          pod install
+
+      - name: 🏗️ Build iOS app (unsigned)
+        run: |
+          cd ios
+          xcodebuild \
+            -workspace LockX.xcworkspace \
+            -scheme LockX \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -archivePath ${{ github.workspace }}/build/LockX.xcarchive \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            archive
+
+      - name: 📦 Create IPA
+        run: |
+          mkdir -p build/Payload
+          cp -r build/LockX.xcarchive/Products/Applications/LockX.app build/Payload/
+          cd build
+          zip -r LockX.ipa Payload
+          rm -rf Payload
+
+      - name: 📤 Upload IPA artifact
+        uses: actions/upload-artifact@v4
         with:
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
+          name: LockX-IPA
+          path: build/LockX.ipa
+          retention-days: 30
 
-      - name: 🏗️ Build iOS IPA (Preview)
-        run: eas build --platform ios --profile preview --non-interactive
-
-      - name: ✅ Build Complete
-        run: echo "🎉 Build submitted! Check https://expo.dev for download link."
+      - name: ✅ Done
+        run: |
+          echo "🎉 Build complete!"
+          echo "📱 Download IPA from the Artifacts section above"
+          echo "📲 Install via AltStore / Sideloadly / TrollStore"
