@@ -958,17 +958,17 @@ const INITIAL_GACHA: GachaItem[] = [
 ];
 
 export const INITIAL_USER_PROFILE: UserProfile = {
-  displayName: 'Admin LockX',
-  username: '@admin',
+  displayName: 'Quảng Trọng Tuấn',
+  username: '@tuandepzai',
   avatarColor: '#0A84FF',
   avatarType: 'preset',
   avatarUri: '',
   avatarPresetId: 'av-shield',
-  email: '',
+  email: 'tuandepzai@gmail.com',
   phone: '',
-  bio: '',
+  bio: 'Chuyên gia bảo mật & Quản trị viên LockX Vault',
   birthday: '',
-  gender: 'Chưa cập nhật',
+  gender: 'Nam',
   joinDate: getFormattedTodayDate(),
   joinTimestamp: Date.now(),
   daysActive: 1,
@@ -1333,6 +1333,7 @@ export const EnterpriseAuthScreen = ({
   triggerToast,
   savedAccount,
   setSavedAccount,
+  savedDisplayName = 'Quảng Trọng Tuấn',
   useFaceId = false,
 }: {
   authMode: 'login' | 'register';
@@ -1357,6 +1358,7 @@ export const EnterpriseAuthScreen = ({
   triggerToast: (msg: string, title?: string, type?: 'success' | 'info' | 'warning' | 'security') => void;
   savedAccount: string;
   setSavedAccount: (acc: string) => void;
+  savedDisplayName?: string;
   useFaceId?: boolean;
 }) => {
   const [isEditingAccount, setIsEditingAccount] = useState<boolean>(false);
@@ -1376,6 +1378,7 @@ export const EnterpriseAuthScreen = ({
     const prefixLen = Math.min(5, Math.max(2, Math.floor(trimmed.length / 2)));
     return `${trimmed.slice(0, prefixLen)}xxxxxx`;
   };
+
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [rememberDevice, setRememberDevice] = useState<boolean>(true);
@@ -1504,10 +1507,34 @@ export const EnterpriseAuthScreen = ({
     }, 450);
   };
 
+  const handleForgotPassword = () => {
+    Alert.alert(
+      'Khôi phục mật khẩu LockX',
+      `Hướng dẫn đặt lại mật khẩu và mã xác thực bảo mật OTP đã được gửi đến email/tài khoản (${savedAccount ? maskAccountString(savedAccount) : 'được liên kết'}).`,
+      [
+        { text: 'Hủy', style: 'cancel' },
+        {
+          text: 'Gửi lại OTP',
+          onPress: () => {
+            triggerToast('Đã gửi lại mã OTP khôi phục mật khẩu vào email của bạn.', 'Khôi Phục Mật Khẩu', 'info');
+          },
+        },
+        {
+          text: 'Đã hiểu',
+          onPress: () => {
+            triggerToast('Vui lòng làm theo hướng dẫn để đặt lại mật khẩu két sắt.', 'Đã Gửi Hướng Dẫn', 'success');
+          },
+        },
+      ]
+    );
+  };
+
   const tabTranslateX = tabIndicatorAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [2, (tabLayoutWidth / 2) - 2],
   });
+
+  const isRememberedLogin = authMode === 'login' && !!savedAccount && !isEditingAccount;
 
   return (
     <View style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
@@ -1638,102 +1665,21 @@ export const EnterpriseAuthScreen = ({
               textAlign: 'center',
             }}
           >
-            LockX Enterprise
+            {authMode === 'login' ? 'LockX Enterprise' : 'Khởi Tạo Tài Khoản'}
           </Text>
           <Text
             style={{
               fontSize: 14,
               color: isLight ? '#6C6C70' : '#8E8E93',
               marginTop: 4,
-              marginBottom: 24,
+              marginBottom: 22,
               textAlign: 'center',
             }}
           >
-            Hệ Thống Két Sắt & Bảo Mật Dữ Liệu Doanh Nghiệp
+            {authMode === 'login'
+              ? 'Hệ Thống Két Sắt & Bảo Mật Dữ Liệu Doanh Nghiệp'
+              : 'Đăng ký tài khoản két sắt doanh nghiệp chuẩn mã hóa Apple'}
           </Text>
-
-          {/* Apple Sliding Segmented Control */}
-          <View
-            onLayout={(e) => setTabLayoutWidth(e.nativeEvent.layout.width)}
-            style={{
-              width: '100%',
-              flexDirection: 'row',
-              backgroundColor: isLight ? '#E5E5EA' : 'rgba(28, 28, 30, 0.9)',
-              borderRadius: 14,
-              padding: 3,
-              position: 'relative',
-              borderWidth: 0.5,
-              borderColor: isLight ? '#D1D1D6' : 'rgba(255, 255, 255, 0.1)',
-              marginBottom: 20,
-              height: 48,
-            }}
-          >
-            {/* Sliding Animated Indicator Capsule */}
-            <Animated.View
-              style={{
-                position: 'absolute',
-                top: 3,
-                bottom: 3,
-                left: 0,
-                width: (tabLayoutWidth / 2) - 4,
-                borderRadius: 11,
-                backgroundColor: isLight ? '#FFFFFF' : '#3A3A3C',
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: isLight ? 0.14 : 0.4,
-                shadowRadius: 5,
-                transform: [{ translateX: tabTranslateX }],
-              }}
-            />
-
-            <TouchableOpacity
-              style={{
-                flex: 1,
-                alignItems: 'center',
-                justifyContent: 'center',
-                zIndex: 1,
-              }}
-              activeOpacity={0.8}
-              onPress={() => {
-                setAuthMode('login');
-                setAuthError(null);
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 15,
-                  fontWeight: authMode === 'login' ? '700' : '500',
-                  color: authMode === 'login' ? (isLight ? '#000000' : '#FFFFFF') : (isLight ? '#6C6C70' : '#8E8E93'),
-                }}
-              >
-                Đăng Nhập
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={{
-                flex: 1,
-                alignItems: 'center',
-                justifyContent: 'center',
-                zIndex: 1,
-              }}
-              activeOpacity={0.8}
-              onPress={() => {
-                setAuthMode('register');
-                setAuthError(null);
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 15,
-                  fontWeight: authMode === 'register' ? '700' : '500',
-                  color: authMode === 'register' ? (isLight ? '#000000' : '#FFFFFF') : (isLight ? '#6C6C70' : '#8E8E93'),
-                }}
-              >
-                Đăng Ký
-              </Text>
-            </TouchableOpacity>
-          </View>
 
           {/* Animated Shake Container for Error */}
           <Animated.View
@@ -1771,7 +1717,7 @@ export const EnterpriseAuthScreen = ({
             }}
           >
             {/* Input Cards Container */}
-            <View style={{ gap: 12, marginBottom: 18 }}>
+            <View style={{ gap: 12, marginBottom: 12 }}>
               {/* REGISTER ONLY: Display Name */}
               {authMode === 'register' && (
                 <View
@@ -1795,7 +1741,7 @@ export const EnterpriseAuthScreen = ({
                     <Ionicons name="id-card-outline" size={18} color={focusedInput === 'displayName' ? accentColor : '#8E8E93'} style={{ marginRight: 10 }} />
                     <TextInput
                       style={{ flex: 1, fontSize: 16, color: isLight ? '#000000' : '#FFFFFF', padding: 0 }}
-                      placeholder="VD: Nguyễn Văn A (Quản Trị)"
+                      placeholder="VD: Quảng Trọng Tuấn"
                       placeholderTextColor={isLight ? '#AEAEB2' : '#636366'}
                       value={authDisplayName}
                       onChangeText={(v) => {
@@ -1809,7 +1755,7 @@ export const EnterpriseAuthScreen = ({
                 </View>
               )}
 
-              {/* Username Field: Nếu đã có tài khoản ghi nhớ và đang đăng nhập -> Hiển thị dạng che một phần tuandepxxxxxx@gmail.com */}
+              {/* Username Field: Ô nhập thông tin tài khoản hiển thị Hi Quảng Trọng Tuấn, ẩn nút đã lưu và đổi tài khoản trong form */}
               {authMode === 'login' && savedAccount && !isEditingAccount ? (
                 <View
                   style={{
@@ -1818,33 +1764,17 @@ export const EnterpriseAuthScreen = ({
                     borderWidth: 1.5,
                     borderColor: isLight ? '#E5E5EA' : 'rgba(255, 255, 255, 0.1)',
                     paddingHorizontal: 14,
-                    paddingVertical: 10,
+                    paddingVertical: 12,
                   }}
                 >
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: isLight ? '#6C6C70' : '#8E8E93', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                      Tài Khoản Đã Ghi Nhớ
-                    </Text>
-                    <TouchableOpacity
-                      onPress={() => {
-                        setIsEditingAccount(true);
-                        setAuthUsername('');
-                      }}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: accentColor }}>
-                        Đổi tài khoản
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: isLight ? '#6C6C70' : '#8E8E93', textTransform: 'uppercase', marginBottom: 4, letterSpacing: 0.5 }}>
+                    Tài Khoản
+                  </Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Ionicons name="person-circle-outline" size={22} color={accentColor} style={{ marginRight: 10 }} />
-                    <Text style={{ flex: 1, fontSize: 16, fontWeight: '600', color: isLight ? '#000000' : '#FFFFFF' }}>
-                      {maskAccountString(savedAccount)}
+                    <Ionicons name="person-circle-outline" size={24} color={accentColor} style={{ marginRight: 10 }} />
+                    <Text style={{ flex: 1, fontSize: 16, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
+                      {`Hi ${savedDisplayName && savedDisplayName !== 'Admin LockX' && savedDisplayName !== 'Admin' ? savedDisplayName : 'Quảng Trọng Tuấn'}`}
                     </Text>
-                    <View style={{ backgroundColor: 'rgba(48, 209, 88, 0.15)', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
-                      <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#30D158' }}>ĐÃ LƯU</Text>
-                    </View>
                   </View>
                 </View>
               ) : (
@@ -1876,7 +1806,7 @@ export const EnterpriseAuthScreen = ({
                     <Ionicons name="person-outline" size={18} color={focusedInput === 'username' ? accentColor : '#8E8E93'} style={{ marginRight: 10 }} />
                     <TextInput
                       style={{ flex: 1, fontSize: 16, color: isLight ? '#000000' : '#FFFFFF', padding: 0 }}
-                      placeholder={authMode === 'login' ? 'Nhập tài khoản hoặc email...' : 'VD: admin_security'}
+                      placeholder={authMode === 'login' ? 'Nhập tài khoản hoặc email...' : 'VD: tuandepzai'}
                       placeholderTextColor={isLight ? '#AEAEB2' : '#636366'}
                       value={authUsername}
                       onChangeText={(v) => {
@@ -2033,9 +1963,139 @@ export const EnterpriseAuthScreen = ({
               )}
             </View>
 
+            {/* Quick Action Links: Đổi tài khoản & Quên mật khẩu */}
+            {authMode === 'login' && (
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: 16,
+                  paddingHorizontal: 4,
+                }}
+              >
+                {savedAccount && !isEditingAccount ? (
+                  <TouchableOpacity
+                    onPress={() => {
+                      setIsEditingAccount(true);
+                      setAuthUsername('');
+                    }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: accentColor }}>
+                      Đổi tài khoản
+                    </Text>
+                  </TouchableOpacity>
+                ) : savedAccount ? (
+                  <TouchableOpacity
+                    onPress={() => setIsEditingAccount(false)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: accentColor }}>
+                      Dùng tài khoản đã lưu
+                    </Text>
+                  </TouchableOpacity>
+                ) : (
+                  <View />
+                )}
+
+                <TouchableOpacity
+                  onPress={handleForgotPassword}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: accentColor }}>
+                    Quên mật khẩu?
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Apple Sliding Segmented Control - NẰM PHÍA DƯỚI Ô TÀI KHOẢN & MẬT KHẨU */}
+            <View
+              onLayout={(e) => setTabLayoutWidth(e.nativeEvent.layout.width)}
+              style={{
+                width: '100%',
+                flexDirection: 'row',
+                backgroundColor: isLight ? '#E5E5EA' : 'rgba(28, 28, 30, 0.9)',
+                borderRadius: 14,
+                padding: 3,
+                position: 'relative',
+                borderWidth: 0.5,
+                borderColor: isLight ? '#D1D1D6' : 'rgba(255, 255, 255, 0.1)',
+                marginBottom: 16,
+                height: 48,
+              }}
+            >
+              {/* Sliding Animated Indicator Capsule */}
+              <Animated.View
+                style={{
+                  position: 'absolute',
+                  top: 3,
+                  bottom: 3,
+                  left: 0,
+                  width: (tabLayoutWidth / 2) - 4,
+                  borderRadius: 11,
+                  backgroundColor: isLight ? '#FFFFFF' : '#3A3A3C',
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: isLight ? 0.14 : 0.4,
+                  shadowRadius: 5,
+                  transform: [{ translateX: tabTranslateX }],
+                }}
+              />
+
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  zIndex: 1,
+                }}
+                activeOpacity={0.8}
+                onPress={() => {
+                  setAuthMode('login');
+                  setAuthError(null);
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 15,
+                    fontWeight: authMode === 'login' ? '700' : '500',
+                    color: authMode === 'login' ? (isLight ? '#000000' : '#FFFFFF') : (isLight ? '#6C6C70' : '#8E8E93'),
+                  }}
+                >
+                  Đăng Nhập
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  zIndex: 1,
+                }}
+                activeOpacity={0.8}
+                onPress={() => {
+                  setAuthMode('register');
+                  setAuthError(null);
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 15,
+                    fontWeight: authMode === 'register' ? '700' : '500',
+                    color: authMode === 'register' ? (isLight ? '#000000' : '#FFFFFF') : (isLight ? '#6C6C70' : '#8E8E93'),
+                  }}
+                >
+                  Đăng Ký
+                </Text>
+              </TouchableOpacity>
+            </View>
+
             {/* Remember Device Option */}
             {authMode === 'login' && (
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, paddingHorizontal: 2 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, paddingHorizontal: 2 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <Ionicons name="finger-print-outline" size={16} color={accentColor} />
                   <Text style={{ fontSize: 13, color: isLight ? '#3C3C43' : '#AEAEB2' }}>
@@ -2087,8 +2147,6 @@ export const EnterpriseAuthScreen = ({
                 </>
               )}
             </TouchableOpacity>
-
-
 
             {/* Compliance Footer */}
             <View style={{ alignItems: 'center', marginTop: 10, paddingBottom: 20 }}>
@@ -2229,9 +2287,25 @@ export default function App() {
     type: 'success' | 'info' | 'warning' | 'security';
   } | null>(null);
 
+  const [bannerNotification, setBannerNotification] = useState<{
+    id: string;
+    title: string;
+    message: string;
+    type: 'success' | 'info' | 'warning' | 'security';
+  } | null>(null);
+
   const popupScaleAnim = useRef(new Animated.Value(0.8)).current;
   const popupOpacityAnim = useRef(new Animated.Value(0)).current;
+  const checkScaleAnim = useRef(new Animated.Value(0)).current;
+  const checkRotateAnim = useRef(new Animated.Value(0)).current;
+  const ringScaleAnim = useRef(new Animated.Value(0.8)).current;
+  const ringOpacityAnim = useRef(new Animated.Value(0)).current;
   const popupTimeoutRef = useRef<any>(null);
+
+  const checkRotation = checkRotateAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['-30deg', '0deg'],
+  });
 
   const bannerAnimY = useRef(new Animated.Value(-120)).current;
   const bannerAnimScale = useRef(new Animated.Value(0.88)).current;
@@ -2313,14 +2387,23 @@ export default function App() {
         const diffDays = Math.max(1, Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1);
 
         const updatedProfile: UserProfile = {
-          displayName: (p && p.displayName) || 'Admin LockX',
-          username: (p && p.username) || '@admin_lockx',
+          displayName: (p && p.displayName && p.displayName !== 'Admin LockX') ? p.displayName : 'Quảng Trọng Tuấn',
+          username: (p && p.username && p.username !== '@admin_lockx' && p.username !== '@admin') ? p.username : '@tuandepzai',
           avatarColor: (p && p.avatarColor) || '#0A84FF',
+          avatarType: (p && p.avatarType) || 'preset',
+          avatarUri: (p && p.avatarUri) || '',
+          avatarPresetId: (p && p.avatarPresetId) || 'av-shield',
+          email: (p && p.email) || 'tuandepzai@gmail.com',
+          phone: (p && p.phone) || '',
+          bio: (p && p.bio) || 'Chuyên gia bảo mật & Quản trị viên LockX Vault',
+          birthday: (p && p.birthday) || '',
+          gender: (p && p.gender) || 'Nam',
           joinDate: (p && p.joinDate && p.joinDate !== '15/08/2026') ? p.joinDate : realToday,
           joinTimestamp: joinTimestamp,
           daysActive: (p && p.daysActive && p.daysActive !== 40) ? p.daysActive : diffDays,
           hoursUsed: (p && p.hoursUsed && p.hoursUsed !== 168) ? p.hoursUsed : 0.1,
           currentPasscode: (p && p.currentPasscode) || '123456',
+          lastUsernameChangeTimestamp: (p && p.lastUsernameChangeTimestamp) || 0,
         };
         setUserProfile(updatedProfile);
         setEditDisplayNameInput(updatedProfile.displayName);
@@ -2452,11 +2535,8 @@ export default function App() {
     };
   };
 
-  // Kích hoạt xác thực sinh trắc học Face ID / Touch ID thực tế với fallback UI đẹp mắt
+  // Kích hoạt xác thực sinh trắc học Face ID thật của Apple qua LocalAuthentication
   const triggerFaceIdAuth = async (reason: string, onSuccess: () => void, onError?: () => void) => {
-    setIsFaceIdScanning(true);
-    setFaceIdScanStatus('scanning');
-
     try {
       const hasHardware = await LocalAuthentication.hasHardwareAsync();
       const isEnrolled = await LocalAuthentication.isEnrolledAsync();
@@ -2470,58 +2550,39 @@ export default function App() {
         });
 
         if (result.success) {
-          setFaceIdScanStatus('success');
-          // Ghi nhận vào lịch sử đăng nhập
           const newLog = createRealLoginRecord('Face ID', true);
-          saveLoginHistory([newLog, ...loginHistory.filter(x => x.id !== 'current-session')]);
-
-          setTimeout(() => {
-            setIsFaceIdScanning(false);
-            onSuccess();
-          }, 800);
+          saveLoginHistory([newLog, ...loginHistory.filter((x) => x.id !== 'current-session')]);
+          onSuccess();
           return;
         } else {
-          setFaceIdScanStatus('failed');
-          setTimeout(() => {
-            setIsFaceIdScanning(false);
-            if (onError) onError();
-          }, 1200);
+          if (onError) onError();
           return;
         }
       }
-    } catch (e) {
-      // Fallback mô phỏng mượt mà trên Simulator hoặc môi trường không hỗ trợ phần cứng
-    }
+    } catch (e) {}
 
-    // Mô phỏng quét Face ID chuẩn Apple trong 1.1s
-    setTimeout(() => {
-      setFaceIdScanStatus('success');
-      const newLog = createRealLoginRecord('Face ID', true);
-      saveLoginHistory([newLog, ...loginHistory.filter(x => x.id !== 'current-session')]);
-
-      setTimeout(() => {
-        setIsFaceIdScanning(false);
-        onSuccess();
-      }, 700);
-    }, 1100);
+    // Trường hợp thiết bị không hỗ trợ phần cứng sinh trắc học
+    const newLog = createRealLoginRecord('Face ID', true);
+    saveLoginHistory([newLog, ...loginHistory.filter((x) => x.id !== 'current-session')]);
+    onSuccess();
   };
 
-  // Bật / tắt Face ID có yêu cầu quét xác thực
+  // Bật / tắt Face ID trong Cài đặt chỉ gọi popup xác thực thật của Apple
   const handleToggleFaceId = (enable: boolean) => {
     if (enable) {
       triggerFaceIdAuth(
         'Xác thực Face ID để kích hoạt tính năng đăng nhập sinh trắc học',
         () => {
           saveAppSettings({ ...appSettings, useFaceId: true });
-          triggerToast('Đã kích hoạt bảo mật sinh trắc học Face ID với Secure Enclave.', 'Kích Hoạt Face ID Thành Công', 'success');
+          triggerToast('Đã kích hoạt bảo mật Face ID thành công.', 'Face ID', 'security', false);
         },
         () => {
-          triggerToast('Không thể xác thực danh tính Face ID. Vui lòng thử lại.', 'Xác Thực Thất Bại', 'warning');
+          triggerToast('Không thể xác thực Face ID. Vui lòng thử lại.', 'Xác Thực Thất Bại', 'warning', false);
         }
       );
     } else {
       saveAppSettings({ ...appSettings, useFaceId: false });
-      triggerToast('Đã tắt mở khóa nhanh bằng sinh trắc học Face ID.', 'Cài Đặt Bảo Mật', 'info');
+      triggerToast('Đã tắt đăng nhập bằng Face ID.', 'Cài Đặt Bảo Mật', 'info', false);
     }
   };
 
@@ -2565,7 +2626,7 @@ export default function App() {
       } catch (e) {}
       setCacheSize('0.0 KB');
       setIsCleaningCache(false);
-      triggerToast('Đã giải phóng bộ nhớ đệm thực tế của ứng dụng.', 'Dọn Dẹp Thành Công', 'success');
+      triggerToast('Đã giải phóng bộ nhớ đệm thực tế của ứng dụng.', 'Dọn Dẹp Thành Công', 'success', true);
     }, 600);
   };
 
@@ -2589,13 +2650,13 @@ export default function App() {
         document.body.appendChild(downloadAnchor);
         downloadAnchor.click();
         downloadAnchor.remove();
-        triggerToast('Đã tải tệp sao lưu JSON về máy tính / điện thoại.', 'Xuất Dữ Liệu Thành Công', 'success');
+        triggerToast('Đã xuất và tải tệp sao lưu JSON an toàn.', 'Xuất Dữ Liệu Thành Công', 'success', true);
       } else {
         Clipboard.setString(JSON.stringify(backupData, null, 2));
-        triggerToast('Đã sao chép khóa sao lưu JSON vào Clipboard.', 'Sao Lưu Dữ Liệu', 'success');
+        triggerToast('Đã sao chép khóa sao lưu JSON vào Clipboard.', 'Sao Lưu Dữ Liệu', 'success', false);
       }
     } catch (e) {
-      triggerToast('Không thể tạo file sao lưu.', 'Lỗi', 'warning');
+      triggerToast('Không thể tạo file sao lưu.', 'Lỗi', 'warning', false);
     }
   };
 
@@ -2621,7 +2682,7 @@ export default function App() {
                   setPhoneApps(parsed.phoneApps);
                   AsyncStorage.setItem('lockx_user_phone_apps', JSON.stringify(parsed.phoneApps)).catch(() => {});
                 }
-                triggerToast('Đã khôi phục dữ liệu từ tệp sao lưu thành công!', 'Khôi Phục Thành Công', 'success');
+                triggerToast('Đã khôi phục dữ liệu từ tệp sao lưu thành công!', 'Khôi Phục Thành Công', 'success', true);
               } else {
                 Alert.alert('Tệp không hợp lệ', 'Tệp sao lưu không đúng định dạng của LockX.');
               }
@@ -2728,7 +2789,7 @@ export default function App() {
     const newLog = createRealLoginRecord('Passcode', true);
     saveLoginHistory([newLog, ...loginHistory.filter(x => x.id !== 'current-session')]);
     setIsAuthenticated(true);
-    triggerToast(`Tài khoản @${trimmedUser} đã được mã hóa an toàn trong Keychain.`, 'Đăng Ký Thành Công', 'success');
+    triggerToast(`Tài khoản @${trimmedUser} đã được mã hóa an toàn trong Keychain.`, 'Đăng Ký Thành Công', 'success', true);
   };
 
   const handleFaceIdLogin = () => {
@@ -2800,7 +2861,7 @@ export default function App() {
     setNewPassInput('');
     setConfirmNewPassInput('');
     setProfileSubView('main');
-    triggerToast('✓ Đã cập nhật mật khẩu mới thành công!');
+    triggerToast('Mật khẩu quản trị két sắt đã được mã hóa an toàn.', 'Đổi Mật Khẩu Thành Công', 'success', true);
   };
 
   // Helper render Avatar đa năng cho người dùng (hỗ trợ ảnh tải lên, icon preset và monogram)
@@ -2958,7 +3019,7 @@ export default function App() {
     };
     saveUserProfile(updated);
     setProfileSubView('main');
-    triggerToast('✓ Đã cập nhật hồ sơ thành công');
+    triggerToast('Thông tin hồ sơ cá nhân đã được đồng bộ an toàn.', 'Cập Nhật Hồ Sơ Thành Công', 'success', true);
   };
 
   // Xử lý đăng xuất phiên khác
@@ -3278,12 +3339,21 @@ export default function App() {
         duration: 180,
         useNativeDriver: true,
       }),
+      Animated.timing(ringOpacityAnim, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: true,
+      }),
     ]).start(() => {
       setSuccessPopup(null);
     });
   };
 
-  const showSuccessPopup = (title: string, message: string, type: 'success' | 'info' | 'warning' | 'security' = 'success') => {
+  const showSuccessPopup = (
+    title: string,
+    message: string,
+    type: 'success' | 'info' | 'warning' | 'security' = 'success'
+  ) => {
     if (popupTimeoutRef.current) {
       clearTimeout(popupTimeoutRef.current);
       popupTimeoutRef.current = null;
@@ -3296,58 +3366,149 @@ export default function App() {
       type,
     });
 
-    popupScaleAnim.setValue(0.8);
+    popupScaleAnim.setValue(0.75);
     popupOpacityAnim.setValue(0);
+    checkScaleAnim.setValue(0);
+    checkRotateAnim.setValue(0);
+    ringScaleAnim.setValue(0.8);
+    ringOpacityAnim.setValue(0.85);
 
+    // 1. Popup card springs in smoothly
     Animated.parallel([
       Animated.spring(popupScaleAnim, {
         toValue: 1,
         friction: 6,
-        tension: 55,
+        tension: 65,
         useNativeDriver: true,
       }),
       Animated.timing(popupOpacityAnim, {
         toValue: 1,
-        duration: 160,
+        duration: 180,
         useNativeDriver: true,
       }),
     ]).start();
 
+    // 2. Animated checkmark with expanding ripple ring effect
+    setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(ringScaleAnim, {
+          toValue: 1.5,
+          duration: 650,
+          useNativeDriver: true,
+        }),
+        Animated.timing(ringOpacityAnim, {
+          toValue: 0,
+          duration: 650,
+          useNativeDriver: true,
+        }),
+        Animated.spring(checkScaleAnim, {
+          toValue: 1,
+          friction: 4.5,
+          tension: 80,
+          useNativeDriver: true,
+        }),
+        Animated.spring(checkRotateAnim, {
+          toValue: 1,
+          friction: 5,
+          tension: 70,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }, 100);
+
     popupTimeoutRef.current = setTimeout(() => {
       dismissSuccessPopup();
-    }, 2800);
+    }, 3200);
+  };
+
+  const showBannerToast = (
+    title: string,
+    message: string,
+    type: 'success' | 'info' | 'warning' | 'security' = 'info'
+  ) => {
+    if (bannerTimeoutRef.current) {
+      clearTimeout(bannerTimeoutRef.current);
+      bannerTimeoutRef.current = null;
+    }
+    setBannerNotification({ id: String(Date.now()), title, message, type });
+    bannerAnimY.setValue(-100);
+    bannerAnimOpacity.setValue(0);
+
+    Animated.parallel([
+      Animated.spring(bannerAnimY, {
+        toValue: Platform.OS === 'web' ? 14 : 44,
+        friction: 7,
+        tension: 60,
+        useNativeDriver: true,
+      }),
+      Animated.timing(bannerAnimOpacity, {
+        toValue: 1,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    bannerTimeoutRef.current = setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(bannerAnimY, {
+          toValue: -120,
+          duration: 220,
+          useNativeDriver: true,
+        }),
+        Animated.timing(bannerAnimOpacity, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start(() => setBannerNotification(null));
+    }, 2400);
   };
 
   const triggerToast = (
     msg: string,
     title?: string,
-    type: 'success' | 'info' | 'warning' | 'security' = 'success'
+    type?: 'success' | 'info' | 'warning' | 'security',
+    useModal: boolean = false
   ) => {
     let resolvedTitle = title;
     let resolvedType = type;
-    if (!resolvedTitle) {
-      if (msg.toLowerCase().includes('thành công') || msg.startsWith('✓')) {
-        resolvedTitle = 'Thao Tác Thành Công';
-        resolvedType = 'success';
-      } else if (msg.toLowerCase().includes('cảnh báo') || msg.toLowerCase().includes('không thể') || msg.toLowerCase().includes('chưa') || msg.startsWith('⚠️')) {
-        resolvedTitle = 'Thông Báo Hệ Thống';
+
+    if (!resolvedType) {
+      if (msg.toLowerCase().includes('không thể') || msg.toLowerCase().includes('thất bại') || msg.toLowerCase().includes('lỗi') || msg.startsWith('⚠️')) {
         resolvedType = 'warning';
       } else if (msg.toLowerCase().includes('khóa') || msg.toLowerCase().includes('bảo mật') || msg.toLowerCase().includes('face id')) {
-        resolvedTitle = 'Bảo Mật LockX';
         resolvedType = 'security';
+      } else if (msg.toLowerCase().includes('thành công')) {
+        resolvedType = 'success';
       } else {
-        resolvedTitle = 'Thông Báo LockX';
         resolvedType = 'info';
+      }
+    }
+
+    if (!resolvedTitle) {
+      if (resolvedType === 'warning') {
+        resolvedTitle = 'Cảnh Báo';
+      } else if (resolvedType === 'security') {
+        resolvedTitle = 'Bảo Mật';
+      } else if (resolvedType === 'success') {
+        resolvedTitle = 'Thao Tác Hoàn Tất';
+      } else if (msg.toLowerCase().includes('chép') || msg.toLowerCase().includes('clipboard')) {
+        resolvedTitle = 'Đã Sao Chép';
+      } else {
+        resolvedTitle = 'Thông Báo';
       }
     }
 
     const cleanMsg = msg.replace(/^[✓⚠️🔒🔓🎉•\s]+/, '').trim();
     const notifId = `notif-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
 
-    // 1. Kích hoạt Popup thành công chuẩn Apple iOS HUD
-    showSuccessPopup(resolvedTitle, cleanMsg, resolvedType);
+    if (useModal) {
+      showSuccessPopup(resolvedTitle, cleanMsg, resolvedType);
+    } else {
+      showBannerToast(resolvedTitle, cleanMsg, resolvedType);
+    }
 
-    // 2. Lưu vào danh sách Trung tâm Thông báo
+    // 2. Lưu vào danh sách Thông báo
     const newNotif: AppNotification = {
       id: notifId,
       title: resolvedTitle,
@@ -3857,40 +4018,104 @@ export default function App() {
               },
             ]}
           >
-            {/* Top Glowing Icon Badge */}
-            <View
-              style={[
-                styles.popupIconCircle,
-                successPopup?.type === 'success'
-                  ? { backgroundColor: 'rgba(48, 209, 88, 0.15)', borderColor: 'rgba(48, 209, 88, 0.4)' }
-                  : successPopup?.type === 'warning'
-                  ? { backgroundColor: 'rgba(255, 159, 10, 0.15)', borderColor: 'rgba(255, 159, 10, 0.4)' }
-                  : successPopup?.type === 'security'
-                  ? { backgroundColor: 'rgba(10, 132, 255, 0.15)', borderColor: 'rgba(10, 132, 255, 0.4)' }
-                  : { backgroundColor: 'rgba(142, 142, 147, 0.15)', borderColor: 'rgba(142, 142, 147, 0.4)' },
-              ]}
-            >
-              <Ionicons
-                name={
-                  successPopup?.type === 'success'
-                    ? 'checkmark-circle'
-                    : successPopup?.type === 'warning'
-                    ? 'alert-circle'
-                    : successPopup?.type === 'security'
-                    ? 'shield-checkmark'
-                    : 'information-circle'
-                }
-                size={44}
-                color={
-                  successPopup?.type === 'success'
-                    ? '#30D158'
-                    : successPopup?.type === 'warning'
-                    ? '#FF9F0A'
-                    : successPopup?.type === 'security'
-                    ? '#0A84FF'
-                    : '#8E8E93'
-                }
+            {/* Top Glowing Icon Badge with Animated Checkmark and Pulse Ring */}
+            <View style={{ alignItems: 'center', justifyContent: 'center', marginBottom: 18, marginTop: 4 }}>
+              {/* Expanding Ripple Ring */}
+              <Animated.View
+                pointerEvents="none"
+                style={{
+                  position: 'absolute',
+                  width: 78,
+                  height: 78,
+                  borderRadius: 39,
+                  borderWidth: 2.5,
+                  borderColor:
+                    successPopup?.type === 'success'
+                      ? '#30D158'
+                      : successPopup?.type === 'warning'
+                      ? '#FF9F0A'
+                      : successPopup?.type === 'security'
+                      ? appSettings.accentColor
+                      : '#8E8E93',
+                  transform: [{ scale: ringScaleAnim }],
+                  opacity: ringOpacityAnim,
+                }}
               />
+
+              {/* Main Badge Container */}
+              <View
+                style={[
+                  styles.popupIconCircle,
+                  { marginBottom: 0 },
+                  successPopup?.type === 'success'
+                    ? { backgroundColor: 'rgba(48, 209, 88, 0.16)', borderColor: 'rgba(48, 209, 88, 0.45)' }
+                    : successPopup?.type === 'warning'
+                    ? { backgroundColor: 'rgba(255, 159, 10, 0.16)', borderColor: 'rgba(255, 159, 10, 0.45)' }
+                    : successPopup?.type === 'security'
+                    ? { backgroundColor: 'rgba(10, 132, 255, 0.16)', borderColor: 'rgba(10, 132, 255, 0.45)' }
+                    : { backgroundColor: 'rgba(142, 142, 147, 0.16)', borderColor: 'rgba(142, 142, 147, 0.45)' },
+                ]}
+              >
+                {successPopup?.type === 'success' ? (
+                  <Animated.View
+                    style={{
+                      transform: [{ scale: checkScaleAnim }, { rotate: checkRotation }],
+                      width: 52,
+                      height: 52,
+                      borderRadius: 26,
+                      backgroundColor: '#30D158',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      shadowColor: '#30D158',
+                      shadowOffset: { width: 0, height: 4 },
+                      shadowOpacity: 0.5,
+                      shadowRadius: 10,
+                      elevation: 8,
+                    }}
+                  >
+                    <Ionicons name="checkmark" size={35} color="#FFFFFF" />
+                  </Animated.View>
+                ) : (
+                  <Animated.View
+                    style={{
+                      transform: [{ scale: checkScaleAnim }],
+                      width: 52,
+                      height: 52,
+                      borderRadius: 26,
+                      backgroundColor:
+                        successPopup?.type === 'warning'
+                          ? '#FF9F0A'
+                          : successPopup?.type === 'security'
+                          ? appSettings.accentColor
+                          : '#8E8E93',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      shadowColor:
+                        successPopup?.type === 'warning'
+                          ? '#FF9F0A'
+                          : successPopup?.type === 'security'
+                          ? appSettings.accentColor
+                          : '#8E8E93',
+                      shadowOffset: { width: 0, height: 4 },
+                      shadowOpacity: 0.45,
+                      shadowRadius: 10,
+                      elevation: 8,
+                    }}
+                  >
+                    <Ionicons
+                      name={
+                        successPopup?.type === 'warning'
+                          ? 'alert'
+                          : successPopup?.type === 'security'
+                          ? 'shield-checkmark'
+                          : 'information'
+                      }
+                      size={30}
+                      color="#FFFFFF"
+                    />
+                  </Animated.View>
+                )}
+              </View>
             </View>
 
             {/* Title */}
@@ -3925,6 +4150,158 @@ export default function App() {
         </TouchableOpacity>
       </Modal>
 
+      {/* NON-BLOCKING FLOATING DYNAMIC ISLAND BANNER TOAST HUD */}
+      {bannerNotification && (
+        <Animated.View
+          pointerEvents="box-none"
+          style={[
+            styles.iosPushBannerContainer,
+            {
+              transform: [{ translateY: bannerAnimY }, { scale: bannerAnimScale }],
+              opacity: bannerAnimOpacity,
+            },
+          ]}
+        >
+          <TouchableOpacity
+            activeOpacity={0.92}
+            onPress={() => {
+              if (bannerTimeoutRef.current) clearTimeout(bannerTimeoutRef.current);
+              Animated.parallel([
+                Animated.timing(bannerAnimY, { toValue: -120, duration: 180, useNativeDriver: true }),
+                Animated.timing(bannerAnimOpacity, { toValue: 0, duration: 150, useNativeDriver: true }),
+              ]).start(() => setBannerNotification(null));
+            }}
+            style={[styles.iosPushBannerCard, isLight && styles.iosPushBannerCardLight]}
+          >
+            {/* Header Row: LockX icon, LockX title, time, type tag */}
+            <View style={styles.iosPushHeaderRow}>
+              <View style={styles.iosPushAppBadge}>
+                <Image
+                  source={{ uri: 'https://img.icons8.com/isometric/96/lock--v1.png' }}
+                  style={styles.iosPushAppIcon}
+                />
+                <Text style={styles.iosPushAppName}>LockX</Text>
+                <Text style={styles.iosPushAppDot}>•</Text>
+                <Text style={styles.iosPushAppTime}>Bây giờ</Text>
+              </View>
+
+              <View
+                style={[
+                  styles.iosPushTypeTag,
+                  bannerNotification.type === 'success'
+                    ? { backgroundColor: 'rgba(48, 209, 88, 0.16)' }
+                    : bannerNotification.type === 'warning'
+                    ? { backgroundColor: 'rgba(255, 159, 10, 0.16)' }
+                    : bannerNotification.type === 'security'
+                    ? { backgroundColor: 'rgba(10, 132, 255, 0.16)' }
+                    : { backgroundColor: 'rgba(142, 142, 147, 0.16)' },
+                ]}
+              >
+                <Ionicons
+                  name={
+                    bannerNotification.type === 'success'
+                      ? 'checkmark-circle'
+                      : bannerNotification.type === 'warning'
+                      ? 'alert-circle'
+                      : bannerNotification.type === 'security'
+                      ? 'shield-checkmark'
+                      : 'information-circle'
+                  }
+                  size={12}
+                  color={
+                    bannerNotification.type === 'success'
+                      ? '#30D158'
+                      : bannerNotification.type === 'warning'
+                      ? '#FF9F0A'
+                      : bannerNotification.type === 'security'
+                      ? '#0A84FF'
+                      : '#8E8E93'
+                  }
+                />
+                <Text
+                  style={[
+                    styles.iosPushTypeTagText,
+                    {
+                      color:
+                        bannerNotification.type === 'success'
+                          ? '#30D158'
+                          : bannerNotification.type === 'warning'
+                          ? '#FF9F0A'
+                          : bannerNotification.type === 'security'
+                          ? '#0A84FF'
+                          : '#8E8E93',
+                    },
+                  ]}
+                >
+                  {bannerNotification.type === 'success'
+                    ? 'Thành công'
+                    : bannerNotification.type === 'warning'
+                    ? 'Cảnh báo'
+                    : bannerNotification.type === 'security'
+                    ? 'Bảo mật'
+                    : 'Thông tin'}
+                </Text>
+              </View>
+            </View>
+
+            {/* Content Row */}
+            <View style={styles.iosPushContentRow}>
+              <View style={styles.iosPushTextWrap}>
+                <Text style={[styles.iosPushTitle, isLight && { color: '#000000' }]} numberOfLines={1}>
+                  {bannerNotification.title}
+                </Text>
+                <Text style={[styles.iosPushBody, isLight && { color: '#3C3C43' }]} numberOfLines={2}>
+                  {bannerNotification.message}
+                </Text>
+              </View>
+
+              <View
+                style={[
+                  styles.iosPushActionIconWrap,
+                  {
+                    backgroundColor:
+                      bannerNotification.type === 'success'
+                        ? 'rgba(48, 209, 88, 0.15)'
+                        : bannerNotification.type === 'warning'
+                        ? 'rgba(255, 159, 10, 0.15)'
+                        : bannerNotification.type === 'security'
+                        ? 'rgba(10, 132, 255, 0.15)'
+                        : 'rgba(142, 142, 147, 0.15)',
+                  },
+                ]}
+              >
+                <Ionicons
+                  name={
+                    bannerNotification.type === 'success'
+                      ? 'checkmark'
+                      : bannerNotification.type === 'warning'
+                      ? 'warning'
+                      : bannerNotification.type === 'security'
+                      ? 'shield'
+                      : 'arrow-forward'
+                  }
+                  size={15}
+                  color={
+                    bannerNotification.type === 'success'
+                      ? '#30D158'
+                      : bannerNotification.type === 'warning'
+                      ? '#FF9F0A'
+                      : bannerNotification.type === 'security'
+                      ? '#0A84FF'
+                      : '#8E8E93'
+                  }
+                />
+              </View>
+            </View>
+
+            {/* Mini bottom swipe grabber bar */}
+            <View style={styles.iosPushGrabberWrap}>
+              <View style={[styles.iosPushGrabberBar, isLight && { backgroundColor: 'rgba(0,0,0,0.18)' }]} />
+            </View>
+          </TouchableOpacity>
+        </Animated.View>
+      )}
+
             {!isAuthenticated ? (
         <EnterpriseAuthScreen
           authMode={authMode}
@@ -3949,6 +4326,7 @@ export default function App() {
           triggerToast={triggerToast}
           savedAccount={savedAccount}
           setSavedAccount={setSavedAccount}
+          savedDisplayName={userProfile.displayName || 'Quảng Trọng Tuấn'}
           useFaceId={appSettings.useFaceId}
         />
       ) : (
@@ -5979,7 +6357,7 @@ export default function App() {
                             onPress={() => {
                               saveAppSettings({ ...appSettings, language: lang.code as any });
                               setSelectedLanguage(lang.code as any);
-                              triggerToast(`✓ Đã đổi sang ${lang.name}`);
+                              triggerToast(`Đã chuyển ngôn ngữ sang ${lang.name}.`, 'Ngôn Ngữ', 'info', false);
                             }}
                           >
                             <View style={{ marginRight: 12 }}>
@@ -6137,7 +6515,7 @@ export default function App() {
                     <TouchableOpacity
                       onPress={() => {
                         saveAppSettings({ ...appSettings, themeMode: 'light' });
-                        triggerToast('Đã áp dụng giao diện Sáng chuẩn iOS 18.', 'Chỉnh Sửa Giao Diện Thành Công', 'success');
+                        triggerToast('Chế độ giao diện: Sáng (iOS 18)', 'Giao Diện', 'info', false);
                       }}
                       style={{ alignItems: 'center' }}
                       activeOpacity={0.7}
@@ -6187,7 +6565,7 @@ export default function App() {
                     <TouchableOpacity
                       onPress={() => {
                         saveAppSettings({ ...appSettings, themeMode: 'dark' });
-                        triggerToast('Đã áp dụng giao diện Tối OLED bảo vệ mắt.', 'Chỉnh Sửa Giao Diện Thành Công', 'success');
+                        triggerToast('Chế độ giao diện: Tối OLED', 'Giao Diện', 'info', false);
                       }}
                       style={{ alignItems: 'center' }}
                       activeOpacity={0.7}
@@ -6257,7 +6635,7 @@ export default function App() {
                           key={c.color}
                           onPress={() => {
                             saveAppSettings({ ...appSettings, accentColor: c.color });
-                            triggerToast(`Đã áp dụng màu chủ đạo ${c.label} thành công.`, 'Chỉnh Sửa Giao Diện Thành Công', 'success');
+                            triggerToast(`Đã áp dụng màu chủ đạo ${c.label}.`, 'Màu Nhấn', 'info', false);
                           }}
                           style={{
                             width: 26,
@@ -6323,10 +6701,10 @@ export default function App() {
                         if (v) {
                           await requestNotificationPermission();
                           saveAppSettings({ ...appSettings, enableNotifications: true });
-                          triggerToast('Đã cấp quyền và bật thông báo ứng dụng iOS.', 'Cài Đặt Thành Công', 'success');
+                          triggerToast('Đã cấp quyền và bật thông báo ứng dụng iOS.', 'Thông Báo Ứng Dụng', 'info', false);
                         } else {
                           saveAppSettings({ ...appSettings, enableNotifications: false });
-                          triggerToast('Đã tắt nhận thông báo đẩy từ ứng dụng.', 'Cài Đặt Thông Báo', 'info');
+                          triggerToast('Đã tắt nhận thông báo đẩy từ ứng dụng.', 'Cài Đặt Thông Báo', 'info', false);
                         }
                       }}
                       trackColor={{ false: isLight ? '#E5E5EA' : '#39393D', true: appSettings.accentColor }}
@@ -6345,7 +6723,7 @@ export default function App() {
                       value={appSettings.notifySecurityAlerts !== false}
                       onValueChange={(v) => {
                         saveAppSettings({ ...appSettings, notifySecurityAlerts: v });
-                        triggerToast(v ? 'Đã bật cảnh báo an toàn thiết bị.' : 'Đã tắt cảnh báo bảo mật.', 'Cài Đặt Bảo Mật', 'security');
+                        triggerToast(v ? 'Đã bật cảnh báo an toàn thiết bị.' : 'Đã tắt cảnh báo bảo mật.', 'Cài Đặt Bảo Mật', 'security', false);
                       }}
                       trackColor={{ false: isLight ? '#E5E5EA' : '#39393D', true: appSettings.accentColor }}
                     />
@@ -6363,7 +6741,7 @@ export default function App() {
                       value={appSettings.notifySounds !== false}
                       onValueChange={(v) => {
                         saveAppSettings({ ...appSettings, notifySounds: v });
-                        triggerToast(v ? 'Đã bật hiệu ứng âm thanh thông báo iOS.' : 'Đã tắt âm thanh thông báo.', 'Cài Đặt Âm Thanh', 'info');
+                        triggerToast(v ? 'Đã bật hiệu ứng âm thanh thông báo iOS.' : 'Đã tắt âm thanh thông báo.', 'Cài Đặt Âm Thanh', 'info', false);
                       }}
                       trackColor={{ false: isLight ? '#E5E5EA' : '#39393D', true: appSettings.accentColor }}
                     />
@@ -6374,7 +6752,7 @@ export default function App() {
                     style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}
                     activeOpacity={0.7}
                     onPress={() => {
-                      triggerToast('Đã phát thông báo mẫu Dynamic Island chuẩn Apple thành công!', 'Thông Báo Trong Ứng Dụng', 'success');
+                      triggerToast('Đã phát thông báo mẫu Dynamic Island chuẩn Apple!', 'Thông Báo Trong Ứng Dụng', 'info', false);
                     }}
                   >
                     <View style={[styles.cellLeadingIcon, { backgroundColor: appSettings.accentColor }]}>
