@@ -1093,8 +1093,8 @@ export const AppleAppIcon = ({
 };
 
 export default function App() {
-  // Onboarding & Load Stages: 'loading' -> 'onboarding' -> 'ready'
-  const [onboardingStage, setOnboardingStage] = useState<'loading' | 'onboarding' | 'ready'>('loading');
+  // Onboarding & Load Stages: 'loading' -> 'onboarding' -> 'ready' (Bypass vào thẳng trang chủ)
+  const [onboardingStage, setOnboardingStage] = useState<'loading' | 'onboarding' | 'ready'>('ready');
   const [selectedLanguage, setSelectedLanguage] = useState<'en' | 'vi' | 'zh'>('vi');
 
   // Nhận diện phiên bản iOS và Build ID chính xác từ thiết bị
@@ -1104,12 +1104,10 @@ export default function App() {
   const [detectedOsBuild, setDetectedOsBuild] = useState<string>(() => {
     return Device.osBuildId || (Platform.OS === 'ios' ? '22C152' : '23G90');
   });
-  const [isSimulatedOverride, setIsSimulatedOverride] = useState<boolean | null>(null);
+  const [isSimulatedOverride, setIsSimulatedOverride] = useState<boolean | null>(true);
 
-  // Kiểm tra phiên bản điện thoại có thuộc danh sách hỗ trợ hay không
-  const isDeviceSupported = isSimulatedOverride !== null
-    ? isSimulatedOverride
-    : checkIsSupportedVersion(detectedOsVersion);
+  // Cho phép truy cập thẳng trang chủ
+  const isDeviceSupported = true;
 
   const [hasNotifPermission, setHasNotifPermission] = useState(false);
 
@@ -1761,26 +1759,9 @@ export default function App() {
     }, 300);
   };
 
-  // Check on app launch: only show load screen on FIRST launch!
-  // Mới vào sẽ yêu cầu cấp quyền cho phép thông báo
+  // Luôn vào thẳng trang chủ LockX
   useEffect(() => {
-    AsyncStorage.getItem('lockx_has_onboarded')
-      .then((val) => {
-        if (val === 'true') {
-          setOnboardingStage('ready');
-        } else {
-          setOnboardingStage('onboarding');
-          setTimeout(() => {
-            requestNotificationPermission();
-          }, 400);
-        }
-      })
-      .catch(() => {
-        setOnboardingStage('onboarding');
-        setTimeout(() => {
-          requestNotificationPermission();
-        }, 400);
-      });
+    setOnboardingStage('ready');
   }, []);
 
   useEffect(() => {
