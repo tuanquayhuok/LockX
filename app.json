@@ -44,7 +44,8 @@
           "baemin",
           "chatgpt",
           "canva"
-        ]
+        ],
+        "NSFaceIDUsageDescription": "LockX sử dụng Face ID để xác thực và bảo vệ an toàn cho tài khoản và két sắt của bạn."
       }
     },
     "android": {
@@ -59,7 +60,13 @@
     },
     "plugins": [
       "expo-font",
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "LockX sử dụng Face ID để xác thực và bảo vệ an toàn cho tài khoản và két sắt của bạn."
+        }
+      ]
     ]
   }
 }
