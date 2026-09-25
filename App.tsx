@@ -3430,28 +3430,33 @@ export default function App() {
           )
         )}
 
-        {/* TAB 4: CÀI ĐẶT THƯƠNG MẠI CAO CẤP (COMMERCIAL iOS 18 SETTINGS) */}
+        {/* TAB 4: CÀI ĐẶT CHUẨN APPLE iOS 18 (GENUINE APPLE HIG SETTINGS) */}
         {currentTab === 'settings' && (
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-            {/* Header thương mại */}
-            <View style={styles.navHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Text style={styles.largeTitle}>Cài Đặt</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: `${appSettings.accentColor}20`, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: `${appSettings.accentColor}40`, gap: 4 }}>
-                  <Ionicons name="sparkles" size={13} color={appSettings.accentColor} />
-                  <Text style={{ color: appSettings.accentColor, fontSize: 11, fontWeight: '800', letterSpacing: 0.5 }}>PRO EDITION</Text>
-                </View>
-              </View>
-              <Text style={styles.navSubtitle}>Bảo mật sinh trắc học Face ID, cá nhân hóa & hệ thống</Text>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, { paddingHorizontal: 16, paddingTop: 10 }]}>
+            {/* Apple Large Title */}
+            <View style={{ marginBottom: 12 }}>
+              <Text style={{ fontSize: 34, fontWeight: '700', color: '#FFFFFF', letterSpacing: 0.36 }}>
+                Cài đặt
+              </Text>
             </View>
 
-            {/* Quick Search Bar trong Cài Đặt */}
-            <View style={[styles.searchBarBox, { marginTop: 4, marginBottom: 14 }]}>
-              <Ionicons name="search" size={16} color="#8E8E93" style={{ marginRight: 6 }} />
+            {/* Apple Settings Search Bar */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: '#1C1C1E',
+                borderRadius: 10,
+                paddingHorizontal: 10,
+                height: 36,
+                marginBottom: 18,
+              }}
+            >
+              <Ionicons name="search" size={17} color="#8E8E93" style={{ marginRight: 6 }} />
               <TextInput
-                style={styles.searchInput}
-                placeholder="Tìm kiếm cài đặt nhanh (Face ID, màu sắc, cache...)"
-                placeholderTextColor="#636366"
+                style={{ flex: 1, color: '#FFFFFF', fontSize: 16, padding: 0 }}
+                placeholder="Tìm kiếm"
+                placeholderTextColor="#8E8E93"
                 value={settingsSearchQuery}
                 onChangeText={setSettingsSearchQuery}
                 autoCapitalize="none"
@@ -3463,514 +3468,424 @@ export default function App() {
               )}
             </View>
 
-            {/* Thẻ định danh thương mại người dùng (Apple Commercial ID Card) */}
-            {(!settingsSearchQuery || 'tài khoản hồ sơ cá nhân pro'.includes(settingsSearchQuery.toLowerCase())) && (
-              <TouchableOpacity
-                style={[
-                  styles.screenTimeCard,
-                  {
-                    padding: 16,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    backgroundColor: '#1C1C1E',
-                    borderWidth: 1,
-                    borderColor: `${appSettings.accentColor}35`,
-                    marginBottom: 16,
-                  },
-                ]}
-                activeOpacity={0.85}
-                onPress={() => setCurrentTab('profile')}
-              >
-                <View
-                  style={{
-                    width: 58,
-                    height: 58,
-                    borderRadius: 29,
-                    backgroundColor: userProfile.avatarColor || appSettings.accentColor,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    marginRight: 14,
-                    borderWidth: 2,
-                    borderColor: '#FFFFFF',
-                    shadowColor: appSettings.accentColor,
-                    shadowOffset: { width: 0, height: 4 },
-                    shadowOpacity: 0.35,
-                    shadowRadius: 8,
-                  }}
+            {/* Apple ID Profile Cell */}
+            {(!settingsSearchQuery || 'tài khoản cá nhân hồ sơ profile'.includes(settingsSearchQuery.toLowerCase())) && (
+              <View style={[styles.groupedList, { marginBottom: 18 }]}>
+                <TouchableOpacity
+                  style={[styles.cellItem, { borderBottomWidth: 0, paddingVertical: 10 }]}
+                  activeOpacity={0.7}
+                  onPress={() => setCurrentTab('profile')}
                 >
-                  <Text style={{ color: '#fff', fontWeight: '800', fontSize: 24 }}>
-                    {(userProfile.displayName || 'A').charAt(0).toUpperCase()}
-                  </Text>
-                </View>
-
-                <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text style={{ color: '#FFFFFF', fontSize: 17, fontWeight: '700' }} numberOfLines={1}>
+                  <View
+                    style={{
+                      width: 54,
+                      height: 54,
+                      borderRadius: 27,
+                      backgroundColor: '#3A3A3C',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      marginRight: 14,
+                    }}
+                  >
+                    <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 22 }}>
+                      {(userProfile.displayName || 'A').charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                  <View style={[styles.cellContent, { flex: 1 }]}>
+                    <Text style={{ color: '#FFFFFF', fontSize: 18, fontWeight: '500' }} numberOfLines={1}>
                       {userProfile.displayName}
                     </Text>
-                    <Ionicons name="checkmark-circle" size={16} color="#30D158" />
-                  </View>
-                  <Text style={{ color: '#8E8E93', fontSize: 13, marginTop: 2 }}>
-                    {userProfile.username}
-                  </Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 }}>
-                    <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: appSettings.useFaceId ? '#30D158' : '#FF9500' }} />
-                    <Text style={{ color: appSettings.useFaceId ? '#30D158' : '#FF9500', fontSize: 11, fontWeight: '600' }}>
-                      {appSettings.useFaceId ? 'Face ID Đã Bật' : 'Chưa Kích Hoạt Face ID'}
+                    <Text style={{ color: '#8E8E93', fontSize: 13, marginTop: 2 }}>
+                      {userProfile.username} • Tài khoản bảo mật
                     </Text>
                   </View>
-                </View>
-
-                <Ionicons name="chevron-forward" size={18} color="#636366" />
-              </TouchableOpacity>
+                  <Ionicons name="chevron-forward" size={18} color="#48484A" />
+                </TouchableOpacity>
+              </View>
             )}
 
-            {/* NHÓM 1: BẢO MẬT & SINH TRẮC HỌC (FACE ID) */}
-            {(!settingsSearchQuery || 'face id bảo mật mật mã khóa vân tay sinh trắc học'.includes(settingsSearchQuery.toLowerCase())) && (
-              <View style={styles.sectionWrap}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <Text style={styles.sectionCaption}>BẢO MẬT & SINH TRẮC HỌC</Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                    <Ionicons name="shield-checkmark" size={12} color="#30D158" />
-                    <Text style={{ color: '#30D158', fontSize: 11, fontWeight: '700' }}>SECURE ENCLAVE</Text>
-                  </View>
-                </View>
+            {/* NHÓM 1: FACE ID & MẬT MÃ */}
+            {(!settingsSearchQuery || 'face id mật mã bảo mật khóa vân tay sinh trắc học'.includes(settingsSearchQuery.toLowerCase())) && (
+              <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 18 }]}>
+                <Text style={{ color: '#8E8E93', fontSize: 12.5, fontWeight: '500', textTransform: 'uppercase', marginBottom: 6, marginLeft: 16 }}>
+                  Face ID & Mật mã
+                </Text>
                 <View style={styles.groupedList}>
                   {/* Bật / Tắt Face ID */}
                   <View style={styles.cellItem}>
-                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#007AFF' }]}>
-                      <Ionicons name="scan-outline" size={19} color="#fff" />
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#34C759' }]}>
+                      <Ionicons name="scan-outline" size={18} color="#FFFFFF" />
                     </View>
                     <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={styles.cellTitle}>Đăng Nhập Bằng Face ID</Text>
-                      <Text style={styles.cellSubtitle}>
-                        {appSettings.useFaceId
-                          ? 'Đã bật • Quét khuôn mặt khi khởi chạy app'
-                          : 'Đang tắt • Mở khóa bằng mật mã thông thường'}
-                      </Text>
+                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Sử dụng Face ID</Text>
                     </View>
                     <Switch
                       value={appSettings.useFaceId}
                       onValueChange={handleToggleFaceId}
-                      trackColor={{ false: '#39393D', true: '#30D158' }}
+                      trackColor={{ false: '#39393D', true: '#34C759' }}
                     />
                   </View>
 
-                  {/* Nút Test Quét Face ID trực tiếp */}
+                  {/* Thử nghiệm Face ID */}
                   <TouchableOpacity
                     style={styles.cellItem}
                     activeOpacity={0.7}
                     onPress={() => {
                       triggerFaceIdAuth(
-                        'Kiểm tra tính năng nhận diện Face ID của thiết bị',
-                        () => triggerToast('✓ Xác thực Face ID thành công!'),
-                        () => triggerToast('⚠️ Không thể nhận diện Face ID')
+                        'Xác thực Face ID',
+                        () => triggerToast('✓ Face ID hợp lệ'),
+                        () => triggerToast('Face ID không khớp')
                       );
                     }}
                   >
-                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#30D158' }]}>
-                      <Ionicons name="finger-print" size={19} color="#fff" />
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#007AFF' }]}>
+                      <Ionicons name="person-circle-outline" size={19} color="#FFFFFF" />
                     </View>
                     <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={styles.cellTitle}>Thử Nghiệm Quét Face ID Ngay</Text>
-                      <Text style={styles.cellSubtitle}>Kiểm tra độ trễ & độ chính xác của cảm biến</Text>
+                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Kiểm tra Face ID</Text>
                     </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      <Text style={{ color: appSettings.accentColor, fontSize: 13, fontWeight: '600' }}>Quét ngay</Text>
-                      <Ionicons name="chevron-forward" size={16} color="#636366" />
-                    </View>
+                    <Ionicons name="chevron-forward" size={17} color="#48484A" />
                   </TouchableOpacity>
 
-                  {/* Yêu cầu Face ID khi xem mật khẩu trong Két Sắt */}
+                  {/* Bảo vệ Két sắt */}
                   <View style={styles.cellItem}>
-                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#BF5AF2' }]}>
-                      <Ionicons name="key" size={18} color="#fff" />
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#5856D6' }]}>
+                      <Ionicons name="lock-closed" size={17} color="#FFFFFF" />
                     </View>
                     <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={styles.cellTitle}>Bảo Vệ Két Sắt Tuyệt Đối</Text>
-                      <Text style={styles.cellSubtitle}>Bắt buộc quét Face ID khi bấm xem mật khẩu</Text>
+                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Bảo vệ Két sắt</Text>
                     </View>
                     <Switch
                       value={appSettings.requireFaceIdForVault}
                       onValueChange={(v) => {
                         saveAppSettings({ ...appSettings, requireFaceIdForVault: v });
-                        triggerToast(v ? '🔒 Đã bật xác thực Face ID xem mật khẩu' : 'Đã tắt bảo vệ mật khẩu');
+                        triggerToast(v ? 'Đã bật Face ID cho Két sắt' : 'Đã tắt Face ID cho Két sắt');
                       }}
-                      trackColor={{ false: '#39393D', true: '#30D158' }}
+                      trackColor={{ false: '#39393D', true: '#34C759' }}
                     />
                   </View>
 
-                  {/* Tự Động Khóa Ứng Dụng */}
-                  <View style={styles.cellItem}>
-                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#FF9500' }]}>
-                      <Ionicons name="timer-outline" size={19} color="#fff" />
-                    </View>
-                    <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={styles.cellTitle}>Tự Động Khóa Khi Rời App</Text>
-                      <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }}>
-                        {([
-                          { id: 'immediately', label: 'Ngay lập tức' },
-                          { id: '1m', label: '1 phút' },
-                          { id: '5m', label: '5 phút' },
-                          { id: 'never', label: 'Không bao giờ' },
-                        ] as const).map((opt) => (
-                          <TouchableOpacity
-                            key={opt.id}
-                            onPress={() => {
-                              saveAppSettings({ ...appSettings, autoLockTimeout: opt.id });
-                              triggerToast(`Tự động khóa: ${opt.label}`);
-                            }}
-                            style={{
-                              paddingHorizontal: 8,
-                              paddingVertical: 5,
-                              borderRadius: 8,
-                              backgroundColor: appSettings.autoLockTimeout === opt.id ? appSettings.accentColor : '#2C2C2E',
-                            }}
-                          >
-                            <Text
-                              style={{
-                                fontSize: 11,
-                                fontWeight: appSettings.autoLockTimeout === opt.id ? '700' : '500',
-                                color: appSettings.autoLockTimeout === opt.id ? '#000' : '#8E8E93',
-                              }}
-                            >
-                              {opt.label}
-                            </Text>
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-                    </View>
-                  </View>
-
-                  {/* Che mờ màn hình khi chuyển App Switcher */}
+                  {/* Tự động khóa */}
                   <View style={[styles.cellItem, { borderBottomWidth: 0 }]}>
-                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#5856D6' }]}>
-                      <Ionicons name="eye-off-outline" size={18} color="#fff" />
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#FF9500' }]}>
+                      <Ionicons name="timer-outline" size={18} color="#FFFFFF" />
                     </View>
                     <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={styles.cellTitle}>Chống Nhìn Lén Đa Nhiệm</Text>
-                      <Text style={styles.cellSubtitle}>Làm mờ nội dung trong màn hình App Switcher</Text>
+                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Tự động khóa</Text>
                     </View>
-                    <Switch
-                      value={appSettings.blurSwitcher}
-                      onValueChange={(v) => {
-                        saveAppSettings({ ...appSettings, blurSwitcher: v });
-                        triggerToast(v ? '🛡️ Đã bật chống chụp lén App Switcher' : 'Đã tắt chống nhìn lén');
+                    <TouchableOpacity
+                      onPress={() => {
+                        const timeouts: ('immediately' | '1m' | '5m' | 'never')[] = ['immediately', '1m', '5m', 'never'];
+                        const nextIndex = (timeouts.indexOf(appSettings.autoLockTimeout) + 1) % timeouts.length;
+                        const nextVal = timeouts[nextIndex];
+                        saveAppSettings({ ...appSettings, autoLockTimeout: nextVal });
                       }}
-                      trackColor={{ false: '#39393D', true: '#30D158' }}
-                    />
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                    >
+                      <Text style={{ color: '#8E8E93', fontSize: 16 }}>
+                        {appSettings.autoLockTimeout === 'immediately'
+                          ? 'Ngay'
+                          : appSettings.autoLockTimeout === '1m'
+                          ? '1 phút'
+                          : appSettings.autoLockTimeout === '5m'
+                          ? '5 phút'
+                          : 'Tắt'}
+                      </Text>
+                      <Ionicons name="chevron-forward" size={16} color="#48484A" />
+                    </TouchableOpacity>
                   </View>
                 </View>
+                <Text style={{ color: '#8E8E93', fontSize: 12, marginTop: 6, marginLeft: 16 }}>
+                  Sử dụng Face ID để mở khóa ứng dụng và xác thực an toàn với Secure Enclave.
+                </Text>
               </View>
             )}
 
-            {/* NHÓM 2: CÁ NHÂN HÓA GIAO DIỆN (THEME & TINT) */}
-            {(!settingsSearchQuery || 'màu giao diện theme sáng tối cỡ chữ font ngôn ngữ'.includes(settingsSearchQuery.toLowerCase())) && (
-              <View style={[styles.sectionWrap, { marginTop: 16 }]}>
-                <Text style={styles.sectionCaption}>GIAO DIỆN & MÀU SẮC THƯƠNG MẠI</Text>
+            {/* NHÓM 2: MÀN HÌNH & ĐỘ SÁNG (DISPLAY & APPEARANCE) */}
+            {(!settingsSearchQuery || 'màn hình giao diện sáng tối màu chữ'.includes(settingsSearchQuery.toLowerCase())) && (
+              <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 18 }]}>
+                <Text style={{ color: '#8E8E93', fontSize: 12.5, fontWeight: '500', textTransform: 'uppercase', marginBottom: 6, marginLeft: 16 }}>
+                  Màn hình & Giao diện
+                </Text>
                 
-                {/* Bộ Sưu Tập Màu Sắc Accent */}
-                <View style={[styles.groupedList, { padding: 14, marginBottom: 12 }]}>
-                  <Text style={{ color: '#8E8E93', fontSize: 12, fontWeight: '600', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                    Màu Sắc Nổi Bật (Accent Tint)
-                  </Text>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between' }}>
-                    {ACCENT_COLOR_OPTIONS.map((opt) => {
-                      const isSelected = appSettings.accentColor === opt.color;
-                      return (
-                        <TouchableOpacity
-                          key={opt.id}
-                          onPress={() => {
-                            saveAppSettings({ ...appSettings, accentColor: opt.color });
-                            triggerToast(`Đã chọn tông màu: ${opt.label}`);
-                          }}
-                          style={{ alignItems: 'center', width: '22%', marginVertical: 4 }}
-                          activeOpacity={0.8}
-                        >
-                          <View
-                            style={{
-                              width: 44,
-                              height: 44,
-                              borderRadius: 22,
-                              backgroundColor: opt.color,
-                              justifyContent: 'center',
-                              alignItems: 'center',
-                              borderWidth: isSelected ? 3 : 0,
-                              borderColor: '#FFFFFF',
-                              shadowColor: opt.color,
-                              shadowOffset: { width: 0, height: 3 },
-                              shadowOpacity: isSelected ? 0.6 : 0.2,
-                              shadowRadius: isSelected ? 8 : 4,
-                            }}
-                          >
-                            {isSelected && <Ionicons name="checkmark" size={22} color="#FFFFFF" />}
-                          </View>
-                          <Text
-                            style={{
-                              color: isSelected ? '#FFFFFF' : '#8E8E93',
-                              fontSize: 11,
-                              fontWeight: isSelected ? '700' : '500',
-                              marginTop: 6,
-                              textAlign: 'center',
-                            }}
-                          >
-                            {opt.label}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
+                {/* 2 Mockups Sáng / Tối chuẩn Apple */}
+                <View style={[styles.groupedList, { padding: 16, marginBottom: 10 }]}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center' }}>
+                    {/* Mockup Sáng */}
+                    <TouchableOpacity
+                      onPress={() => {
+                        saveAppSettings({ ...appSettings, themeMode: 'light' });
+                        triggerToast('Đã chọn Giao diện Sáng');
+                      }}
+                      style={{ alignItems: 'center' }}
+                      activeOpacity={0.7}
+                    >
+                      <View
+                        style={{
+                          width: 80,
+                          height: 110,
+                          backgroundColor: '#E5E5EA',
+                          borderRadius: 14,
+                          borderWidth: appSettings.themeMode === 'light' ? 2 : 1,
+                          borderColor: appSettings.themeMode === 'light' ? '#007AFF' : '#38383A',
+                          padding: 8,
+                          justifyContent: 'space-between',
+                        }}
+                      >
+                        <View style={{ height: 10, width: '60%', backgroundColor: '#C7C7CC', borderRadius: 4 }} />
+                        <View style={{ gap: 4 }}>
+                          <View style={{ height: 6, width: '100%', backgroundColor: '#D1D1D6', borderRadius: 3 }} />
+                          <View style={{ height: 6, width: '80%', backgroundColor: '#D1D1D6', borderRadius: 3 }} />
+                        </View>
+                        <View style={{ height: 16, backgroundColor: '#FFFFFF', borderRadius: 6 }} />
+                      </View>
+                      <Text style={{ color: '#FFFFFF', fontSize: 13, marginTop: 8, fontWeight: '500' }}>Sáng</Text>
+                      <View
+                        style={{
+                          width: 18,
+                          height: 18,
+                          borderRadius: 9,
+                          borderWidth: 1.5,
+                          borderColor: appSettings.themeMode === 'light' ? '#007AFF' : '#636366',
+                          backgroundColor: appSettings.themeMode === 'light' ? '#007AFF' : 'transparent',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          marginTop: 6,
+                        }}
+                      >
+                        {appSettings.themeMode === 'light' && <Ionicons name="checkmark" size={12} color="#FFFFFF" />}
+                      </View>
+                    </TouchableOpacity>
+
+                    {/* Mockup Tối */}
+                    <TouchableOpacity
+                      onPress={() => {
+                        saveAppSettings({ ...appSettings, themeMode: 'dark' });
+                        triggerToast('Đã chọn Giao diện Tối');
+                      }}
+                      style={{ alignItems: 'center' }}
+                      activeOpacity={0.7}
+                    >
+                      <View
+                        style={{
+                          width: 80,
+                          height: 110,
+                          backgroundColor: '#000000',
+                          borderRadius: 14,
+                          borderWidth: appSettings.themeMode === 'dark' ? 2 : 1,
+                          borderColor: appSettings.themeMode === 'dark' ? '#007AFF' : '#38383A',
+                          padding: 8,
+                          justifyContent: 'space-between',
+                        }}
+                      >
+                        <View style={{ height: 10, width: '60%', backgroundColor: '#2C2C2E', borderRadius: 4 }} />
+                        <View style={{ gap: 4 }}>
+                          <View style={{ height: 6, width: '100%', backgroundColor: '#1C1C1E', borderRadius: 3 }} />
+                          <View style={{ height: 6, width: '80%', backgroundColor: '#1C1C1E', borderRadius: 3 }} />
+                        </View>
+                        <View style={{ height: 16, backgroundColor: '#1C1C1E', borderRadius: 6 }} />
+                      </View>
+                      <Text style={{ color: '#FFFFFF', fontSize: 13, marginTop: 8, fontWeight: '500' }}>Tối</Text>
+                      <View
+                        style={{
+                          width: 18,
+                          height: 18,
+                          borderRadius: 9,
+                          borderWidth: 1.5,
+                          borderColor: appSettings.themeMode === 'dark' ? '#007AFF' : '#636366',
+                          backgroundColor: appSettings.themeMode === 'dark' ? '#007AFF' : 'transparent',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          marginTop: 6,
+                        }}
+                      >
+                        {appSettings.themeMode === 'dark' && <Ionicons name="checkmark" size={12} color="#FFFFFF" />}
+                      </View>
+                    </TouchableOpacity>
                   </View>
                 </View>
 
-                {/* Chế Độ Màn Hình: Tối / Sáng / Tự Động */}
+                {/* Màu nhấn & Cỡ chữ */}
                 <View style={styles.groupedList}>
+                  {/* Màu nhấn Tint Color */}
                   <View style={styles.cellItem}>
-                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#5856D6' }]}>
-                      <Ionicons
-                        name={appSettings.themeMode === 'dark' ? 'moon' : appSettings.themeMode === 'light' ? 'sunny' : 'phone-portrait-outline'}
-                        size={18}
-                        color="#fff"
-                      />
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#AF52DE' }]}>
+                      <Ionicons name="color-palette" size={18} color="#FFFFFF" />
                     </View>
                     <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={styles.cellTitle}>Chế Độ Giao Diện</Text>
-                      <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }}>
-                        {([
-                          { id: 'dark', label: 'Tối (Dark)', icon: 'moon' },
-                          { id: 'light', label: 'Sáng (Light)', icon: 'sunny' },
-                          { id: 'auto', label: 'Tự động', icon: 'settings' },
-                        ] as const).map((mode) => (
-                          <TouchableOpacity
-                            key={mode.id}
-                            onPress={() => {
-                              saveAppSettings({ ...appSettings, themeMode: mode.id });
-                              triggerToast(`Chế độ: ${mode.label}`);
-                            }}
-                            style={{
-                              flex: 1,
-                              paddingVertical: 7,
-                              borderRadius: 8,
-                              backgroundColor: appSettings.themeMode === mode.id ? appSettings.accentColor : '#2C2C2E',
-                              alignItems: 'center',
-                            }}
-                          >
-                            <Text
-                              style={{
-                                fontSize: 11.5,
-                                fontWeight: appSettings.themeMode === mode.id ? '700' : '500',
-                                color: appSettings.themeMode === mode.id ? '#000' : '#8E8E93',
-                              }}
-                            >
-                              {mode.label}
-                            </Text>
-                          </TouchableOpacity>
-                        ))}
-                      </View>
+                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Màu nhấn</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+                      {[
+                        { color: '#007AFF' },
+                        { color: '#34C759' },
+                        { color: '#AF52DE' },
+                        { color: '#FF9500' },
+                        { color: '#FF3B30' },
+                      ].map((c) => (
+                        <TouchableOpacity
+                          key={c.color}
+                          onPress={() => saveAppSettings({ ...appSettings, accentColor: c.color })}
+                          style={{
+                            width: 24,
+                            height: 24,
+                            borderRadius: 12,
+                            backgroundColor: c.color,
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                          }}
+                        >
+                          {appSettings.accentColor === c.color && (
+                            <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                          )}
+                        </TouchableOpacity>
+                      ))}
                     </View>
                   </View>
 
-                  {/* Kích Thước Chữ & Xem Trước */}
-                  <View style={styles.cellItem}>
-                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#FF2D55' }]}>
-                      <Ionicons name="text-outline" size={19} color="#fff" />
-                    </View>
-                    <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={styles.cellTitle}>Kích Thước Chữ (Dynamic Type)</Text>
-                      <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }}>
-                        {([
-                          { id: 'small' as const, label: 'Nhỏ (90%)' },
-                          { id: 'standard' as const, label: 'Chuẩn (100%)' },
-                          { id: 'large' as const, label: 'Lớn (115%)' },
-                        ] as const).map((sz) => (
-                          <TouchableOpacity
-                            key={sz.id}
-                            onPress={() => {
-                              saveAppSettings({ ...appSettings, fontSizeScale: sz.id });
-                              triggerToast(`Cỡ chữ: ${sz.label}`);
-                            }}
-                            style={{
-                              flex: 1,
-                              paddingVertical: 7,
-                              borderRadius: 8,
-                              backgroundColor: appSettings.fontSizeScale === sz.id ? appSettings.accentColor : '#2C2C2E',
-                              alignItems: 'center',
-                            }}
-                          >
-                            <Text
-                              style={{
-                                fontSize: 11.5,
-                                fontWeight: appSettings.fontSizeScale === sz.id ? '700' : '500',
-                                color: appSettings.fontSizeScale === sz.id ? '#000' : '#8E8E93',
-                              }}
-                            >
-                              {sz.label}
-                            </Text>
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-                    </View>
-                  </View>
-
-                  {/* Chữ In Đậm (Bold Text) */}
+                  {/* Chữ in đậm */}
                   <View style={styles.cellItem}>
                     <View style={[styles.cellLeadingIcon, { backgroundColor: '#FF9500' }]}>
-                      <Ionicons name="text" size={18} color="#fff" />
+                      <Ionicons name="text" size={17} color="#FFFFFF" />
                     </View>
                     <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={[styles.cellTitle, appSettings.isBoldText && { fontWeight: '900' }]}>Chữ In Đậm</Text>
-                      <Text style={styles.cellSubtitle}>Tăng độ tương phản và độ đậm cho tiêu đề</Text>
+                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Chữ in đậm</Text>
                     </View>
                     <Switch
                       value={appSettings.isBoldText}
-                      onValueChange={(v) => {
-                        saveAppSettings({ ...appSettings, isBoldText: v });
-                        triggerToast(v ? '𝗕 Đã bật chữ đậm' : 'Đã tắt chữ đậm');
-                      }}
-                      trackColor={{ false: '#39393D', true: '#30D158' }}
+                      onValueChange={(v) => saveAppSettings({ ...appSettings, isBoldText: v })}
+                      trackColor={{ false: '#39393D', true: '#34C759' }}
                     />
                   </View>
 
-                  {/* Phản Hồi Xúc Giác Haptics */}
+                  {/* Cỡ chữ */}
                   <View style={[styles.cellItem, { borderBottomWidth: 0 }]}>
-                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#32ADE6' }]}>
-                      <Ionicons name="phone-portrait" size={18} color="#fff" />
-                    </View>
-                    <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={styles.cellTitle}>Phản Hồi Xúc Giác (Haptics)</Text>
-                      <Text style={styles.cellSubtitle}>Rung siêu nhẹ Taptic Engine khi thao tác</Text>
-                    </View>
-                    <Switch
-                      value={appSettings.hapticFeedback}
-                      onValueChange={(v) => {
-                        saveAppSettings({ ...appSettings, hapticFeedback: v });
-                        triggerToast(v ? '📳 Đã kích hoạt Haptic Touch' : 'Đã tắt rung phản hồi');
-                      }}
-                      trackColor={{ false: '#39393D', true: '#30D158' }}
-                    />
-                  </View>
-                </View>
-              </View>
-            )}
-
-            {/* NHÓM 3: NGÔN NGỮ QUỐC TẾ */}
-            {(!settingsSearchQuery || 'ngôn ngữ tiếng việt english chinese language'.includes(settingsSearchQuery.toLowerCase())) && (
-              <View style={[styles.sectionWrap, { marginTop: 16 }]}>
-                <Text style={styles.sectionCaption}>NGÔN NGỮ HIỂN THỊ</Text>
-                <View style={styles.groupedList}>
-                  {[
-                    { id: 'vi' as const, label: 'Tiếng Việt', flag: '🇻🇳', sub: 'Mặc định hệ thống' },
-                    { id: 'en' as const, label: 'English (US)', flag: '🇺🇸', sub: 'International' },
-                    { id: 'zh' as const, label: '简体中文', flag: '🇨🇳', sub: 'Simplified Chinese' },
-                  ].map((lang, idx, arr) => (
-                    <TouchableOpacity
-                      key={lang.id}
-                      style={[styles.cellItem, idx === arr.length - 1 && { borderBottomWidth: 0 }]}
-                      onPress={() => {
-                        saveAppSettings({ ...appSettings, language: lang.id });
-                        setSelectedLanguage(lang.id);
-                        triggerToast(`Ngôn ngữ: ${lang.label}`);
-                      }}
-                    >
-                      <Text style={{ fontSize: 24, marginRight: 12 }}>{lang.flag}</Text>
-                      <View style={[styles.cellContent, { flex: 1 }]}>
-                        <Text style={styles.cellTitle}>{lang.label}</Text>
-                        <Text style={styles.cellSubtitle}>{lang.sub}</Text>
-                      </View>
-                      {appSettings.language === lang.id && (
-                        <Ionicons name="checkmark-circle" size={22} color={appSettings.accentColor} />
-                      )}
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            )}
-
-            {/* NHÓM 4: DỮ LIỆU & LƯU TRỮ (DATA & STORAGE) */}
-            {(!settingsSearchQuery || 'dữ liệu bộ nhớ đệm cache sao lưu khôi phục icloud reset'.includes(settingsSearchQuery.toLowerCase())) && (
-              <View style={[styles.sectionWrap, { marginTop: 16 }]}>
-                <Text style={styles.sectionCaption}>DỮ LIỆU & LƯU TRỮ ĐÁM MÂY</Text>
-                <View style={styles.groupedList}>
-                  {/* Đồng bộ iCloud */}
-                  <View style={styles.cellItem}>
                     <View style={[styles.cellLeadingIcon, { backgroundColor: '#007AFF' }]}>
-                      <Ionicons name="cloud-done-outline" size={19} color="#fff" />
+                      <Ionicons name="text-outline" size={18} color="#FFFFFF" />
                     </View>
                     <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={styles.cellTitle}>Đồng Bộ Hóa iCloud Vault</Text>
-                      <Text style={styles.cellSubtitle}>Tự động sao lưu và đồng bộ mã hóa hai chiều</Text>
+                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Cỡ chữ</Text>
                     </View>
-                    <Switch
-                      value={appSettings.cloudSync}
-                      onValueChange={(v) => {
-                        saveAppSettings({ ...appSettings, cloudSync: v });
-                        triggerToast(v ? '☁️ Đã bật đồng bộ iCloud Vault' : 'Đã tắt đồng bộ iCloud');
+                    <TouchableOpacity
+                      onPress={() => {
+                        const sizes: ('small' | 'standard' | 'large')[] = ['small', 'standard', 'large'];
+                        const nextIdx = (sizes.indexOf(appSettings.fontSizeScale) + 1) % sizes.length;
+                        saveAppSettings({ ...appSettings, fontSizeScale: sizes[nextIdx] });
                       }}
-                      trackColor={{ false: '#39393D', true: '#30D158' }}
-                    />
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                    >
+                      <Text style={{ color: '#8E8E93', fontSize: 16 }}>
+                        {appSettings.fontSizeScale === 'small' ? 'Nhỏ' : appSettings.fontSizeScale === 'large' ? 'Lớn' : 'Chuẩn'}
+                      </Text>
+                      <Ionicons name="chevron-forward" size={16} color="#48484A" />
+                    </TouchableOpacity>
                   </View>
+                </View>
+              </View>
+            )}
 
-                  {/* Xuất bản sao lưu */}
-                  <TouchableOpacity style={styles.cellItem} activeOpacity={0.7} onPress={handleExportBackup}>
-                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#30D158' }]}>
-                      <Ionicons name="download-outline" size={19} color="#fff" />
-                    </View>
-                    <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={styles.cellTitle}>Xuất Bản Sao Lưu Mã Hóa AES-256</Text>
-                      <Text style={styles.cellSubtitle}>Tạo file JSON mã hóa có mật mã bảo vệ</Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={16} color="#636366" />
-                  </TouchableOpacity>
-
-                  {/* Dọn dẹp bộ nhớ đệm (Cache Cleaner) */}
+            {/* NHÓM 3: CÀI ĐẶT CHUNG & DUNG LƯỢNG */}
+            {(!settingsSearchQuery || 'ngôn ngữ bộ nhớ dữ liệu cache dung lượng icloud'.includes(settingsSearchQuery.toLowerCase())) && (
+              <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 18 }]}>
+                <Text style={{ color: '#8E8E93', fontSize: 12.5, fontWeight: '500', textTransform: 'uppercase', marginBottom: 6, marginLeft: 16 }}>
+                  Cài đặt chung
+                </Text>
+                <View style={styles.groupedList}>
+                  {/* Ngôn ngữ */}
                   <TouchableOpacity
                     style={styles.cellItem}
                     activeOpacity={0.7}
-                    onPress={handleClearCache}
-                    disabled={isCleaningCache || cacheSize === '0.0 MB'}
+                    onPress={() => {
+                      const nextLang = appSettings.language === 'vi' ? 'en' : appSettings.language === 'en' ? 'zh' : 'vi';
+                      saveAppSettings({ ...appSettings, language: nextLang });
+                      setSelectedLanguage(nextLang);
+                    }}
                   >
-                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#FF9500' }]}>
-                      <Ionicons name="trash-bin-outline" size={18} color="#fff" />
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#007AFF' }]}>
+                      <Ionicons name="globe-outline" size={18} color="#FFFFFF" />
                     </View>
                     <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={styles.cellTitle}>Dọn Dẹp Bộ Nhớ Đệm</Text>
-                      <Text style={styles.cellSubtitle}>Giải phóng dung lượng hình ảnh & dữ liệu tạm</Text>
+                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Ngôn ngữ</Text>
                     </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Text style={{ color: cacheSize === '0.0 MB' ? '#30D158' : '#8E8E93', fontSize: 13, fontWeight: '700' }}>
-                        {isCleaningCache ? 'Đang dọn...' : cacheSize}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Text style={{ color: '#8E8E93', fontSize: 16 }}>
+                        {appSettings.language === 'vi' ? 'Tiếng Việt' : appSettings.language === 'en' ? 'English' : '简体中文'}
                       </Text>
-                      <Ionicons name="refresh" size={16} color={isCleaningCache ? appSettings.accentColor : '#636366'} />
+                      <Ionicons name="chevron-forward" size={16} color="#48484A" />
                     </View>
                   </TouchableOpacity>
 
-                  {/* Xem lại Splash Screen */}
-                  <TouchableOpacity style={styles.cellItem} activeOpacity={0.7} onPress={() => triggerSplashFlow()}>
-                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#5856D6' }]}>
-                      <Ionicons name="play-circle-outline" size={19} color="#fff" />
+                  {/* Đồng bộ iCloud */}
+                  <View style={styles.cellItem}>
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#32ADE6' }]}>
+                      <Ionicons name="cloud-outline" size={18} color="#FFFFFF" />
                     </View>
                     <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={styles.cellTitle}>Xem Lại Màn Hình Chào & Tương Thích</Text>
-                      <Text style={styles.cellSubtitle}>Trải nghiệm màn hình boot logo & kiểm tra iOS</Text>
+                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '400' }}>iCloud Sync</Text>
                     </View>
-                    <Ionicons name="chevron-forward" size={16} color="#636366" />
+                    <Switch
+                      value={appSettings.cloudSync}
+                      onValueChange={(v) => saveAppSettings({ ...appSettings, cloudSync: v })}
+                      trackColor={{ false: '#39393D', true: '#34C759' }}
+                    />
+                  </View>
+
+                  {/* Dung lượng & Dọn dẹp cache */}
+                  <View style={[styles.cellItem, { borderBottomWidth: 0 }]}>
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#8E8E93' }]}>
+                      <Ionicons name="server-outline" size={18} color="#FFFFFF" />
+                    </View>
+                    <View style={[styles.cellContent, { flex: 1 }]}>
+                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Dung lượng đệm</Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={handleClearCache}
+                      disabled={isCleaningCache || cacheSize === '0.0 MB'}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+                    >
+                      <Text style={{ color: cacheSize === '0.0 MB' ? '#8E8E93' : '#007AFF', fontSize: 15 }}>
+                        {isCleaningCache ? 'Đang xóa...' : cacheSize === '0.0 MB' ? '0.0 MB' : `Xóa (${cacheSize})`}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            )}
+
+            {/* NHÓM 4: GIỚI THIỆU & PHÁP LÝ */}
+            {(!settingsSearchQuery || 'giới thiệu phiên bản sao lưu chia sẻ'.includes(settingsSearchQuery.toLowerCase())) && (
+              <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 32 }]}>
+                <Text style={{ color: '#8E8E93', fontSize: 12.5, fontWeight: '500', textTransform: 'uppercase', marginBottom: 6, marginLeft: 16 }}>
+                  Giới thiệu
+                </Text>
+                <View style={styles.groupedList}>
+                  {/* Xuất sao lưu */}
+                  <TouchableOpacity style={styles.cellItem} activeOpacity={0.7} onPress={handleExportBackup}>
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#34C759' }]}>
+                      <Ionicons name="arrow-down-circle-outline" size={18} color="#FFFFFF" />
+                    </View>
+                    <View style={[styles.cellContent, { flex: 1 }]}>
+                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Sao lưu dữ liệu</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color="#48484A" />
                   </TouchableOpacity>
 
-                  {/* Đặt lại cài đặt gốc */}
+                  {/* Đặt lại */}
                   <TouchableOpacity
-                    style={[styles.cellItem, { borderBottomWidth: 0 }]}
+                    style={styles.cellItem}
                     activeOpacity={0.7}
                     onPress={() => {
                       Alert.alert(
-                        'Đặt Lại Cài Đặt Gốc',
-                        'Bạn có chắc chắn muốn đưa toàn bộ cài đặt giao diện, màu sắc, Face ID về mặc định nhà sản xuất không?',
+                        'Đặt lại tất cả cài đặt',
+                        'Thao tác này sẽ đưa tất cả các tùy chọn về mặc định của hệ thống.',
                         [
                           { text: 'Hủy', style: 'cancel' },
                           {
-                            text: 'Đặt Lại Mặc Định',
+                            text: 'Đặt lại',
                             style: 'destructive',
                             onPress: () => {
                               saveAppSettings(INITIAL_SETTINGS);
-                              triggerToast('✓ Đã khôi phục cài đặt gốc thành công!');
+                              triggerToast('Đã khôi phục cài đặt');
                             },
                           },
                         ]
@@ -3978,86 +3893,24 @@ export default function App() {
                     }}
                   >
                     <View style={[styles.cellLeadingIcon, { backgroundColor: '#FF3B30' }]}>
-                      <Ionicons name="refresh-circle-outline" size={20} color="#fff" />
+                      <Ionicons name="refresh-outline" size={18} color="#FFFFFF" />
                     </View>
                     <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={[styles.cellTitle, { color: '#FF3B30' }]}>Khôi Phục Cài Đặt Gốc</Text>
-                      <Text style={styles.cellSubtitle}>Đưa tùy chọn màu sắc & bảo mật về ban đầu</Text>
+                      <Text style={{ color: '#FF3B30', fontSize: 16, fontWeight: '400' }}>Đặt lại cài đặt</Text>
                     </View>
-                    <Ionicons name="chevron-forward" size={16} color="#636366" />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
-
-            {/* NHÓM 5: THÔNG TIN THƯƠNG MẠI & PHÁP LÝ */}
-            {(!settingsSearchQuery || 'thông tin phiên bản đánh giá app store bản quyền'.includes(settingsSearchQuery.toLowerCase())) && (
-              <View style={[styles.sectionWrap, { marginTop: 16 }]}>
-                <Text style={styles.sectionCaption}>THƯƠNG HIỆU & PHÁP LÝ</Text>
-                <View style={styles.groupedList}>
-                  <TouchableOpacity
-                    style={styles.cellItem}
-                    activeOpacity={0.7}
-                    onPress={() => triggerToast('⭐ Cảm ơn bạn đã đánh giá 5 sao cho LockX Pro!')}
-                  >
-                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#FFD60A' }]}>
-                      <Ionicons name="star" size={18} color="#000" />
-                    </View>
-                    <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={styles.cellTitle}>Đánh Giá 5 Sao Trên App Store</Text>
-                      <Text style={styles.cellSubtitle}>Tiếp thêm động lực phát triển tính năng mới</Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={16} color="#636366" />
+                    <Ionicons name="chevron-forward" size={16} color="#48484A" />
                   </TouchableOpacity>
 
-                  <TouchableOpacity
-                    style={styles.cellItem}
-                    activeOpacity={0.7}
-                    onPress={() => {
-                      Clipboard.setString('https://github.com/tuanquayhuok/LockX');
-                      triggerToast('✓ Đã sao chép link chia sẻ LockX!');
-                    }}
-                  >
-                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#30D158' }]}>
-                      <Ionicons name="share-social-outline" size={18} color="#fff" />
-                    </View>
-                    <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={styles.cellTitle}>Chia Sẻ Ứng Dụng Với Bạn Bè</Text>
-                      <Text style={styles.cellSubtitle}>Lan tỏa bảo mật cấp quân sự cho mọi người</Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={16} color="#636366" />
-                  </TouchableOpacity>
-
-                  <View style={styles.cellItem}>
-                    <Text style={{ color: '#fff', fontSize: 14 }}>Phiên bản thương mại</Text>
-                    <Text style={{ color: '#8E8E93', fontSize: 14, fontWeight: '700' }}>2.5.0 (Build 2026.09)</Text>
-                  </View>
-
-                  <View style={styles.cellItem}>
-                    <Text style={{ color: '#fff', fontSize: 14 }}>Chip Mã Hóa Phần Cứng</Text>
-                    <Text style={{ color: '#30D158', fontSize: 14, fontWeight: '600' }}>Apple Secure Enclave</Text>
-                  </View>
-
+                  {/* Phiên bản */}
                   <View style={[styles.cellItem, { borderBottomWidth: 0 }]}>
-                    <Text style={{ color: '#fff', fontSize: 14 }}>Thuật toán mã hóa</Text>
-                    <Text style={{ color: '#8E8E93', fontSize: 14 }}>AES-256-GCM / PBKDF2</Text>
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#8E8E93' }]}>
+                      <Ionicons name="information-circle-outline" size={19} color="#FFFFFF" />
+                    </View>
+                    <View style={[styles.cellContent, { flex: 1 }]}>
+                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Phiên bản</Text>
+                    </View>
+                    <Text style={{ color: '#8E8E93', fontSize: 16 }}>1.0 (2026)</Text>
                   </View>
-                </View>
-
-                {/* Footer Bản Quyền */}
-                <View style={{ alignItems: 'center', marginTop: 24, marginBottom: 40 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                    <Ionicons name="shield-checkmark" size={16} color={appSettings.accentColor} />
-                    <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 14, letterSpacing: 0.8 }}>
-                      LOCKX SECURITY SUITE
-                    </Text>
-                  </View>
-                  <Text style={{ color: '#636366', fontSize: 12 }}>
-                    Bản quyền thương mại thuộc về LockX Corporation
-                  </Text>
-                  <Text style={{ color: '#48484A', fontSize: 11, marginTop: 2 }}>
-                    Designed in California • Engineered for iOS 18
-                  </Text>
                 </View>
               </View>
             )}
