@@ -2285,6 +2285,8 @@ export default function App() {
     title: string;
     message: string;
     type: 'success' | 'info' | 'warning' | 'security';
+    customIcon?: string;
+    customColor?: string;
   } | null>(null);
 
   const [bannerNotification, setBannerNotification] = useState<{
@@ -3352,7 +3354,9 @@ export default function App() {
   const showSuccessPopup = (
     title: string,
     message: string,
-    type: 'success' | 'info' | 'warning' | 'security' = 'success'
+    type: 'success' | 'info' | 'warning' | 'security' = 'success',
+    customIcon?: string,
+    customColor?: string
   ) => {
     if (popupTimeoutRef.current) {
       clearTimeout(popupTimeoutRef.current);
@@ -3364,6 +3368,8 @@ export default function App() {
       title,
       message,
       type,
+      customIcon,
+      customColor,
     });
 
     popupScaleAnim.setValue(0.75);
@@ -3373,7 +3379,7 @@ export default function App() {
     ringScaleAnim.setValue(0.8);
     ringOpacityAnim.setValue(0.85);
 
-    // 1. Popup card springs in smoothly
+    // 1. Popup card springs in smoothly in the center of the screen
     Animated.parallel([
       Animated.spring(popupScaleAnim, {
         toValue: 1,
@@ -3414,11 +3420,11 @@ export default function App() {
           useNativeDriver: true,
         }),
       ]).start();
-    }, 100);
+    }, 90);
 
     popupTimeoutRef.current = setTimeout(() => {
       dismissSuccessPopup();
-    }, 3200);
+    }, 2400);
   };
 
   const showBannerToast = (
@@ -3468,17 +3474,22 @@ export default function App() {
     msg: string,
     title?: string,
     type?: 'success' | 'info' | 'warning' | 'security',
-    useModal: boolean = false
+    customIconOrUseModal?: string | boolean,
+    customColor?: string
   ) => {
     let resolvedTitle = title;
     let resolvedType = type;
+    let resolvedIcon = typeof customIconOrUseModal === 'string' ? customIconOrUseModal : undefined;
+    let resolvedColor = customColor;
+
+    const lower = msg.toLowerCase();
 
     if (!resolvedType) {
-      if (msg.toLowerCase().includes('không thể') || msg.toLowerCase().includes('thất bại') || msg.toLowerCase().includes('lỗi') || msg.startsWith('⚠️')) {
+      if (lower.includes('không thể') || lower.includes('thất bại') || lower.includes('lỗi') || lower.includes('quá ngắn') || msg.startsWith('⚠️')) {
         resolvedType = 'warning';
-      } else if (msg.toLowerCase().includes('khóa') || msg.toLowerCase().includes('bảo mật') || msg.toLowerCase().includes('face id')) {
+      } else if (lower.includes('khóa') || lower.includes('bảo mật') || lower.includes('face id')) {
         resolvedType = 'security';
-      } else if (msg.toLowerCase().includes('thành công')) {
+      } else if (lower.includes('thành công') || lower.includes('hoàn tất') || lower.includes('đã lưu') || lower.includes('đã xóa')) {
         resolvedType = 'success';
       } else {
         resolvedType = 'info';
@@ -3491,22 +3502,49 @@ export default function App() {
       } else if (resolvedType === 'security') {
         resolvedTitle = 'Bảo Mật';
       } else if (resolvedType === 'success') {
-        resolvedTitle = 'Thao Tác Hoàn Tất';
-      } else if (msg.toLowerCase().includes('chép') || msg.toLowerCase().includes('clipboard')) {
+        resolvedTitle = 'Thao Tác Thành Công';
+      } else if (lower.includes('chép') || lower.includes('clipboard')) {
         resolvedTitle = 'Đã Sao Chép';
+      } else if (lower.includes('giao diện') || lower.includes('sáng') || lower.includes('tối')) {
+        resolvedTitle = 'Chế Độ Giao Diện';
+      } else if (lower.includes('ngôn ngữ')) {
+        resolvedTitle = 'Ngôn Ngữ';
+      } else if (lower.includes('màu')) {
+        resolvedTitle = 'Màu Sắc';
+      } else if (lower.includes('cỡ chữ')) {
+        resolvedTitle = 'Cỡ Chữ';
       } else {
         resolvedTitle = 'Thông Báo';
+      }
+    }
+
+    if (!resolvedIcon) {
+      if (lower.includes('sáng')) {
+        resolvedIcon = 'sunny';
+        resolvedColor = '#FF9500';
+      } else if (lower.includes('tối')) {
+        resolvedIcon = 'moon';
+        resolvedColor = '#5856D6';
+      } else if (lower.includes('chép') || lower.includes('clipboard')) {
+        resolvedIcon = 'copy';
+        resolvedColor = '#0A84FF';
+      } else if (lower.includes('màu')) {
+        resolvedIcon = 'color-palette';
+        resolvedColor = appSettings.accentColor;
+      } else if (lower.includes('cỡ chữ') || lower.includes('in đậm')) {
+        resolvedIcon = 'text';
+        resolvedColor = appSettings.accentColor;
+      } else if (lower.includes('ngôn ngữ')) {
+        resolvedIcon = 'language';
+        resolvedColor = '#0A84FF';
       }
     }
 
     const cleanMsg = msg.replace(/^[✓⚠️🔒🔓🎉•\s]+/, '').trim();
     const notifId = `notif-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
 
-    if (useModal) {
-      showSuccessPopup(resolvedTitle, cleanMsg, resolvedType);
-    } else {
-      showBannerToast(resolvedTitle, cleanMsg, resolvedType);
-    }
+    // Luôn hiển thị popup ở GIỮA MÀN HÌNH (Center Screen HUD)
+    showSuccessPopup(resolvedTitle, cleanMsg, resolvedType, resolvedIcon, resolvedColor);
 
     // 2. Lưu vào danh sách Thông báo
     const newNotif: AppNotification = {
@@ -4032,11 +4070,12 @@ export default function App() {
                   borderColor:
                     successPopup?.type === 'success'
                       ? '#30D158'
-                      : successPopup?.type === 'warning'
-                      ? '#FF9F0A'
-                      : successPopup?.type === 'security'
-                      ? appSettings.accentColor
-                      : '#8E8E93',
+                      : successPopup?.customColor ||
+                        (successPopup?.type === 'warning'
+                          ? '#FF9F0A'
+                          : successPopup?.type === 'security'
+                          ? appSettings.accentColor
+                          : '#0A84FF'),
                   transform: [{ scale: ringScaleAnim }],
                   opacity: ringOpacityAnim,
                 }}
@@ -4053,7 +4092,10 @@ export default function App() {
                     ? { backgroundColor: 'rgba(255, 159, 10, 0.16)', borderColor: 'rgba(255, 159, 10, 0.45)' }
                     : successPopup?.type === 'security'
                     ? { backgroundColor: 'rgba(10, 132, 255, 0.16)', borderColor: 'rgba(10, 132, 255, 0.45)' }
-                    : { backgroundColor: 'rgba(142, 142, 147, 0.16)', borderColor: 'rgba(142, 142, 147, 0.45)' },
+                    : {
+                        backgroundColor: `${successPopup?.customColor || '#0A84FF'}22`,
+                        borderColor: `${successPopup?.customColor || '#0A84FF'}50`,
+                      },
                 ]}
               >
                 {successPopup?.type === 'success' ? (
@@ -4083,19 +4125,21 @@ export default function App() {
                       height: 52,
                       borderRadius: 26,
                       backgroundColor:
-                        successPopup?.type === 'warning'
+                        successPopup?.customColor ||
+                        (successPopup?.type === 'warning'
                           ? '#FF9F0A'
                           : successPopup?.type === 'security'
                           ? appSettings.accentColor
-                          : '#8E8E93',
+                          : '#0A84FF'),
                       alignItems: 'center',
                       justifyContent: 'center',
                       shadowColor:
-                        successPopup?.type === 'warning'
+                        successPopup?.customColor ||
+                        (successPopup?.type === 'warning'
                           ? '#FF9F0A'
                           : successPopup?.type === 'security'
                           ? appSettings.accentColor
-                          : '#8E8E93',
+                          : '#0A84FF'),
                       shadowOffset: { width: 0, height: 4 },
                       shadowOpacity: 0.45,
                       shadowRadius: 10,
@@ -4104,11 +4148,12 @@ export default function App() {
                   >
                     <Ionicons
                       name={
-                        successPopup?.type === 'warning'
-                          ? 'alert'
-                          : successPopup?.type === 'security'
-                          ? 'shield-checkmark'
-                          : 'information'
+                        (successPopup?.customIcon ||
+                          (successPopup?.type === 'warning'
+                            ? 'alert'
+                            : successPopup?.type === 'security'
+                            ? 'shield-checkmark'
+                            : 'information')) as any
                       }
                       size={30}
                       color="#FFFFFF"
@@ -4138,9 +4183,10 @@ export default function App() {
                   backgroundColor:
                     successPopup?.type === 'success'
                       ? '#30D158'
-                      : successPopup?.type === 'security'
-                      ? appSettings.accentColor
-                      : isLight ? '#000000' : '#2C2C2E',
+                      : successPopup?.customColor ||
+                        (successPopup?.type === 'security'
+                          ? appSettings.accentColor
+                          : isLight ? '#000000' : '#2C2C2E'),
                 },
               ]}
             >
@@ -4149,158 +4195,6 @@ export default function App() {
           </Animated.View>
         </TouchableOpacity>
       </Modal>
-
-      {/* NON-BLOCKING FLOATING DYNAMIC ISLAND BANNER TOAST HUD */}
-      {bannerNotification && (
-        <Animated.View
-          pointerEvents="box-none"
-          style={[
-            styles.iosPushBannerContainer,
-            {
-              transform: [{ translateY: bannerAnimY }, { scale: bannerAnimScale }],
-              opacity: bannerAnimOpacity,
-            },
-          ]}
-        >
-          <TouchableOpacity
-            activeOpacity={0.92}
-            onPress={() => {
-              if (bannerTimeoutRef.current) clearTimeout(bannerTimeoutRef.current);
-              Animated.parallel([
-                Animated.timing(bannerAnimY, { toValue: -120, duration: 180, useNativeDriver: true }),
-                Animated.timing(bannerAnimOpacity, { toValue: 0, duration: 150, useNativeDriver: true }),
-              ]).start(() => setBannerNotification(null));
-            }}
-            style={[styles.iosPushBannerCard, isLight && styles.iosPushBannerCardLight]}
-          >
-            {/* Header Row: LockX icon, LockX title, time, type tag */}
-            <View style={styles.iosPushHeaderRow}>
-              <View style={styles.iosPushAppBadge}>
-                <Image
-                  source={{ uri: 'https://img.icons8.com/isometric/96/lock--v1.png' }}
-                  style={styles.iosPushAppIcon}
-                />
-                <Text style={styles.iosPushAppName}>LockX</Text>
-                <Text style={styles.iosPushAppDot}>•</Text>
-                <Text style={styles.iosPushAppTime}>Bây giờ</Text>
-              </View>
-
-              <View
-                style={[
-                  styles.iosPushTypeTag,
-                  bannerNotification.type === 'success'
-                    ? { backgroundColor: 'rgba(48, 209, 88, 0.16)' }
-                    : bannerNotification.type === 'warning'
-                    ? { backgroundColor: 'rgba(255, 159, 10, 0.16)' }
-                    : bannerNotification.type === 'security'
-                    ? { backgroundColor: 'rgba(10, 132, 255, 0.16)' }
-                    : { backgroundColor: 'rgba(142, 142, 147, 0.16)' },
-                ]}
-              >
-                <Ionicons
-                  name={
-                    bannerNotification.type === 'success'
-                      ? 'checkmark-circle'
-                      : bannerNotification.type === 'warning'
-                      ? 'alert-circle'
-                      : bannerNotification.type === 'security'
-                      ? 'shield-checkmark'
-                      : 'information-circle'
-                  }
-                  size={12}
-                  color={
-                    bannerNotification.type === 'success'
-                      ? '#30D158'
-                      : bannerNotification.type === 'warning'
-                      ? '#FF9F0A'
-                      : bannerNotification.type === 'security'
-                      ? '#0A84FF'
-                      : '#8E8E93'
-                  }
-                />
-                <Text
-                  style={[
-                    styles.iosPushTypeTagText,
-                    {
-                      color:
-                        bannerNotification.type === 'success'
-                          ? '#30D158'
-                          : bannerNotification.type === 'warning'
-                          ? '#FF9F0A'
-                          : bannerNotification.type === 'security'
-                          ? '#0A84FF'
-                          : '#8E8E93',
-                    },
-                  ]}
-                >
-                  {bannerNotification.type === 'success'
-                    ? 'Thành công'
-                    : bannerNotification.type === 'warning'
-                    ? 'Cảnh báo'
-                    : bannerNotification.type === 'security'
-                    ? 'Bảo mật'
-                    : 'Thông tin'}
-                </Text>
-              </View>
-            </View>
-
-            {/* Content Row */}
-            <View style={styles.iosPushContentRow}>
-              <View style={styles.iosPushTextWrap}>
-                <Text style={[styles.iosPushTitle, isLight && { color: '#000000' }]} numberOfLines={1}>
-                  {bannerNotification.title}
-                </Text>
-                <Text style={[styles.iosPushBody, isLight && { color: '#3C3C43' }]} numberOfLines={2}>
-                  {bannerNotification.message}
-                </Text>
-              </View>
-
-              <View
-                style={[
-                  styles.iosPushActionIconWrap,
-                  {
-                    backgroundColor:
-                      bannerNotification.type === 'success'
-                        ? 'rgba(48, 209, 88, 0.15)'
-                        : bannerNotification.type === 'warning'
-                        ? 'rgba(255, 159, 10, 0.15)'
-                        : bannerNotification.type === 'security'
-                        ? 'rgba(10, 132, 255, 0.15)'
-                        : 'rgba(142, 142, 147, 0.15)',
-                  },
-                ]}
-              >
-                <Ionicons
-                  name={
-                    bannerNotification.type === 'success'
-                      ? 'checkmark'
-                      : bannerNotification.type === 'warning'
-                      ? 'warning'
-                      : bannerNotification.type === 'security'
-                      ? 'shield'
-                      : 'arrow-forward'
-                  }
-                  size={15}
-                  color={
-                    bannerNotification.type === 'success'
-                      ? '#30D158'
-                      : bannerNotification.type === 'warning'
-                      ? '#FF9F0A'
-                      : bannerNotification.type === 'security'
-                      ? '#0A84FF'
-                      : '#8E8E93'
-                  }
-                />
-              </View>
-            </View>
-
-            {/* Mini bottom swipe grabber bar */}
-            <View style={styles.iosPushGrabberWrap}>
-              <View style={[styles.iosPushGrabberBar, isLight && { backgroundColor: 'rgba(0,0,0,0.18)' }]} />
-            </View>
-          </TouchableOpacity>
-        </Animated.View>
-      )}
 
             {!isAuthenticated ? (
         <EnterpriseAuthScreen
@@ -6515,7 +6409,7 @@ export default function App() {
                     <TouchableOpacity
                       onPress={() => {
                         saveAppSettings({ ...appSettings, themeMode: 'light' });
-                        triggerToast('Chế độ giao diện: Sáng (iOS 18)', 'Giao Diện', 'info', false);
+                        triggerToast('Đã áp dụng giao diện Sáng chuẩn iOS 18.', 'Chế Độ Giao Diện', 'info', 'sunny', '#FF9500');
                       }}
                       style={{ alignItems: 'center' }}
                       activeOpacity={0.7}
@@ -6565,7 +6459,7 @@ export default function App() {
                     <TouchableOpacity
                       onPress={() => {
                         saveAppSettings({ ...appSettings, themeMode: 'dark' });
-                        triggerToast('Chế độ giao diện: Tối OLED', 'Giao Diện', 'info', false);
+                        triggerToast('Đã áp dụng giao diện Tối OLED bảo vệ mắt.', 'Chế Độ Giao Diện', 'info', 'moon', '#5856D6');
                       }}
                       style={{ alignItems: 'center' }}
                       activeOpacity={0.7}
@@ -6635,7 +6529,7 @@ export default function App() {
                           key={c.color}
                           onPress={() => {
                             saveAppSettings({ ...appSettings, accentColor: c.color });
-                            triggerToast(`Đã áp dụng màu chủ đạo ${c.label}.`, 'Màu Nhấn', 'info', false);
+                            triggerToast(`Đã áp dụng màu chủ đạo ${c.label}.`, 'Màu Nhấn', 'info', 'color-palette', c.color);
                           }}
                           style={{
                             width: 26,
@@ -6730,7 +6624,7 @@ export default function App() {
                   </View>
 
                   {/* Âm thanh thông báo */}
-                  <View style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}>
+                  <View style={[styles.cellItem, { borderBottomWidth: 0 }]}>
                     <View style={[styles.cellLeadingIcon, { backgroundColor: '#5856D6' }]}>
                       <Ionicons name="volume-high" size={18} color="#FFFFFF" />
                     </View>
@@ -6746,50 +6640,9 @@ export default function App() {
                       trackColor={{ false: isLight ? '#E5E5EA' : '#39393D', true: appSettings.accentColor }}
                     />
                   </View>
-
-                  {/* Thử nghiệm thông báo Dynamic Island */}
-                  <TouchableOpacity
-                    style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}
-                    activeOpacity={0.7}
-                    onPress={() => {
-                      triggerToast('Đã phát thông báo mẫu Dynamic Island chuẩn Apple!', 'Thông Báo Trong Ứng Dụng', 'info', false);
-                    }}
-                  >
-                    <View style={[styles.cellLeadingIcon, { backgroundColor: appSettings.accentColor }]}>
-                      <Ionicons name="sparkles" size={18} color="#FFFFFF" />
-                    </View>
-                    <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Thông báo Dynamic Island</Text>
-                      <Text style={{ color: isLight ? '#8E8E93' : '#8E8E93', fontSize: 12, marginTop: 1 }}>Viên thuốc nổi rơi từ trên xuống bên trong app</Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={16} color={isLight ? '#C7C7CC' : '#48484A'} />
-                  </TouchableOpacity>
-
-                  {/* Hẹn giờ gửi thông báo ngoài màn hình khóa iPhone */}
-                  <TouchableOpacity
-                    style={[styles.cellItem, { borderBottomWidth: 0 }]}
-                    activeOpacity={0.7}
-                    onPress={() => {
-                      scheduleExternalPushNotification(
-                        'LockX Vault • Cảnh Báo An Toàn',
-                        'Két sắt của bạn đang được bảo vệ bởi Secure Enclave & Face ID.',
-                        3,
-                        'security'
-                      );
-                    }}
-                  >
-                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#30D158' }]}>
-                      <Ionicons name="phone-portrait-outline" size={18} color="#FFFFFF" />
-                    </View>
-                    <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={{ color: '#30D158', fontSize: 16, fontWeight: '600' }}>Thông báo ngoài màn hình khóa (sau 3s)</Text>
-                      <Text style={{ color: isLight ? '#8E8E93' : '#8E8E93', fontSize: 12, marginTop: 1 }}>Khóa máy hoặc thoát app để kiểm tra thông báo iPhone</Text>
-                    </View>
-                    <Ionicons name="paper-plane" size={16} color="#30D158" />
-                  </TouchableOpacity>
                 </View>
                 <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 12, marginTop: 6, marginLeft: 16 }}>
-                  Hệ thống thông báo đẩy tương thích iOS 18 & APNs: hỗ trợ cả hiển thị bên ngoài màn hình khóa và Dynamic Island bên trong ứng dụng.
+                  Hệ thống thông báo đẩy tương thích iOS 18 & APNs: tự động gửi cảnh báo bảo mật và hoạt động tài khoản tới màn hình khóa iPhone.
                 </Text>
               </View>
             )}
@@ -7347,70 +7200,6 @@ export default function App() {
               )}
             </View>
           </SafeAreaView>
-        </View>
-      </Modal>
-      {/* MODAL: FACE ID SCANNER CHUẨN APPLE iOS 18 */}
-      <Modal visible={isFaceIdScanning} transparent animationType="fade">
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center' }}>
-          <View
-            style={{
-              width: 220,
-              height: 220,
-              backgroundColor: '#1C1C1E',
-              borderRadius: 36,
-              borderWidth: 1.5,
-              borderColor: faceIdScanStatus === 'success' ? '#30D158' : faceIdScanStatus === 'failed' ? '#FF453A' : `${appSettings.accentColor}80`,
-              justifyContent: 'center',
-              alignItems: 'center',
-              padding: 20,
-              shadowColor: faceIdScanStatus === 'success' ? '#30D158' : appSettings.accentColor,
-              shadowOffset: { width: 0, height: 10 },
-              shadowOpacity: 0.5,
-              shadowRadius: 24,
-            }}
-          >
-            <View
-              style={{
-                width: 86,
-                height: 86,
-                borderRadius: 43,
-                backgroundColor: faceIdScanStatus === 'success' ? 'rgba(48,209,88,0.15)' : `${appSettings.accentColor}18`,
-                justifyContent: 'center',
-                alignItems: 'center',
-                marginBottom: 16,
-              }}
-            >
-              {faceIdScanStatus === 'scanning' ? (
-                <Image
-                  source={require('./assets/apple_faceid.png')}
-                  style={{ width: 56, height: 56 }}
-                  resizeMode="contain"
-                />
-              ) : (
-                <Ionicons
-                  name={faceIdScanStatus === 'success' ? 'checkmark-circle' : 'close-circle'}
-                  size={54}
-                  color={faceIdScanStatus === 'success' ? '#30D158' : '#FF453A'}
-                />
-              )}
-            </View>
-
-            <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '800', textAlign: 'center' }}>
-              {faceIdScanStatus === 'success'
-                ? 'Face ID Hợp Lệ'
-                : faceIdScanStatus === 'failed'
-                ? 'Không Nhận Diện Được'
-                : 'Đang Nhận Diện Face ID'}
-            </Text>
-
-            <Text style={{ color: '#8E8E93', fontSize: 12, marginTop: 6, textAlign: 'center' }}>
-              {faceIdScanStatus === 'success'
-                ? 'Xác thực sinh trắc học hoàn tất'
-                : faceIdScanStatus === 'failed'
-                ? 'Vui lòng thử lại với góc nhìn thẳng'
-                : 'Giữ khuôn mặt trước màn hình'}
-            </Text>
-          </View>
         </View>
       </Modal>
 
