@@ -26,15 +26,19 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import * as LocalAuthentication from 'expo-local-authentication';
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+try {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    }),
+  });
+} catch (e) {
+  console.warn('Failed to set notification handler:', e);
+}
 
 // Logo Avatar Google Gemini chính thức cho Gehihi AI
 const GEMINI_AVATAR_IMG = require('./assets/gemini_avatar.png');
@@ -238,8 +242,8 @@ export const CallSvgIcon = ({
 let callRingtoneInterval: any = null;
 export const startRingtone = () => {
   try {
-    if (typeof window === 'undefined') return;
-    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
     if (!AudioCtx) return;
     if (callRingtoneInterval) clearInterval(callRingtoneInterval);
 
@@ -276,8 +280,8 @@ export const stopRingtone = () => {
 // Phát âm thanh thông báo iOS 18 chân thực bằng Web Audio API
 export const playAppleNotificationSound = (type: 'success' | 'info' | 'warning' | 'security' | 'tap' = 'success') => {
   try {
-    if (typeof window === 'undefined') return;
-    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
     if (!AudioCtx) return;
 
     const ctx = new AudioCtx();
@@ -4715,20 +4719,20 @@ export default function App() {
     ping();
     const interval = setInterval(ping, 2500);
 
-    if (typeof window !== 'undefined') {
-      window.addEventListener('focus', ping);
-      window.addEventListener('click', ping);
-      window.addEventListener('keydown', ping);
-      document.addEventListener('visibilitychange', ping);
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof document !== 'undefined') {
+      window.addEventListener?.('focus', ping);
+      window.addEventListener?.('click', ping);
+      window.addEventListener?.('keydown', ping);
+      document.addEventListener?.('visibilitychange', ping);
     }
 
     return () => {
       clearInterval(interval);
-      if (typeof window !== 'undefined') {
-        window.removeEventListener('focus', ping);
-        window.removeEventListener('click', ping);
-        window.removeEventListener('keydown', ping);
-        document.removeEventListener('visibilitychange', ping);
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof document !== 'undefined') {
+        window.removeEventListener?.('focus', ping);
+        window.removeEventListener?.('click', ping);
+        window.removeEventListener?.('keydown', ping);
+        document.removeEventListener?.('visibilitychange', ping);
       }
     };
   }, [userProfile.username]);
@@ -5205,11 +5209,12 @@ export default function App() {
   const calculateRealCacheSize = () => {
     try {
       let totalBytes = 0;
-      if (typeof window !== 'undefined' && window.localStorage) {
-        for (let i = 0; i < localStorage.length; i++) {
-          const k = localStorage.key(i);
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && (window as any).localStorage) {
+        const storage = (window as any).localStorage;
+        for (let i = 0; i < storage.length; i++) {
+          const k = storage.key(i);
           if (k) {
-            const v = localStorage.getItem(k) || '';
+            const v = storage.getItem(k) || '';
             totalBytes += (k.length + v.length) * 2;
           }
         }
@@ -5233,11 +5238,15 @@ export default function App() {
     setIsCleaningCache(true);
     setTimeout(() => {
       try {
-        if (typeof window !== 'undefined' && window.sessionStorage) {
-          window.sessionStorage.clear();
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          if ((window as any).sessionStorage) {
+            (window as any).sessionStorage.clear();
+          }
+          if ((window as any).localStorage) {
+            (window as any).localStorage.removeItem('lockx_search_temp');
+            (window as any).localStorage.removeItem('lockx_view_history');
+          }
         }
-        localStorage.removeItem('lockx_search_temp');
-        localStorage.removeItem('lockx_view_history');
       } catch (e) {}
       setCacheSize('0.0 KB');
       setIsCleaningCache(false);
@@ -6005,9 +6014,9 @@ export default function App() {
     }).catch(() => {});
 
     // 2. Đồng bộ các tab trong cùng trình duyệt
-    if (typeof window !== 'undefined' && window.localStorage) {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && (window as any).localStorage) {
       try {
-        window.localStorage.setItem(
+        (window as any).localStorage.setItem(
           'lockx_reaction_sync',
           JSON.stringify({
             from: myClean,
@@ -6080,9 +6089,9 @@ export default function App() {
       }),
     }).catch(() => {});
 
-    if (typeof window !== 'undefined' && window.localStorage) {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && (window as any).localStorage) {
       try {
-        window.localStorage.setItem(
+        (window as any).localStorage.setItem(
           'lockx_block_sync',
           JSON.stringify({
             blocker: myClean,
@@ -6148,8 +6157,8 @@ export default function App() {
 
   // Khởi tạo WebRTC Audio Connection cho cuộc gọi thật 100%
   const setupWebRTC = async (isInitiator: boolean) => {
-    if (typeof window === 'undefined') return;
-    const RTCPC = window.RTCPeerConnection || (window as any).webkitRTCPeerConnection;
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const RTCPC = (window as any).RTCPeerConnection || (window as any).webkitRTCPeerConnection;
     if (!RTCPC) return;
 
     const myClean = (userProfile.username || 'user').replace(/^@/, '').toLowerCase().trim();
@@ -6173,11 +6182,16 @@ export default function App() {
       // Nhận luồng âm thanh từ đối phương và phát qua loa/tai nghe
       pc.ontrack = (event: any) => {
         if (!remoteAudioRef.current) {
-          remoteAudioRef.current = new Audio();
-          remoteAudioRef.current.autoplay = true;
+          const AudioConstructor = (window as any).Audio;
+          if (AudioConstructor) {
+            remoteAudioRef.current = new AudioConstructor();
+            remoteAudioRef.current.autoplay = true;
+          }
         }
-        remoteAudioRef.current.srcObject = event.streams[0];
-        remoteAudioRef.current.play().catch(() => {});
+        if (remoteAudioRef.current) {
+          remoteAudioRef.current.srcObject = event.streams[0];
+          remoteAudioRef.current.play().catch(() => {});
+        }
       };
 
       // Gửi ICE candidate qua Relay Server
@@ -6215,7 +6229,7 @@ export default function App() {
 
   // Xử lý các gói tín hiệu WebRTC (Offer, Answer, Candidate)
   const handleWebRTCSignal = async (sig: any) => {
-    if (!sig) return;
+    if (!sig || Platform.OS !== 'web' || typeof window === 'undefined') return;
     const myClean = (userProfile.username || 'user').replace(/^@/, '').toLowerCase().trim();
     const curFriend = activeCallFriend || activeChatFriend;
     if (!curFriend) return;
@@ -6227,29 +6241,35 @@ export default function App() {
         if (!pc) await setupWebRTC(false);
         const curPc = peerConnectionRef.current;
         if (curPc) {
-          const RTCSess = window.RTCSessionDescription || (window as any).webkitRTCSessionDescription;
-          await curPc.setRemoteDescription(new RTCSess(sig.offer));
-          const answer = await curPc.createAnswer();
-          await curPc.setLocalDescription(answer);
-          fetch('http://127.0.0.1:8089/call/signal', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              from: myClean,
-              to: targetClean,
-              signal: { type: 'answer', answer },
-            }),
-          }).catch(() => {});
+          const RTCSess = (window as any).RTCSessionDescription || (window as any).webkitRTCSessionDescription;
+          if (RTCSess) {
+            await curPc.setRemoteDescription(new RTCSess(sig.offer));
+            const answer = await curPc.createAnswer();
+            await curPc.setLocalDescription(answer);
+            fetch('http://127.0.0.1:8089/call/signal', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                from: myClean,
+                to: targetClean,
+                signal: { type: 'answer', answer },
+              }),
+            }).catch(() => {});
+          }
         }
       } else if (sig.type === 'answer') {
         if (pc) {
-          const RTCSess = window.RTCSessionDescription || (window as any).webkitRTCSessionDescription;
-          await pc.setRemoteDescription(new RTCSess(sig.answer));
+          const RTCSess = (window as any).RTCSessionDescription || (window as any).webkitRTCSessionDescription;
+          if (RTCSess) {
+            await pc.setRemoteDescription(new RTCSess(sig.answer));
+          }
         }
       } else if (sig.type === 'candidate') {
         if (pc && pc.remoteDescription) {
-          const RTCCand = window.RTCIceCandidate || (window as any).webkitRTCIceCandidate;
-          await pc.addIceCandidate(new RTCCand(sig.candidate));
+          const RTCCand = (window as any).RTCIceCandidate || (window as any).webkitRTCIceCandidate;
+          if (RTCCand) {
+            await pc.addIceCandidate(new RTCCand(sig.candidate));
+          }
         }
       }
     } catch (e) {
@@ -6275,9 +6295,9 @@ export default function App() {
     const targetClean = (friendToCall.username || '').replace(/^@/, '').toLowerCase().trim();
 
     // 1. Yêu cầu quyền Micro từ trình duyệt/điện thoại (Web Audio MediaStream)
-    if (typeof window !== 'undefined' && navigator?.mediaDevices?.getUserMedia) {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && (navigator as any)?.mediaDevices?.getUserMedia) {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        const stream = await (navigator as any).mediaDevices.getUserMedia({ audio: true, video: false });
         localStreamRef.current = stream;
       } catch (micErr) {
         console.warn('Microphone permission:', micErr);
@@ -6342,9 +6362,9 @@ export default function App() {
     callLastSignalTimeRef.current = Date.now();
 
     // 1. Yêu cầu quyền Micro
-    if (typeof window !== 'undefined' && navigator?.mediaDevices?.getUserMedia) {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && (navigator as any)?.mediaDevices?.getUserMedia) {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        const stream = await (navigator as any).mediaDevices.getUserMedia({ audio: true, video: false });
         localStreamRef.current = stream;
       } catch (micErr) {
         console.warn('Microphone permission:', micErr);
@@ -6640,8 +6660,8 @@ export default function App() {
       }).catch(() => {});
 
       // 2. Đồng bộ trong cùng trình duyệt qua localStorage
-      if (typeof window !== 'undefined' && window.localStorage) {
-        window.localStorage.setItem(
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && (window as any).localStorage) {
+        (window as any).localStorage.setItem(
           'lockx_typing_ping',
           JSON.stringify({
             from: myClean,
@@ -6752,8 +6772,8 @@ export default function App() {
 
   // Lắng nghe sự kiện gõ phím, đã xem và chặn giữa các tab trong cùng trình duyệt
   useEffect(() => {
-    if (typeof window === 'undefined' || !window.addEventListener) return;
-    const handleStorageSync = (e: StorageEvent) => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined' || !(window as any).addEventListener) return;
+    const handleStorageSync = (e: any) => {
       if (e.key === 'lockx_typing_ping' && e.newValue) {
         try {
           const data = JSON.parse(e.newValue);
@@ -6820,8 +6840,8 @@ export default function App() {
       }
     };
 
-    window.addEventListener('storage', handleStorageSync);
-    return () => window.removeEventListener('storage', handleStorageSync);
+    (window as any).addEventListener?.('storage', handleStorageSync);
+    return () => (window as any).removeEventListener?.('storage', handleStorageSync);
   }, [activeChatFriend, userProfile.username]);
 
   // Khi mở khung chat, báo cho server biết mình đang xem chat (Active Chat & Seen)
@@ -6850,9 +6870,9 @@ export default function App() {
         }),
       }).catch(() => {});
 
-      if (typeof window !== 'undefined' && window.localStorage) {
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && (window as any).localStorage) {
         try {
-          window.localStorage.setItem(
+          (window as any).localStorage.setItem(
             'lockx_seen_sync',
             JSON.stringify({
               from: myClean,

@@ -11,9 +11,6 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.lockx.app",
-      "entitlements": {
-        "com.apple.developer.family-controls": true
-      },
       "infoPlist": {
         "LSApplicationQueriesSchemes": [
           "zalo",
@@ -49,7 +46,9 @@
           "canva"
         ],
         "NSFaceIDUsageDescription": "LockX sử dụng Face ID để xác thực và bảo vệ an toàn cho tài khoản và két sắt của bạn.",
-        "NSFamilyControlsUsageDescription": "LockX cần quyền Thời Gian Sử Dụng & Quản Lý Ứng Dụng để bảo vệ và đặt giới hạn cho các ứng dụng trên iPhone của bạn."
+        "NSMicrophoneUsageDescription": "LockX cần quyền micro để thực hiện cuộc gọi thoại bảo mật.",
+        "NSCameraUsageDescription": "LockX cần quyền camera để chụp ảnh đại diện và quét mã.",
+        "NSPhotoLibraryUsageDescription": "LockX cần quyền truy cập thư viện ảnh để đổi ảnh đại diện."
       }
     },
     "android": {

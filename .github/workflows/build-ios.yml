@@ -51,7 +51,7 @@ jobs:
           mkdir -p build/Payload
           cp -r build/LockX.xcarchive/Products/Applications/LockX.app build/Payload/
           cd build
-          zip -r LockX.ipa Payload
+          zip -r -y LockX.ipa Payload
           rm -rf Payload
 
       - name: 📤 Upload IPA artifact
