@@ -239,34 +239,116 @@ export const CallSvgIcon = ({
   return <Ionicons name={fallbackIcon} size={size} color={color} style={style} />;
 };
 
-let callRingtoneInterval: any = null;
-export const startRingtone = () => {
+export interface AppleRingtone {
+  id: string;
+  name: string;
+  subname: string;
+  category: string;
+}
+
+export const APPLE_RINGTONES: AppleRingtone[] = [
+  { id: 'reflection', name: 'Reflection (Phản Chiếu)', subname: 'Mặc định iOS 17 / iOS 18', category: 'Apple Hiện Đại' },
+  { id: 'marimba', name: 'Marimba (Gõ Gỗ Cổ Điển)', subname: 'Huyền thoại iPhone Classic', category: 'Cổ Điển' },
+  { id: 'opening', name: 'Opening (Khởi Đầu)', subname: 'Giai điệu thanh thoát iOS 7-16', category: 'Cổ Điển' },
+  { id: 'radar', name: 'Radar (Sóng Cảnh Báo)', subname: 'Xung nhịp dồn dập, nổi bật', category: 'Cảnh Báo' },
+  { id: 'silk', name: 'Silk (Tơ Lụa Mượt)', subname: 'Âm thanh êm dịu, tinh tế', category: 'Thư Giãn' },
+  { id: 'twinkle', name: 'Twinkle (Chuông Thủy Tinh)', subname: 'Tiếng chuông lấp lánh Apple', category: 'Thư Giãn' },
+];
+
+export const playSingleRingtoneCycle = (ringtoneId: string = 'reflection') => {
   try {
     if (Platform.OS !== 'web' || typeof window === 'undefined') return;
     const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
     if (!AudioCtx) return;
-    if (callRingtoneInterval) clearInterval(callRingtoneInterval);
+    const ctx = new AudioCtx();
+    const now = ctx.currentTime;
 
-    const playRingCycle = () => {
-      try {
-        const ctx = new AudioCtx();
-        const now = ctx.currentTime;
-        [440, 480].forEach((freq) => {
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.frequency.value = freq;
-          gain.gain.setValueAtTime(0.08, now);
-          gain.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
-          osc.connect(gain);
-          gain.connect(ctx.destination);
-          osc.start(now);
-          osc.stop(now + 1.2);
-        });
-      } catch (err) {}
+    const playTone = (freq: number, startDelay: number, duration: number, waveType: OscillatorType = 'sine', volume: number = 0.12) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = waveType;
+      osc.frequency.setValueAtTime(freq, now + startDelay);
+      gain.gain.setValueAtTime(volume, now + startDelay);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + startDelay + duration);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + startDelay);
+      osc.stop(now + startDelay + duration);
     };
 
-    playRingCycle();
-    callRingtoneInterval = setInterval(playRingCycle, 2800);
+    if (ringtoneId === 'marimba') {
+      const notes = [
+        { f: 523.25, d: 0.00, l: 0.14 },
+        { f: 392.00, d: 0.12, l: 0.14 },
+        { f: 523.25, d: 0.24, l: 0.14 },
+        { f: 659.25, d: 0.36, l: 0.16 },
+        { f: 783.99, d: 0.52, l: 0.18 },
+        { f: 1046.50, d: 0.70, l: 0.22 },
+        { f: 523.25, d: 1.05, l: 0.14 },
+        { f: 392.00, d: 1.17, l: 0.14 },
+        { f: 523.25, d: 1.29, l: 0.14 },
+        { f: 659.25, d: 1.41, l: 0.16 },
+        { f: 783.99, d: 1.57, l: 0.18 },
+        { f: 1046.50, d: 1.75, l: 0.30 },
+      ];
+      notes.forEach((n) => playTone(n.f, n.d, n.l, 'triangle', 0.14));
+    } else if (ringtoneId === 'opening') {
+      const notes = [
+        { f: 369.99, d: 0.00, l: 0.22 },
+        { f: 440.00, d: 0.18, l: 0.22 },
+        { f: 554.37, d: 0.36, l: 0.25 },
+        { f: 739.99, d: 0.58, l: 0.35 },
+        { f: 659.25, d: 0.88, l: 0.30 },
+        { f: 554.37, d: 1.15, l: 0.40 },
+      ];
+      notes.forEach((n) => playTone(n.f, n.d, n.l, 'sine', 0.13));
+    } else if (ringtoneId === 'radar') {
+      [0.0, 0.16, 0.50, 0.66, 1.0, 1.16].forEach((d, idx) => {
+        playTone(idx % 2 === 0 ? 1046.5 : 1318.5, d, 0.12, 'sine', 0.15);
+      });
+    } else if (ringtoneId === 'silk') {
+      const notes = [
+        { f: 587.33, d: 0.00, l: 0.50 },
+        { f: 739.99, d: 0.35, l: 0.50 },
+        { f: 880.00, d: 0.70, l: 0.60 },
+        { f: 987.77, d: 1.10, l: 0.80 },
+      ];
+      notes.forEach((n) => playTone(n.f, n.d, n.l, 'sine', 0.10));
+    } else if (ringtoneId === 'twinkle') {
+      const notes = [
+        { f: 783.99, d: 0.00, l: 0.25 },
+        { f: 987.77, d: 0.18, l: 0.25 },
+        { f: 1174.66, d: 0.36, l: 0.30 },
+        { f: 1567.98, d: 0.56, l: 0.45 },
+        { f: 1174.66, d: 0.85, l: 0.35 },
+      ];
+      notes.forEach((n) => playTone(n.f, n.d, n.l, 'sine', 0.11));
+    } else {
+      // Default: Reflection (iOS 17/18 modern chime)
+      const notes = [
+        { f: 440.00, d: 0.00, l: 0.25 },
+        { f: 554.37, d: 0.18, l: 0.25 },
+        { f: 659.25, d: 0.36, l: 0.28 },
+        { f: 880.00, d: 0.58, l: 0.38 },
+        { f: 830.61, d: 0.88, l: 0.30 },
+        { f: 659.25, d: 1.15, l: 0.35 },
+        { f: 554.37, d: 1.45, l: 0.40 },
+      ];
+      notes.forEach((n) => playTone(n.f, n.d, n.l, 'sine', 0.12));
+    }
+  } catch (e) {}
+};
+
+let callRingtoneInterval: any = null;
+export const startRingtone = (ringtoneId: string = 'reflection') => {
+  try {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    if (callRingtoneInterval) clearInterval(callRingtoneInterval);
+
+    playSingleRingtoneCycle(ringtoneId);
+    callRingtoneInterval = setInterval(() => {
+      playSingleRingtoneCycle(ringtoneId);
+    }, 2800);
   } catch (e) {}
 };
 
@@ -515,6 +597,7 @@ export interface AppSettings {
   notifySecurityAlerts: boolean; // Cảnh báo bảo mật qua Push
   notifyActivity: boolean; // Thông báo thao tác thành công
   notifySounds: boolean; // Âm thanh thông báo
+  ringtoneId?: string; // Nhạc chuông cuộc gọi Apple
 }
 
 export interface FriendUser {
@@ -1261,6 +1344,7 @@ export const INITIAL_SETTINGS: AppSettings = {
   notifySecurityAlerts: true,
   notifyActivity: true,
   notifySounds: true,
+  ringtoneId: 'reflection',
 };
 
 export const INITIAL_NOTIFICATIONS: AppNotification[] = [
@@ -2613,10 +2697,16 @@ export const TypingIndicatorBubble = ({
   isLight,
   avatarColor,
   avatarIcon,
+  avatarUri,
+  isBot,
+  displayName,
 }: {
   isLight: boolean;
   avatarColor: string;
   avatarIcon?: string;
+  avatarUri?: string | null;
+  isBot?: boolean;
+  displayName?: string;
 }) => {
   const dot1 = useRef(new Animated.Value(0)).current;
   const dot2 = useRef(new Animated.Value(0)).current;
@@ -2704,8 +2794,10 @@ export const TypingIndicatorBubble = ({
         transform: [{ scale: bubbleScale }],
       }}
     >
-      {avatarIcon === 'sparkles' ? (
+      {avatarIcon === 'sparkles' || isBot ? (
         <Image source={GEMINI_AVATAR_IMG} style={{ width: 30, height: 30, borderRadius: 15 }} resizeMode="contain" />
+      ) : avatarUri ? (
+        <Image source={{ uri: avatarUri }} style={{ width: 30, height: 30, borderRadius: 15 }} resizeMode="cover" />
       ) : (
         <View
           style={{
@@ -2717,7 +2809,13 @@ export const TypingIndicatorBubble = ({
             alignItems: 'center',
           }}
         >
-          <Ionicons name={(avatarIcon || 'person') as any} size={15} color="#FFFFFF" />
+          {displayName ? (
+            <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '700' }}>
+              {displayName.trim().charAt(0).toUpperCase()}
+            </Text>
+          ) : (
+            <Ionicons name={(avatarIcon || 'person') as any} size={15} color="#FFFFFF" />
+          )}
         </View>
       )}
       <View
@@ -3023,6 +3121,21 @@ export const EnterpriseAuthScreen = ({
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [rememberDevice, setRememberDevice] = useState<boolean>(true);
   const [tabLayoutWidth, setTabLayoutWidth] = useState<number>(340);
+
+  const recentGreetingName = (savedDisplayName && savedDisplayName !== 'Người Dùng LockX')
+    ? savedDisplayName
+    : (authUsername.toLowerCase().includes('tuan') || (savedAccount && savedAccount.toLowerCase().includes('tuan')))
+    ? 'Quảng Trọng Tuấn'
+    : (savedAccount || 'Quảng Trọng Tuấn');
+  const greetingText = `Hi ${recentGreetingName}`;
+
+  useEffect(() => {
+    if (authMode === 'login' && (savedAccount || savedDisplayName)) {
+      if (!authUsername || authUsername === savedAccount) {
+        setAuthUsername(greetingText);
+      }
+    }
+  }, [authMode, savedAccount, savedDisplayName]);
 
   // Animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -3434,19 +3547,11 @@ export const EnterpriseAuthScreen = ({
                 overflow: 'hidden',
               }}
             >
-              {authMode === 'login' && savedAvatarUri ? (
-                <Image
-                  source={{ uri: savedAvatarUri }}
-                  style={{ width: '100%', height: '100%' }}
-                  resizeMode="cover"
-                />
-              ) : (
-                <Image
-                  source={require('./assets/icon.png')}
-                  style={{ width: '100%', height: '100%' }}
-                  resizeMode="cover"
-                />
-              )}
+              <Image
+                source={require('./assets/icon.png')}
+                style={{ width: '100%', height: '100%' }}
+                resizeMode="cover"
+              />
             </View>
           </Animated.View>
 
@@ -3460,13 +3565,7 @@ export const EnterpriseAuthScreen = ({
               textAlign: 'center',
             }}
           >
-            {authMode === 'login'
-              ? `Hi ${(savedDisplayName && savedDisplayName !== 'Người Dùng LockX')
-                  ? savedDisplayName
-                  : (authUsername.toLowerCase().includes('tuan') || (savedAccount && savedAccount.toLowerCase().includes('tuan')))
-                  ? 'Quảng Trọng Tuấn'
-                  : (savedDisplayName || 'Quảng Trọng Tuấn')}`
-              : 'Khởi Tạo Tài Khoản'}
+            {authMode === 'login' ? 'LockX Enterprise' : 'Khởi Tạo Tài Khoản'}
           </Text>
           <Text
             style={{
@@ -3556,7 +3655,7 @@ export const EnterpriseAuthScreen = ({
                 </View>
               )}
 
-              {/* Username Field: Luôn là ô nhập TextInput editable trực tiếp để khi ấn vào là bật bàn phím ngay */}
+              {/* Username Field: Ô nhập tài khoản gần đây có định dạng "Hi tên user" */}
               <View
                 style={{
                   backgroundColor: isLight ? '#FFFFFF' : 'rgba(28, 28, 30, 0.85)',
@@ -3573,22 +3672,48 @@ export const EnterpriseAuthScreen = ({
               >
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                   <Text style={{ fontSize: 11, fontWeight: '700', color: isLight ? '#6C6C70' : '#8E8E93', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                    {authMode === 'login' ? 'Tài Khoản / Email' : 'Tên Tài Khoản (Username)'}
+                    {authMode === 'login' ? 'Tài Khoản Gần Đây' : 'Tên Tài Khoản (Username)'}
                   </Text>
-                  {authMode === 'login' && savedAccount && authUsername !== savedAccount ? (
-                    <TouchableOpacity
-                      onPress={() => setAuthUsername(savedAccount)}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      <Text style={{ fontSize: 12, fontWeight: '600', color: accentColor }}>Dùng: @{savedAccount}</Text>
-                    </TouchableOpacity>
-                  ) : null}
+                  {authMode === 'login' && (
+                    authUsername.toLowerCase().startsWith('hi ') ? (
+                      <TouchableOpacity
+                        onPress={() => {
+                          setAuthUsername('');
+                          setFocusedInput('username');
+                        }}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: accentColor }}>Đổi tài khoản</Text>
+                      </TouchableOpacity>
+                    ) : (savedAccount || savedDisplayName) ? (
+                      <TouchableOpacity
+                        onPress={() => setAuthUsername(greetingText)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: accentColor }}>Dùng: {greetingText}</Text>
+                      </TouchableOpacity>
+                    ) : null
+                  )}
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Ionicons name="person-outline" size={18} color={focusedInput === 'username' ? accentColor : '#8E8E93'} style={{ marginRight: 10 }} />
+                  {authMode === 'login' && savedAvatarUri && authUsername.toLowerCase().startsWith('hi ') ? (
+                    <Image
+                      source={{ uri: savedAvatarUri }}
+                      style={{ width: 22, height: 22, borderRadius: 11, marginRight: 10 }}
+                    />
+                  ) : (
+                    <Ionicons name="person-outline" size={18} color={focusedInput === 'username' ? accentColor : '#8E8E93'} style={{ marginRight: 10 }} />
+                  )}
                   <TextInput
-                    style={{ flex: 1, fontSize: 16, color: isLight ? '#000000' : '#FFFFFF', padding: 0, minHeight: 24 }}
-                    placeholder={authMode === 'login' ? 'Nhập tài khoản hoặc email...' : 'VD: lockx_user'}
+                    style={{
+                      flex: 1,
+                      fontSize: 16,
+                      color: isLight ? '#000000' : '#FFFFFF',
+                      padding: 0,
+                      minHeight: 24,
+                      fontWeight: authUsername.toLowerCase().startsWith('hi ') ? '600' : '400',
+                    }}
+                    placeholder={authMode === 'login' ? greetingText : 'VD: lockx_user'}
                     placeholderTextColor={isLight ? '#AEAEB2' : '#636366'}
                     value={authUsername}
                     onChangeText={(v) => {
@@ -4678,7 +4803,8 @@ export default function App() {
 
   // Settings State (Màu giao diện, cỡ chữ, chữ in đậm, sáng/tối, ngôn ngữ & bảo mật thương mại)
   const [appSettings, setAppSettings] = useState<AppSettings>(INITIAL_SETTINGS);
-  const [settingsSubView, setSettingsSubView] = useState<'main' | 'font_size' | 'language'>('main');
+  const [settingsSubView, setSettingsSubView] = useState<'main' | 'font_size' | 'language' | 'ringtone'>('main');
+  const [playingRingtoneId, setPlayingRingtoneId] = useState<string | null>(null);
   const [languageSearchQuery, setLanguageSearchQuery] = useState('');
 
   const isLight = appSettings.themeMode === 'light';
@@ -5015,10 +5141,12 @@ export default function App() {
 
     // 4b. Tải tài khoản đã lưu và danh sách người dùng đã đăng ký
     AsyncStorage.getItem('lockx_saved_account')
-      .then((acc) => {
+      .then(async (acc) => {
         if (acc) {
           setSavedAccount(acc);
-          setAuthUsername(acc);
+          const sdn = await AsyncStorage.getItem('lockx_saved_display_name');
+          const nameToDisplay = (sdn && sdn !== 'Người Dùng LockX') ? sdn : (acc.toLowerCase().includes('tuan') ? 'Quảng Trọng Tuấn' : acc);
+          setAuthUsername(`Hi ${nameToDisplay}`);
         }
       })
       .catch(() => {});
@@ -5462,7 +5590,10 @@ export default function App() {
   // =========================================================================
   const handleLogin = async (accountOverride?: string) => {
     setAuthError(null);
-    const trimmedUser = (accountOverride || authUsername || savedAccount).trim();
+    let trimmedUser = (accountOverride || authUsername || savedAccount).trim();
+    if (trimmedUser.toLowerCase().startsWith('hi ')) {
+      trimmedUser = savedAccount || trimmedUser.replace(/^hi\s+/i, '').trim();
+    }
     const trimmedPass = authPassword.trim();
     if (!trimmedUser || !trimmedPass) {
       setAuthError('Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu.');
@@ -5735,6 +5866,13 @@ export default function App() {
     try {
       if (userProfile.displayName && userProfile.displayName !== 'Người Dùng LockX') {
         AsyncStorage.setItem('lockx_saved_display_name', userProfile.displayName);
+      }
+      if (userProfile.username) {
+        const cleanU = userProfile.username.replace(/^@/, '');
+        AsyncStorage.setItem('lockx_saved_account', cleanU);
+        setSavedAccount(cleanU);
+        const nameToDisplay = (userProfile.displayName && userProfile.displayName !== 'Người Dùng LockX') ? userProfile.displayName : cleanU;
+        setAuthUsername(`Hi ${nameToDisplay}`);
       }
     } catch (e) {}
     triggerToast('Phiên làm việc đã được đóng và mã hóa bảo vệ an toàn.', 'Đã Đăng Xuất An Toàn', 'info');
@@ -6582,7 +6720,7 @@ export default function App() {
     if (isTargetOnline) {
       setCallPhase('ringing');
       setCallStatusText('Đang đổ chuông...');
-      startRingtone();
+      startRingtone(appSettings.ringtoneId || 'reflection');
     } else {
       setCallPhase('connecting');
       setCallStatusText('Đang kết nối...');
@@ -6870,7 +7008,7 @@ export default function App() {
               startTime: call.startTime,
               friendObj: friend,
             });
-            startRingtone();
+            startRingtone(appSettings.ringtoneId || 'reflection');
             playAppleNotificationSound('info');
           }
         } else {
@@ -10756,6 +10894,9 @@ export default function App() {
                     isLight={isLight}
                     avatarColor={activeChatFriend.avatarColor}
                     avatarIcon={activeChatFriend.avatarIcon}
+                    avatarUri={activeChatFriend.avatarUri}
+                    isBot={activeChatFriend.isBot}
+                    displayName={activeChatFriend.displayName}
                   />
                 )}
               </ScrollView>
@@ -13046,6 +13187,104 @@ export default function App() {
                 </View>
               </ScrollView>
             </KeyboardAvoidingView>
+          ) : settingsSubView === 'ringtone' ? (
+            /* SUBVIEW: NHẠC CHUÔNG CUỘC GỌI CHUẨN APPLE */
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: isLight ? '#F2F2F7' : '#000000' }}>
+              <View style={styles.fullScreenNavBar}>
+                <TouchableOpacity onPress={() => { stopRingtone(); setSettingsSubView('main'); }} style={styles.fullScreenNavBtn} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+                  <Ionicons name="chevron-back" size={20} color={appSettings.accentColor} />
+                  <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor }]}>{t.settingsTitle}</Text>
+                </TouchableOpacity>
+                <Text style={styles.fullScreenNavTitle}>Nhạc Chuông</Text>
+                <View style={{ width: 60 }} />
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, { paddingHorizontal: 16, paddingTop: 14 }]}>
+                {/* Banner Giới Thiệu */}
+                <View
+                  style={{
+                    backgroundColor: isLight ? 'rgba(0, 122, 255, 0.08)' : 'rgba(10, 132, 255, 0.15)',
+                    borderRadius: 14,
+                    padding: 14,
+                    marginBottom: 16,
+                    borderWidth: 1,
+                    borderColor: isLight ? 'rgba(0, 122, 255, 0.2)' : 'rgba(10, 132, 255, 0.3)',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 12,
+                  }}
+                >
+                  <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#FF2D55', justifyContent: 'center', alignItems: 'center' }}>
+                    <Ionicons name="musical-notes" size={22} color="#FFFFFF" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF', marginBottom: 2 }}>
+                      Âm Thanh Cuộc Gọi Chuẩn Apple
+                    </Text>
+                    <Text style={{ fontSize: 13, color: isLight ? '#6C6C70' : '#8E8E93', lineHeight: 18 }}>
+                      Tự động phát khi có cuộc gọi đến hoặc đang đổ chuông. Chạm vào bất kỳ giai điệu nào để nghe thử trực tiếp.
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Grouped Ringtones List */}
+                <View style={[styles.sectionWrap, { paddingHorizontal: 0, marginTop: 0 }]}>
+                  <Text style={styles.sectionCaption}>NHẠC CHUÔNG APPLE TIÊU CHUẨN (HIFI SYNTHESIS)</Text>
+                  <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }]}>
+                    {APPLE_RINGTONES.map((ring, index, arr) => {
+                      const isSelected = (appSettings.ringtoneId || 'reflection') === ring.id;
+                      const isPlaying = playingRingtoneId === ring.id;
+                      return (
+                        <TouchableOpacity
+                          key={ring.id}
+                          style={[
+                            styles.cellItem,
+                            index === arr.length - 1 && { borderBottomWidth: 0 },
+                          ]}
+                          activeOpacity={0.7}
+                          onPress={() => {
+                            setPlayingRingtoneId(ring.id);
+                            playSingleRingtoneCycle(ring.id);
+                            saveAppSettings({ ...appSettings, ringtoneId: ring.id });
+                            triggerToast(`Đã áp dụng nhạc chuông: ${ring.name}`, 'Cài Đặt Nhạc Chuông', 'success', 'musical-notes', '#FF2D55');
+                            setTimeout(() => {
+                              setPlayingRingtoneId((prev) => prev === ring.id ? null : prev);
+                            }, 2400);
+                          }}
+                        >
+                          <View
+                            style={{
+                              width: 32,
+                              height: 32,
+                              borderRadius: 16,
+                              backgroundColor: isSelected ? appSettings.accentColor : (isLight ? '#E5E5EA' : '#2C2C2E'),
+                              justifyContent: 'center',
+                              alignItems: 'center',
+                              marginRight: 12,
+                            }}
+                          >
+                            <Ionicons
+                              name={isPlaying ? 'volume-high' : 'musical-note'}
+                              size={16}
+                              color={isSelected ? '#FFFFFF' : (isLight ? '#000000' : '#FFFFFF')}
+                            />
+                          </View>
+                          <View style={[styles.cellContent, { flex: 1 }]}>
+                            <Text style={[styles.cellTitle, isSelected && { color: appSettings.accentColor, fontWeight: '700' }]}>
+                              {ring.name}
+                            </Text>
+                            <Text style={styles.cellSubtitle}>{ring.subname} • {ring.category}</Text>
+                          </View>
+                          {isSelected && (
+                            <Ionicons name="checkmark" size={20} color={appSettings.accentColor} />
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              </ScrollView>
+            </KeyboardAvoidingView>
           ) : (
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, { paddingHorizontal: 16, paddingTop: 10 }]}>
             {/* Apple Large Title */}
@@ -13404,7 +13643,7 @@ export default function App() {
                   </View>
 
                   {/* Âm thanh thông báo */}
-                  <View style={[styles.cellItem, { borderBottomWidth: 0 }]}>
+                  <View style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}>
                     <View style={[styles.cellLeadingIcon, { backgroundColor: '#5856D6' }]}>
                       <Ionicons name="volume-high" size={18} color="#FFFFFF" />
                     </View>
@@ -13423,6 +13662,28 @@ export default function App() {
                       trackColor={{ false: isLight ? '#E5E5EA' : '#39393D', true: appSettings.accentColor }}
                     />
                   </View>
+
+                  {/* Nhạc chuông cuộc gọi Apple */}
+                  <TouchableOpacity
+                    style={[styles.cellItem, { borderBottomWidth: 0 }]}
+                    activeOpacity={0.7}
+                    onPress={() => setSettingsSubView('ringtone')}
+                  >
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#FF2D55' }]}>
+                      <Ionicons name="musical-notes" size={18} color="#FFFFFF" />
+                    </View>
+                    <View style={[styles.cellContent, { flex: 1 }]}>
+                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '400' }}>
+                        Nhạc Chuông Cuộc Gọi
+                      </Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 15 }}>
+                        {APPLE_RINGTONES.find((r) => r.id === (appSettings.ringtoneId || 'reflection'))?.name || 'Reflection'}
+                      </Text>
+                      <Ionicons name="chevron-forward" size={16} color={isLight ? '#C7C7CC' : '#48484A'} />
+                    </View>
+                  </TouchableOpacity>
                 </View>
                 <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 12, marginTop: 6, marginLeft: 16 }}>
                   Hệ thống thông báo đẩy tương thích iOS 18 & APNs: tự động gửi cảnh báo bảo mật và hoạt động tài khoản tới màn hình khóa iPhone.
