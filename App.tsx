@@ -3285,31 +3285,37 @@ export const EnterpriseAuthScreen = ({
   const isRememberedLogin = authMode === 'login' && !!savedAccount && !isEditingAccount;
 
   return (
-    <View style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-      {/* Background Ambient Glowing Orbs */}
-      <View
-        style={{
-          position: 'absolute',
-          top: -60,
-          alignSelf: 'center',
-          width: 320,
-          height: 320,
-          borderRadius: 160,
-          backgroundColor: isLight ? 'rgba(0, 122, 255, 0.08)' : 'rgba(10, 132, 255, 0.16)',
-          opacity: 0.9,
-        }}
-      />
-      <View
-        style={{
-          position: 'absolute',
-          bottom: 40,
-          right: -50,
-          width: 240,
-          height: 240,
-          borderRadius: 120,
-          backgroundColor: isLight ? 'rgba(52, 199, 89, 0.06)' : 'rgba(48, 209, 88, 0.10)',
-        }}
-      />
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      style={{ flex: 1 }}
+    >
+      <View style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+        {/* Background Ambient Glowing Orbs (pointerEvents none để không chặn touch bàn phím) */}
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            top: -60,
+            alignSelf: 'center',
+            width: 320,
+            height: 320,
+            borderRadius: 160,
+            backgroundColor: isLight ? 'rgba(0, 122, 255, 0.08)' : 'rgba(10, 132, 255, 0.16)',
+            opacity: 0.9,
+          }}
+        />
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            bottom: 40,
+            right: -50,
+            width: 240,
+            height: 240,
+            borderRadius: 120,
+            backgroundColor: isLight ? 'rgba(52, 199, 89, 0.06)' : 'rgba(48, 209, 88, 0.10)',
+          }}
+        />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -3503,77 +3509,60 @@ export const EnterpriseAuthScreen = ({
                 </View>
               )}
 
-              {/* Username Field: Ô nhập thông tin tài khoản hiển thị Hi Quảng Trọng Tuấn, ẩn nút đã lưu và đổi tài khoản trong form */}
-              {authMode === 'login' && savedAccount && !isEditingAccount ? (
-                <View
-                  style={{
-                    backgroundColor: isLight ? '#FFFFFF' : 'rgba(28, 28, 30, 0.85)',
-                    borderRadius: 15,
-                    borderWidth: 1.5,
-                    borderColor: isLight ? '#E5E5EA' : 'rgba(255, 255, 255, 0.1)',
-                    paddingHorizontal: 14,
-                    paddingVertical: 12,
-                  }}
-                >
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: isLight ? '#6C6C70' : '#8E8E93', textTransform: 'uppercase', marginBottom: 4, letterSpacing: 0.5 }}>
-                    Tài Khoản
+              {/* Username Field: Luôn là ô nhập TextInput editable trực tiếp để khi ấn vào là bật bàn phím ngay */}
+              <View
+                style={{
+                  backgroundColor: isLight ? '#FFFFFF' : 'rgba(28, 28, 30, 0.85)',
+                  borderRadius: 15,
+                  borderWidth: 1.5,
+                  borderColor: focusedInput === 'username' ? accentColor : (isLight ? '#E5E5EA' : 'rgba(255, 255, 255, 0.1)'),
+                  paddingHorizontal: 14,
+                  paddingVertical: 10,
+                  shadowColor: focusedInput === 'username' ? accentColor : 'transparent',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.25,
+                  shadowRadius: 6,
+                }}
+              >
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: isLight ? '#6C6C70' : '#8E8E93', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    {authMode === 'login' ? 'Tài Khoản / Email' : 'Tên Tài Khoản (Username)'}
                   </Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Ionicons name="person-circle-outline" size={24} color={accentColor} style={{ marginRight: 10 }} />
-                    <Text style={{ flex: 1, fontSize: 16, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
-                      {`Hi ${savedDisplayName && savedDisplayName !== 'Admin LockX' && savedDisplayName !== 'Admin' ? savedDisplayName : 'Quảng Trọng Tuấn'}`}
-                    </Text>
-                  </View>
+                  {authMode === 'login' && savedAccount && authUsername !== savedAccount ? (
+                    <TouchableOpacity
+                      onPress={() => setAuthUsername(savedAccount)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: accentColor }}>Dùng: @{savedAccount}</Text>
+                    </TouchableOpacity>
+                  ) : null}
                 </View>
-              ) : (
-                <View
-                  style={{
-                    backgroundColor: isLight ? '#FFFFFF' : 'rgba(28, 28, 30, 0.85)',
-                    borderRadius: 15,
-                    borderWidth: 1.5,
-                    borderColor: focusedInput === 'username' ? accentColor : (isLight ? '#E5E5EA' : 'rgba(255, 255, 255, 0.1)'),
-                    paddingHorizontal: 14,
-                    paddingVertical: 10,
-                    shadowColor: focusedInput === 'username' ? accentColor : 'transparent',
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.25,
-                    shadowRadius: 6,
-                  }}
-                >
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: isLight ? '#6C6C70' : '#8E8E93', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                      {authMode === 'login' ? 'Tài Khoản / Email' : 'Tên Tài Khoản (Username)'}
-                    </Text>
-                    {authMode === 'login' && savedAccount ? (
-                      <TouchableOpacity onPress={() => setIsEditingAccount(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                        <Text style={{ fontSize: 12, fontWeight: '600', color: accentColor }}>Dùng tk đã lưu</Text>
-                      </TouchableOpacity>
-                    ) : null}
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Ionicons name="person-outline" size={18} color={focusedInput === 'username' ? accentColor : '#8E8E93'} style={{ marginRight: 10 }} />
-                    <TextInput
-                      style={{ flex: 1, fontSize: 16, color: isLight ? '#000000' : '#FFFFFF', padding: 0 }}
-                      placeholder={authMode === 'login' ? 'Nhập tài khoản hoặc email...' : 'VD: lockx_user'}
-                      placeholderTextColor={isLight ? '#AEAEB2' : '#636366'}
-                      value={authUsername}
-                      onChangeText={(v) => {
-                        setAuthUsername(v);
-                        if (authError) setAuthError(null);
-                      }}
-                      onFocus={() => setFocusedInput('username')}
-                      onBlur={() => setFocusedInput(null)}
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                    />
-                    {authUsername.length > 0 && (
-                      <TouchableOpacity onPress={() => setAuthUsername('')}>
-                        <Ionicons name="close-circle" size={17} color="#8E8E93" />
-                      </TouchableOpacity>
-                    )}
-                  </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Ionicons name="person-outline" size={18} color={focusedInput === 'username' ? accentColor : '#8E8E93'} style={{ marginRight: 10 }} />
+                  <TextInput
+                    style={{ flex: 1, fontSize: 16, color: isLight ? '#000000' : '#FFFFFF', padding: 0, minHeight: 24 }}
+                    placeholder={authMode === 'login' ? 'Nhập tài khoản hoặc email...' : 'VD: lockx_user'}
+                    placeholderTextColor={isLight ? '#AEAEB2' : '#636366'}
+                    value={authUsername}
+                    onChangeText={(v) => {
+                      setAuthUsername(v);
+                      if (authError) setAuthError(null);
+                    }}
+                    onFocus={() => setFocusedInput('username')}
+                    onBlur={() => setFocusedInput(null)}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    keyboardType="default"
+                    returnKeyType="next"
+                    editable={true}
+                  />
+                  {authUsername.length > 0 && (
+                    <TouchableOpacity onPress={() => setAuthUsername('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Ionicons name="close-circle" size={17} color="#8E8E93" />
+                    </TouchableOpacity>
+                  )}
                 </View>
-              )}
+              </View>
 
               {/* Password Field Row: Ô mật khẩu + Ô Face ID icon nằm kế bên phải */}
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -3599,7 +3588,7 @@ export const EnterpriseAuthScreen = ({
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <Ionicons name="lock-closed-outline" size={18} color={focusedInput === 'password' ? accentColor : '#8E8E93'} style={{ marginRight: 10 }} />
                     <TextInput
-                      style={{ flex: 1, fontSize: 16, color: isLight ? '#000000' : '#FFFFFF', padding: 0 }}
+                      style={{ flex: 1, fontSize: 16, color: isLight ? '#000000' : '#FFFFFF', padding: 0, minHeight: 24 }}
                       placeholder="Nhập mật khẩu..."
                       placeholderTextColor={isLight ? '#AEAEB2' : '#636366'}
                       value={authPassword}
@@ -3611,8 +3600,12 @@ export const EnterpriseAuthScreen = ({
                       onBlur={() => setFocusedInput(null)}
                       secureTextEntry={!authShowPassword}
                       autoCapitalize="none"
+                      autoCorrect={false}
+                      keyboardType="default"
+                      returnKeyType="done"
+                      editable={true}
                     />
-                    <TouchableOpacity onPress={() => setAuthShowPassword(!authShowPassword)}>
+                    <TouchableOpacity onPress={() => setAuthShowPassword(!authShowPassword)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                       <Ionicons
                         name={authShowPassword ? 'eye-off-outline' : 'eye-outline'}
                         size={19}
@@ -3722,21 +3715,9 @@ export const EnterpriseAuthScreen = ({
                   paddingHorizontal: 4,
                 }}
               >
-                {savedAccount && !isEditingAccount ? (
+                {savedAccount && authUsername !== savedAccount ? (
                   <TouchableOpacity
-                    onPress={() => {
-                      setIsEditingAccount(true);
-                      setAuthUsername('');
-                    }}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <Text style={{ fontSize: 13, fontWeight: '600', color: accentColor }}>
-                      Đổi tài khoản
-                    </Text>
-                  </TouchableOpacity>
-                ) : savedAccount ? (
-                  <TouchableOpacity
-                    onPress={() => setIsEditingAccount(false)}
+                    onPress={() => setAuthUsername(savedAccount)}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   >
                     <Text style={{ fontSize: 13, fontWeight: '600', color: accentColor }}>
@@ -4224,7 +4205,8 @@ export const EnterpriseAuthScreen = ({
         </KeyboardAvoidingView>
       </Modal>
     </View>
-  );
+  </KeyboardAvoidingView>
+);
 };
 
 // Kiểm tra trạng thái khóa / cấm tài khoản thời gian thực từ Server Web MySQL
@@ -4525,7 +4507,7 @@ const SwipeableFriendRow: React.FC<{
             </View>
 
             <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 13, marginTop: 1 }}>
-              {friend.username} • {friend.status === 'online' ? '🟢 Trực tuyến' : 'Ngoại tuyến'}
+              {friend.username} • {friend.status === 'online' ? '🟢 Trực tuyến' : 'Hoạt động gần đây'}
             </Text>
 
             {friend.lastMessage ? (
@@ -6143,25 +6125,33 @@ export default function App() {
   const handleDeleteFriend = (friend: FriendUser) => {
     setFriendActionSheetUser(null);
     setSwipedFriendId(null);
-    Alert.alert(
-      'Xóa bạn bè',
-      `Bạn có chắc chắn muốn xóa ${friend.displayName} (@${friend.username.replace(/^@/, '')}) khỏi danh sách bạn bè?`,
-      [
-        { text: t.cancel || 'Hủy', style: 'cancel' },
-        {
-          text: 'Xóa bạn',
-          style: 'destructive',
-          onPress: () => {
-            const updated = friendsList.filter((f) => f.id !== friend.id);
-            setFriendsList(updated);
-            saveFriends(updated);
-            if (activeChatFriend?.id === friend.id) setActiveChatFriend(null);
-            triggerToast(`Đã xóa ${friend.displayName} khỏi danh sách bạn bè.`, 'Bạn Bè', 'warning', 'trash');
-            playAppleNotificationSound('warning');
+    const confirmDelete = () => {
+      const updated = friendsList.filter((f) => f.id !== friend.id);
+      setFriendsList(updated);
+      saveFriends(updated);
+      if (activeChatFriend?.id === friend.id) setActiveChatFriend(null);
+      triggerToast(`Đã xóa ${friend.displayName} khỏi danh sách bạn bè.`, 'Bạn Bè', 'warning', 'trash');
+      playAppleNotificationSound('warning');
+    };
+
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && window.confirm(`Bạn có chắc chắn muốn xóa ${friend.displayName} (@${friend.username.replace(/^@/, '')}) khỏi danh sách bạn bè?`)) {
+        confirmDelete();
+      }
+    } else {
+      Alert.alert(
+        'Xóa bạn bè',
+        `Bạn có chắc chắn muốn xóa ${friend.displayName} (@${friend.username.replace(/^@/, '')}) khỏi danh sách bạn bè?`,
+        [
+          { text: t.cancel || 'Hủy', style: 'cancel' },
+          {
+            text: 'Xóa bạn',
+            style: 'destructive',
+            onPress: confirmDelete,
           },
-        },
-      ]
-    );
+        ]
+      );
+    }
   };
 
   // Khởi tạo WebRTC Audio Connection cho cuộc gọi thật 100%
@@ -7098,6 +7088,99 @@ export default function App() {
     }, 2000);
     return () => clearInterval(interval);
   }, [syncIncomingMessages]);
+
+  // Polling đồng bộ Thông báo Push phát từ Web Server PHP (aecongnghe.online / Web Dashboard)
+  const lastAdminNotifCheckRef = useRef<number>(Math.floor(Date.now() / 1000) - 20);
+  const receivedAdminNotifIdsRef = useRef<Set<number>>(new Set());
+
+  const syncAdminNotifications = useCallback(async () => {
+    const cleanUser = (userProfile.username || '').replace(/^@/, '').trim();
+    if (!cleanUser) return;
+
+    try {
+      const since = lastAdminNotifCheckRef.current || 0;
+      const res = await fetch(`https://aecongnghe.online/api/notifications/list.php?username=${encodeURIComponent(cleanUser)}&since=${since}`);
+      const data = await res.json();
+
+      if (data && data.success && Array.isArray(data.data?.notifications)) {
+        const notifs = data.data.notifications;
+        lastAdminNotifCheckRef.current = Math.floor(Date.now() / 1000);
+
+        for (const item of notifs) {
+          const numId = Number(item.id);
+          if (receivedAdminNotifIdsRef.current.has(numId)) continue;
+          receivedAdminNotifIdsRef.current.add(numId);
+
+          const title = item.title || 'LockX Vault • Thông Báo';
+          const body = item.body || '';
+          const notifStyle = (item.type || 'info') as any;
+
+          // 1. Lưu vào danh sách thông báo của App
+          const notifObj: AppNotification = {
+            id: `admin-notif-${numId}`,
+            title,
+            message: body,
+            type: notifStyle,
+            time: 'Vừa xong',
+            timestamp: Date.now(),
+            read: false,
+          };
+          setNotifications((prev) => {
+            const nextList = [notifObj, ...prev.slice(0, 49)];
+            AsyncStorage.setItem('lockx_notifications_history', JSON.stringify(nextList)).catch(() => {});
+            return nextList;
+          });
+
+          // 2. Bắn biểu ngữ ngoài Màn hình khóa iPhone / Android (Messenger style)
+          const curSettings = appSettingsRef.current;
+          if (curSettings && curSettings.enableNotifications !== false) {
+            try {
+              Notifications.scheduleNotificationAsync({
+                content: {
+                  title,
+                  body,
+                  sound: curSettings.notifySounds ? 'default' : undefined,
+                  badge: 1,
+                  data: {
+                    type: 'admin_push',
+                    notifId: item.id,
+                  },
+                },
+                trigger: null,
+              }).catch(() => {});
+            } catch (e) {}
+
+            // 3. Web Desktop Notification nếu chạy trên PC / Safari
+            if (Platform.OS === 'web' && typeof window !== 'undefined' && 'Notification' in window) {
+              try {
+                if (Notification.permission === 'granted') {
+                  new Notification(title, {
+                    body,
+                    icon: '/assets/icon.png',
+                    badge: '/assets/icon.png',
+                  });
+                }
+              } catch (e) {}
+            }
+          }
+
+          // 4. Hiển thị popup Center Screen HUD trong app và phát chuông Apple
+          triggerToast(body, title, notifStyle, 'notifications', notifStyle === 'security' ? '#FF453A' : '#0A84FF');
+          playAppleNotificationSound('info');
+        }
+      }
+    } catch (e) {
+      // Bỏ qua lỗi kết nối nền
+    }
+  }, [userProfile.username]);
+
+  // Polling nhận thông báo từ Web Admin mỗi 3.5 giây
+  useEffect(() => {
+    const timer = setInterval(() => {
+      syncAdminNotifications();
+    }, 3500);
+    return () => clearInterval(timer);
+  }, [syncAdminNotifications]);
 
   // Gửi tin nhắn chat iMessage (Chat Thật Đồng Bộ MySQL Server & Chat AI Google Gemini)
   const handleSendMessage = (customText?: string) => {
@@ -9853,7 +9936,11 @@ export default function App() {
                       ? '🚫 Đã chặn tài khoản'
                       : activeChatFriend.isBot
                       ? '🟢 Trợ lý AI sẵn sàng'
-                      : (friendPresenceStatus || (activeChatFriend.status === 'online' ? '🟢 Đang hoạt động • E2E' : '⚪ Ngoại tuyến'))}
+                      : (activeChatFriend.status === 'online'
+                          ? '🟢 Đang hoạt động • E2E'
+                          : (friendPresenceStatus
+                              ? friendPresenceStatus.replace(/^[🟢⚪\s]+/, '').replace(/Ngoại tuyến/g, 'Hoạt động gần đây')
+                              : 'Hoạt động gần đây'))}
                   </Text>
                 </TouchableOpacity>
 
@@ -13094,19 +13181,21 @@ export default function App() {
                         />
                       </View>
                     )}
-                    <View
-                      style={{
-                        position: 'absolute',
-                        bottom: 2,
-                        right: 2,
-                        width: 20,
-                        height: 20,
-                        borderRadius: 10,
-                        backgroundColor: viewingFriendProfile.status === 'online' ? '#34C759' : '#8E8E93',
-                        borderWidth: 3,
-                        borderColor: isLight ? '#F2F2F7' : '#1C1C1E',
-                      }}
-                    />
+                    {viewingFriendProfile.status === 'online' && (
+                      <View
+                        style={{
+                          position: 'absolute',
+                          bottom: 2,
+                          right: 2,
+                          width: 20,
+                          height: 20,
+                          borderRadius: 10,
+                          backgroundColor: '#34C759',
+                          borderWidth: 3,
+                          borderColor: isLight ? '#F2F2F7' : '#1C1C1E',
+                        }}
+                      />
+                    )}
                   </View>
 
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12 }}>
@@ -13239,7 +13328,11 @@ export default function App() {
                       <Text style={{ fontSize: 15, color: isLight ? '#000000' : '#FFFFFF' }}>Trạng thái mạng</Text>
                     </View>
                     <Text style={{ fontSize: 15, color: viewingFriendProfile.status === 'online' ? '#34C759' : '#8E8E93', fontWeight: '500' }}>
-                      {viewingFriendProfile.status === 'online' ? 'Đang hoạt động' : 'Ngoại tuyến'}
+                      {viewingFriendProfile.status === 'online'
+                        ? 'Đang hoạt động'
+                        : (friendPresenceStatus
+                            ? friendPresenceStatus.replace(/^[🟢⚪\s]+/, '').replace(/Ngoại tuyến/g, 'Hoạt động gần đây')
+                            : 'Hoạt động gần đây')}
                     </Text>
                   </View>
 
@@ -13318,24 +13411,33 @@ export default function App() {
                       onPress={() => {
                         const fName = viewingFriendProfile.displayName;
                         const fId = viewingFriendProfile.id;
-                        Alert.alert(
-                          'Hủy kết bạn',
-                          `Bạn có chắc chắn muốn xóa ${fName} khỏi danh sách bạn bè?`,
-                          [
-                            { text: t.cancel, style: 'cancel' },
-                            {
-                              text: 'Xóa bạn',
-                              style: 'destructive',
-                              onPress: () => {
-                                const updated = friendsList.filter((f) => f.id !== fId);
-                                saveFriends(updated);
-                                setViewingFriendProfile(null);
-                                if (activeChatFriend?.id === fId) setActiveChatFriend(null);
-                                triggerToast(`Đã xóa ${fName} khỏi danh sách bạn bè.`, 'Bạn Bè', 'warning');
+                        const confirmRemove = () => {
+                          const updated = friendsList.filter((f) => f.id !== fId);
+                          setFriendsList(updated);
+                          saveFriends(updated);
+                          setViewingFriendProfile(null);
+                          if (activeChatFriend?.id === fId) setActiveChatFriend(null);
+                          triggerToast(`Đã xóa ${fName} khỏi danh sách bạn bè.`, 'Bạn Bè', 'warning');
+                        };
+
+                        if (Platform.OS === 'web') {
+                          if (typeof window !== 'undefined' && window.confirm(`Bạn có chắc chắn muốn xóa ${fName} khỏi danh sách bạn bè?`)) {
+                            confirmRemove();
+                          }
+                        } else {
+                          Alert.alert(
+                            'Hủy kết bạn',
+                            `Bạn có chắc chắn muốn xóa ${fName} khỏi danh sách bạn bè?`,
+                            [
+                              { text: t.cancel, style: 'cancel' },
+                              {
+                                text: 'Xóa bạn',
+                                style: 'destructive',
+                                onPress: confirmRemove,
                               },
-                            },
-                          ]
-                        );
+                            ]
+                          );
+                        }
                       }}
                     >
                       <View style={[styles.cellLeadingIcon, { backgroundColor: '#FF3B30' }]}>
@@ -14733,22 +14835,30 @@ export default function App() {
               {notifications.length > 0 ? (
                 <TouchableOpacity
                   onPress={() => {
-                    Alert.alert(
-                      'Xóa tất cả thông báo',
-                      'Bạn có chắc chắn muốn xóa toàn bộ lịch sử thông báo không?',
-                      [
-                        { text: 'Hủy', style: 'cancel' },
-                        {
-                          text: 'Xóa tất cả',
-                          style: 'destructive',
-                          onPress: () => {
-                            setNotifications([]);
-                            AsyncStorage.setItem('lockx_notifications_history', '[]').catch(() => {});
-                            triggerToast('Đã dọn sạch toàn bộ trung tâm thông báo.', 'Dọn Dẹp Thành Công', 'info');
+                    const clearAllNotifications = () => {
+                      setNotifications([]);
+                      AsyncStorage.setItem('lockx_notifications_history', '[]').catch(() => {});
+                      triggerToast('Đã dọn sạch toàn bộ trung tâm thông báo.', 'Dọn Dẹp Thành Công', 'info');
+                    };
+
+                    if (Platform.OS === 'web') {
+                      if (typeof window !== 'undefined' && window.confirm('Bạn có chắc chắn muốn xóa toàn bộ lịch sử thông báo không?')) {
+                        clearAllNotifications();
+                      }
+                    } else {
+                      Alert.alert(
+                        'Xóa tất cả thông báo',
+                        'Bạn có chắc chắn muốn xóa toàn bộ lịch sử thông báo không?',
+                        [
+                          { text: 'Hủy', style: 'cancel' },
+                          {
+                            text: 'Xóa tất cả',
+                            style: 'destructive',
+                            onPress: clearAllNotifications,
                           },
-                        },
-                      ]
-                    );
+                        ]
+                      );
+                    }
                   }}
                 >
                   <Text style={[styles.sheetBtnBlue, { color: '#FF3B30' }]}>Xóa hết</Text>

@@ -244,19 +244,21 @@ const server = http.createServer((req, res) => {
       const diffSec = Math.floor((now - last) / 1000);
       const diffMins = Math.floor(diffSec / 60);
 
-      let text = '⚪ Ngoại tuyến';
+      let text = 'Hoạt động gần đây';
       if (isOnline) {
         text = '🟢 Đang hoạt động • E2E';
       } else if (last > 0) {
         if (diffMins < 1) {
-          text = '⚪ Hoạt động vừa xong';
+          text = 'Hoạt động vừa xong';
         } else if (diffMins < 60) {
-          text = `⚪ Hoạt động ${diffMins} phút trước`;
+          text = `Hoạt động ${diffMins || 1} phút trước`;
         } else if (diffMins < 1440) {
-          text = `⚪ Hoạt động ${Math.floor(diffMins / 60)} giờ trước`;
+          text = `Hoạt động ${Math.floor(diffMins / 60)} giờ trước`;
         } else {
-          text = `⚪ Hoạt động ${Math.floor(diffMins / 1440)} ngày trước`;
+          text = `Hoạt động ${Math.floor(diffMins / 1440)} ngày trước`;
         }
+      } else {
+        text = 'Hoạt động gần đây';
       }
       const viewer = (url.searchParams.get('viewer') || '').toLowerCase().replace(/^@/, '').trim();
       const isViewingChat = isOnline && viewer ? (activeChatState[u] === viewer) : false;

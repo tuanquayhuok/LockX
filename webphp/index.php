@@ -102,6 +102,50 @@ try {
             $upStmt = $db->prepare("UPDATE users SET is_verified = 1, verified_key = ?, verified_at = ? WHERE id = ?");
             $upStmt->execute([$key, $now, $userId]);
             $actionMessage = "✓ Đã cấp Tích Xanh trực tiếp cho người dùng ID #{$userId}.";
+        } elseif ($act === 'send_push_notification') {
+            $targetType = $_POST['target_type'] ?? 'broadcast';
+            $targetUser = trim($_POST['target_user'] ?? '');
+            $cleanTargetUser = ltrim($targetUser, '@');
+            $notifTitle = trim($_POST['notif_title'] ?? 'LockX Vault Thông Báo');
+            $notifBody  = trim($_POST['notif_body'] ?? '');
+            $notifStyle = trim($_POST['notif_style'] ?? 'info');
+
+            if (!empty($notifBody)) {
+                $recipient = ($targetType === 'broadcast') ? 'all' : $cleanTargetUser;
+
+                $db->exec("CREATE TABLE IF NOT EXISTS `app_notifications` (
+                    `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
+                    `recipient` VARCHAR(64) NOT NULL DEFAULT 'all',
+                    `title` VARCHAR(255) NOT NULL,
+                    `body` LONGTEXT NOT NULL,
+                    `type` VARCHAR(32) NOT NULL DEFAULT 'info',
+                    `data` LONGTEXT DEFAULT NULL,
+                    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    INDEX `idx_recipient` (`recipient`),
+                    INDEX `idx_created` (`created_at`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+                $insStmt = $db->prepare("INSERT INTO app_notifications (recipient, title, body, type, created_at) VALUES (?, ?, ?, ?, NOW())");
+                $insStmt->execute([$recipient, $notifTitle, $notifBody, $notifStyle]);
+
+                // Gửi Push Notification qua Expo Push Service (APNs / FCM)
+                if ($targetType === 'broadcast') {
+                    PushNotificationService::broadcastAll($notifTitle, $notifBody, ['style' => $notifStyle]);
+                    $actionMessage = "✓ Đã phát sóng thông báo đẩy (Push) tới TẤT CẢ người dùng: '{$notifTitle}'";
+                } else {
+                    PushNotificationService::sendToUser($cleanTargetUser, $notifTitle, $notifBody, ['style' => $notifStyle]);
+                    $actionMessage = "✓ Đã gửi thông báo đẩy (Push) tới @{$cleanTargetUser}: '{$notifTitle}'";
+                }
+
+                TelegramService::sendAlert('📢 ĐÃ BẮN PUSH NOTIFICATION TỪ WEB DASHBOARD', [
+                    'Tiêu đề'   => $notifTitle,
+                    'Nội dung'  => $notifBody,
+                    'Đối tượng' => ($targetType === 'broadcast') ? '🌐 Tất cả người dùng' : "@{$cleanTargetUser}",
+                    'Phong cách' => strtoupper($notifStyle)
+                ]);
+            } else {
+                $actionMessage = "⚠️ Nội dung thông báo không được để trống.";
+            }
         }
     }
 
@@ -115,7 +159,7 @@ try {
     $stats['webhooks'] = $db->query("SELECT COUNT(*) FROM webhooks_log")->fetchColumn();
 
     // Lấy danh sách toàn bộ người dùng
-    $allUsers = $db->query("SELECT * FROM users ORDER BY id DESC LIMIT 15")->fetchAll();
+    $allUsers = $db->query("SELECT * FROM users ORDER BY id DESC LIMIT 20")->fetchAll();
 
     // Lấy danh sách yêu cầu xác minh
     $pendingRequests = $db->query("SELECT * FROM verification_requests ORDER BY created_at DESC LIMIT 10")->fetchAll();
@@ -128,6 +172,12 @@ try {
 
     // Lấy danh sách nhật ký cuộc gọi gần nhất
     $recentCalls = $db->query("SELECT * FROM call_logs ORDER BY start_time DESC LIMIT 8")->fetchAll();
+
+    // Lấy danh sách thông báo Push gần nhất
+    $recentAppNotifs = [];
+    try {
+        $recentAppNotifs = $db->query("SELECT * FROM app_notifications ORDER BY id DESC LIMIT 8")->fetchAll();
+    } catch (Exception $ex) {}
 
 } catch (Exception $e) {
     $dbError = $e->getMessage();
@@ -461,6 +511,105 @@ $baseUrl = $protocol . $host . rtrim(dirname($_SERVER['SCRIPT_NAME']), '/\\');
             </div>
         </div>
 
+        <!-- 📢 TRUNG TÂM PHÁT THÔNG BÁO PUSH ĐẾN APP -->
+        <div class="section-title">
+            <span>📢 Trung Tâm Phát Thông Báo Push Tới Ứng Dụng (Push Notification Console)</span>
+            <span style="font-size: 13px; color: var(--accent); font-weight: 600;">⚡ Bắn biểu ngữ ra Màn hình khóa iPhone / Web App</span>
+        </div>
+        <div class="card" style="padding: 22px;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px;">
+                <!-- Form gửi thông báo -->
+                <form method="POST" id="pushForm">
+                    <input type="hidden" name="admin_action" value="send_push_notification">
+                    
+                    <div style="margin-bottom: 14px;">
+                        <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--text-primary);">
+                            1. Đối Tượng Nhận Thông Báo:
+                        </label>
+                        <div style="display: flex; gap: 14px; align-items: center; margin-bottom: 8px; flex-wrap: wrap;">
+                            <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer;">
+                                <input type="radio" name="target_type" value="broadcast" checked onchange="toggleTargetUser(false)">
+                                <b>🌐 Phát sóng TẤT CẢ người dùng (Broadcast All)</b>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer;">
+                                <input type="radio" name="target_type" value="user" onchange="toggleTargetUser(true)">
+                                <b>👤 Người dùng cụ thể</b>
+                            </label>
+                        </div>
+                        <div id="targetUserWrapper" style="display: none; margin-top: 8px;">
+                            <input type="text" name="target_user" id="targetUserInput" placeholder="Nhập username (vd: @tuan hoặc bấm '📢 Bắn Push' bên dưới)..." style="width: 100%; padding: 10px 14px; background: rgba(255,255,255,0.06); border: 1px solid var(--card-border); border-radius: 8px; color: var(--text-primary); font-size: 13.5px; box-sizing: border-box;">
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom: 14px;">
+                        <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--text-primary);">
+                            2. Tiêu Đề Thông Báo (Hiển thị in đậm ngoài màn hình khóa):
+                        </label>
+                        <input type="text" name="notif_title" value="LockX Vault • Thông Báo Quản Trị Viên" required style="width: 100%; padding: 10px 14px; background: rgba(255,255,255,0.06); border: 1px solid var(--card-border); border-radius: 8px; color: var(--text-primary); font-size: 13.5px; box-sizing: border-box;">
+                    </div>
+
+                    <div style="margin-bottom: 14px;">
+                        <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--text-primary);">
+                            3. Nội Dung Tin Nhắn Thông Báo:
+                        </label>
+                        <textarea name="notif_body" rows="3" placeholder="Nhập nội dung thông báo gửi ra màn hình khóa điện thoại..." required style="width: 100%; padding: 10px 14px; background: rgba(255,255,255,0.06); border: 1px solid var(--card-border); border-radius: 8px; color: var(--text-primary); font-size: 13.5px; resize: vertical; box-sizing: border-box;"></textarea>
+                    </div>
+
+                    <div style="display: flex; gap: 14px; align-items: center; justify-content: space-between; flex-wrap: wrap;">
+                        <div>
+                            <label style="font-size: 12.5px; font-weight: 600; color: var(--text-secondary); margin-right: 8px;">Kiểu Biểu Ngữ:</label>
+                            <select name="notif_style" style="padding: 6px 12px; background: rgba(255,255,255,0.08); border: 1px solid var(--card-border); border-radius: 6px; color: var(--text-primary); font-size: 12.5px;">
+                                <option value="info">🔵 Thông Tin (Xanh dương)</option>
+                                <option value="success">🟢 Chúc Mừng / Thành Công (Xanh lá)</option>
+                                <option value="warning">🟡 Cảnh Báo (Vàng)</option>
+                                <option value="security">🔴 Bảo Mật Khẩn Cấp (Đỏ)</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn" style="background: var(--accent); color: #FFF; padding: 10px 22px; font-size: 13.5px; font-weight: 700; border-radius: 10px; cursor: pointer; box-shadow: 0 4px 12px rgba(10, 132, 255, 0.35);">
+                            🚀 Bắn Thông Báo Đến App Ngay
+                        </button>
+                    </div>
+                </form>
+
+                <!-- Nhật ký thông báo đã gửi & Hướng dẫn API -->
+                <div style="border-left: 1px solid var(--card-border); padding-left: 20px;">
+                    <div style="font-size: 14px; font-weight: 700; margin-bottom: 12px; color: var(--text-primary); display: flex; align-items: center; justify-content: space-between;">
+                        <span>📋 Nhật Ký Thông Báo Vừa Gửi</span>
+                        <small style="color: var(--text-secondary); font-weight: 400;">Mới nhất</small>
+                    </div>
+                    <?php if (empty($recentAppNotifs)): ?>
+                        <p style="color: var(--text-secondary); font-size: 13px; font-style: italic;">Chưa có thông báo nào được bắn từ Web Dashboard.</p>
+                    <?php else: ?>
+                        <div style="display: flex; flex-direction: column; gap: 10px; max-height: 250px; overflow-y: auto;">
+                            <?php foreach ($recentAppNotifs as $n): ?>
+                                <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); border-radius: 8px; padding: 10px 12px;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                        <b style="font-size: 12.5px; color: var(--text-primary);"><?= htmlspecialchars($n['title']) ?></b>
+                                        <small style="font-size: 11px; color: var(--text-secondary);"><?= date('H:i d/m', strtotime($n['created_at'])) ?></small>
+                                    </div>
+                                    <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.4; margin-bottom: 4px;">
+                                        <?= htmlspecialchars($n['body']) ?>
+                                    </div>
+                                    <div style="font-size: 11px; display: flex; gap: 8px;">
+                                        <span style="color: var(--accent); font-weight: 600;">Gửi tới: <?= ($n['recipient'] === 'all') ? '🌐 Tất cả người dùng' : '@' . htmlspecialchars($n['recipient']) ?></span>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+
+                    <div style="margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--card-border);">
+                        <small style="color: var(--text-secondary); display: block; margin-bottom: 4px;">
+                            💡 <b>API Gửi Tự Động Từ Bot / Cronjob / Web Khác:</b>
+                        </small>
+                        <code style="font-size: 11px; background: rgba(0,0,0,0.4); padding: 4px 8px; border-radius: 4px; color: #34C759; word-break: break-all; display: block;">
+                            POST <?= $baseUrl ?>/api/notifications/send_push.php
+                        </code>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- 1. BẢNG PHÊ DUYỆT TÍCH XANH -->
         <div class="section-title">
             <span>🛡️ Danh Sách Yêu Cầu Cấp Tích Xanh (LockX Verified)</span>
@@ -577,16 +726,19 @@ $baseUrl = $protocol . $host . rtrim(dirname($_SERVER['SCRIPT_NAME']), '/\\');
                                 </td>
                                 <td><small style="color: var(--text-secondary);"><?= date('H:i d/m/Y', strtotime($u['created_at'])) ?></small></td>
                                 <td style="text-align: right;">
-                                    <form method="POST" style="display: inline-flex; gap: 6px;">
-                                        <input type="hidden" name="user_id" value="<?= $u['id'] ?>">
-                                        <input type="hidden" name="current_status" value="<?= $u['status'] ?>">
-                                        <?php if (!$u['is_verified']): ?>
-                                            <button type="submit" name="admin_action" value="grant_verified" class="btn btn-approve" style="font-size: 11px; padding: 4px 8px;">+ Cấp Tích</button>
-                                        <?php endif; ?>
-                                        <button type="submit" name="admin_action" value="toggle_status" class="btn <?= $u['status'] === 'active' ? 'btn-reject' : 'btn-approve' ?>" style="font-size: 11px; padding: 4px 8px;">
-                                            <?= $u['status'] === 'active' ? 'Khóa' : 'Mở' ?>
-                                        </button>
-                                    </form>
+                                    <div style="display: inline-flex; gap: 6px; align-items: center;">
+                                        <button type="button" onclick="selectUserForPush('<?= htmlspecialchars($u['username']) ?>')" class="btn" style="background: rgba(10, 132, 255, 0.15); color: var(--accent); font-size: 11px; padding: 4px 8px;">📢 Bắn Push</button>
+                                        <form method="POST" style="display: inline-flex; gap: 6px;">
+                                            <input type="hidden" name="user_id" value="<?= $u['id'] ?>">
+                                            <input type="hidden" name="current_status" value="<?= $u['status'] ?>">
+                                            <?php if (!$u['is_verified']): ?>
+                                                <button type="submit" name="admin_action" value="grant_verified" class="btn btn-approve" style="font-size: 11px; padding: 4px 8px;">+ Cấp Tích</button>
+                                            <?php endif; ?>
+                                            <button type="submit" name="admin_action" value="toggle_status" class="btn <?= $u['status'] === 'active' ? 'btn-reject' : 'btn-approve' ?>" style="font-size: 11px; padding: 4px 8px;">
+                                                <?= $u['status'] === 'active' ? 'Khóa' : 'Mở' ?>
+                                            </button>
+                                        </form>
+                                    </div>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -818,5 +970,36 @@ $baseUrl = $protocol . $host . rtrim(dirname($_SERVER['SCRIPT_NAME']), '/\\');
             LockX Vault & GVault Backend PHP Core © 2026. Tích hợp Quản lý Users, Cuộc gọi, Tin nhắn & Duyệt Tích Xanh.
         </div>
     </div>
+
+    <script>
+        function toggleTargetUser(show) {
+            var wrapper = document.getElementById('targetUserWrapper');
+            if (wrapper) wrapper.style.display = show ? 'block' : 'none';
+            if (show) {
+                var input = document.getElementById('targetUserInput');
+                if (input) input.focus();
+            }
+        }
+
+        function selectUserForPush(username) {
+            var radioUser = document.querySelector('input[name="target_type"][value="user"]');
+            if (radioUser) {
+                radioUser.checked = true;
+                toggleTargetUser(true);
+            }
+            var input = document.getElementById('targetUserInput');
+            if (input) {
+                input.value = '@' + username.replace(/^@/, '');
+            }
+            var form = document.getElementById('pushForm');
+            if (form) {
+                form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            var textarea = document.querySelector('textarea[name="notif_body"]');
+            if (textarea) {
+                textarea.focus();
+            }
+        }
+    </script>
 </body>
 </html>
