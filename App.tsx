@@ -649,6 +649,7 @@ export const QUICK_EMOJIS = ['👍', '❤️', '🔥', '🎉', '😂', '👏', '
 
 export interface ChatMessage {
   id: string;
+  clientMsgId?: string;
   sender: 'me' | 'friend';
   text: string;
   time: string;
@@ -6323,33 +6324,67 @@ export default function App() {
       convKey,
     ];
 
-    const seenMap = new Map<string, ChatMessage>();
-
+    const rawMsgs: ChatMessage[] = [];
     keys.forEach((k) => {
       if (k && chatMessages[k]) {
-        chatMessages[k].forEach((m) => {
-          if (!seenMap.has(m.id)) {
-            seenMap.set(m.id, m);
-          }
-        });
+        rawMsgs.push(...chatMessages[k]);
       }
     });
 
     for (const k in chatMessages) {
       if ((cleanU && k.toLowerCase().includes(cleanU)) || (friend.id && k === friend.id)) {
         (chatMessages[k] || []).forEach((m) => {
-          if (!seenMap.has(m.id)) {
-            seenMap.set(m.id, m);
-          }
+          rawMsgs.push(m);
         });
       }
     }
 
-    return Array.from(seenMap.values()).sort((a, b) => {
-      const timeA = a.timestamp || 0;
-      const timeB = b.timestamp || 0;
-      return timeA - timeB;
+    // Sort theo timestamp tăng dần trước khi deduplicate
+    rawMsgs.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+
+    const result: ChatMessage[] = [];
+    const seenIds = new Set<string>();
+    const seenClientMsgIds = new Set<string>();
+
+    rawMsgs.forEach((m) => {
+      if (!m || !m.text) return;
+
+      // 1. Trùng chính xác ID
+      if (seenIds.has(m.id)) return;
+
+      // 2. Trùng clientMsgId
+      if (m.clientMsgId && seenClientMsgIds.has(m.clientMsgId)) return;
+
+      // 3. Khử trùng lặp giữa tin tạm local/relay (id bắt đầu bằng 'msg-' hoặc 'rl-') và tin chính thức từ server MySQL ('srv-')
+      const duplicateIdx = result.findIndex((existing) => {
+        if (existing.sender !== m.sender || existing.text !== m.text) return false;
+        if (existing.clientMsgId && m.clientMsgId && existing.clientMsgId === m.clientMsgId) return true;
+        const timeDiff = Math.abs((existing.timestamp || 0) - (m.timestamp || 0));
+        const oneIsSrv = existing.id.startsWith('srv-') || m.id.startsWith('srv-');
+        const oneIsLocal = existing.id.startsWith('msg-') || existing.id.startsWith('rl-') || m.id.startsWith('msg-') || m.id.startsWith('rl-');
+        return oneIsSrv && oneIsLocal && timeDiff < 60000;
+      });
+
+      if (duplicateIdx !== -1) {
+        // Ưu tiên giữ tin chính thức srv-
+        if (m.id.startsWith('srv-')) {
+          result[duplicateIdx] = {
+            ...result[duplicateIdx],
+            ...m,
+            reactions: m.reactions?.length ? m.reactions : result[duplicateIdx].reactions,
+          };
+          seenIds.add(m.id);
+          if (m.clientMsgId) seenClientMsgIds.add(m.clientMsgId);
+        }
+        return;
+      }
+
+      seenIds.add(m.id);
+      if (m.clientMsgId) seenClientMsgIds.add(m.clientMsgId);
+      result.push(m);
     });
+
+    return result;
   }, [chatMessages, userProfile.username]);
 
   // Thả / gỡ cảm xúc tin nhắn (Apple iMessage Reactions - Đồng bộ đa trình duyệt)
@@ -7203,11 +7238,17 @@ export default function App() {
             let current = prev[activeChatFriend.id] || prev[targetClean] || [];
             data.messages.forEach((rm: any) => {
               const isFromMe = (rm.sender || '').toLowerCase().replace(/^@/, '') === myClean;
-              const alreadyHas = current.some((m) => m.id === rm.id || (m.timestamp && rm.timestamp && Math.abs(m.timestamp - rm.timestamp) < 2000 && m.text === rm.text));
+              const rId = rm.id;
+              const rClientId = rm.clientMsgId || rm.id;
+              const alreadyHas = current.some((m) =>
+                m.id === rId ||
+                (rClientId && (m.id === rClientId || m.clientMsgId === rClientId))
+              );
               if (!alreadyHas) {
                 changed = true;
                 const newM: ChatMessage = {
-                  id: rm.id,
+                  id: rId,
+                  clientMsgId: rClientId,
                   sender: isFromMe ? 'me' : 'friend',
                   text: rm.text,
                   time: rm.time || clockStr,
@@ -7454,20 +7495,41 @@ export default function App() {
               ...(updatedMap[targetFriendId] || updatedMap[otherUserClean] || updatedMap[`fr-${otherUserClean}`] || [])
             ];
             const msgId = `srv-${sm.id}`;
+            const timeStr = sm.created_at ? sm.created_at.split(' ')[1]?.substring(0, 5) || clockStr : clockStr;
+            const msgTime = sm.created_at ? new Date(sm.created_at.replace(/-/g, '/')).getTime() : Date.now();
+
+            let clientMsgId: string | null = null;
+            if (sm.encrypted_payload) {
+              try {
+                const parsed = JSON.parse(sm.encrypted_payload);
+                if (parsed.clientMsgId) clientMsgId = parsed.clientMsgId;
+              } catch (e) {}
+            }
 
             // 1. Kiểm tra đã có tin nhắn với id srv-${sm.id} chưa
             let alreadyExists = currentMsgs.some((m) => m.id === msgId);
 
-            // 2. Đối soát tin nhắn của tôi: nếu có tin nhắn local tạm thời (id bắt đầu bằng 'msg-'), thay thế id thành srv-${sm.id}
-            if (!alreadyExists && !isIncomingForMe) {
-              const tempIdx = currentMsgs.findIndex(
-                (m) => m.sender === 'me' && m.id.startsWith('msg-') && m.text === sm.content
-              );
+            // 2. Đối soát tin nhắn: Nếu đã có tin nhắn tạm thời (từ local hoặc relay server)
+            if (!alreadyExists) {
+              const tempIdx = currentMsgs.findIndex((m) => {
+                if (clientMsgId && (m.id === clientMsgId || m.clientMsgId === clientMsgId)) {
+                  return true;
+                }
+                const isTemp = m.id.startsWith('msg-') || m.id.startsWith('rl-');
+                if (!isTemp) return false;
+                const expectedSender = isIncomingForMe ? 'friend' : 'me';
+                if (m.sender !== expectedSender) return false;
+                if (m.text !== sm.content) return false;
+                const timeDiff = Math.abs((m.timestamp || 0) - msgTime);
+                return timeDiff < 60000;
+              });
+
               if (tempIdx !== -1) {
                 currentMsgs[tempIdx] = {
                   ...currentMsgs[tempIdx],
                   id: msgId,
-                  deliveryStatus: 'delivered',
+                  clientMsgId: clientMsgId || currentMsgs[tempIdx].clientMsgId || currentMsgs[tempIdx].id,
+                  deliveryStatus: isIncomingForMe ? currentMsgs[tempIdx].deliveryStatus : 'delivered',
                 };
                 alreadyExists = true;
                 mapChanged = true;
@@ -7507,10 +7569,9 @@ export default function App() {
             }
 
             if (!alreadyExists) {
-              const timeStr = sm.created_at ? sm.created_at.split(' ')[1]?.substring(0, 5) || clockStr : clockStr;
-              const msgTime = sm.created_at ? new Date(sm.created_at.replace(/-/g, '/')).getTime() : Date.now();
               const newMsgObj: ChatMessage = {
                 id: msgId,
+                clientMsgId: clientMsgId || undefined,
                 sender: isIncomingForMe ? 'friend' : 'me',
                 text: sm.content,
                 time: timeStr,
@@ -7827,9 +7888,11 @@ export default function App() {
     const initStatus: 'sent' | 'delivered' | 'seen' = isTargetOnline ? 'delivered' : 'sent';
 
     const msgTimestamp = Date.now();
+    const uniqueClientMsgId = `msg-${msgTimestamp}-${Math.random().toString(36).substring(2, 7)}`;
     // Gửi tin nhắn từ phía Tôi (Tin nhắn thật)
     const myMsg: ChatMessage = {
-      id: `msg-${msgTimestamp}`,
+      id: uniqueClientMsgId,
+      clientMsgId: uniqueClientMsgId,
       sender: 'me',
       text: textToSend,
       time: clockStr,
@@ -7853,6 +7916,8 @@ export default function App() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        id: uniqueClientMsgId,
+        clientMsgId: uniqueClientMsgId,
         from: myClean,
         to: targetClean,
         text: textToSend,
@@ -7912,6 +7977,7 @@ export default function App() {
           recipient_username: recipientClean,
           recipient_name: currentFriend.displayName || recipientClean,
           content: textToSend,
+          encrypted_payload: JSON.stringify({ clientMsgId: uniqueClientMsgId }),
           message_type: 'text',
         }),
       })

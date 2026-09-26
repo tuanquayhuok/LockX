@@ -174,8 +174,10 @@ const server = http.createServer((req, res) => {
           if (from && to && text) {
             const ck = getConvKey(from, to);
             if (!messageState[ck]) messageState[ck] = [];
+            const clientMsgId = data.clientMsgId || data.id || `rl-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
             const msgObj = {
-              id: data.id || `rl-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+              id: clientMsgId,
+              clientMsgId: clientMsgId,
               sender: from,
               text: text,
               time: data.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -185,7 +187,7 @@ const server = http.createServer((req, res) => {
               deliveryStatus: 'delivered'
             };
             // deduplicate if same id exists
-            const existingIdx = messageState[ck].findIndex(m => m.id === msgObj.id);
+            const existingIdx = messageState[ck].findIndex(m => m.id === msgObj.id || (m.clientMsgId && m.clientMsgId === msgObj.clientMsgId));
             if (existingIdx !== -1) {
               messageState[ck][existingIdx] = msgObj;
             } else {
