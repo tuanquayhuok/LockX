@@ -8,6 +8,8 @@ let reactionState = {}; // key: conversationKey => { [msgId/msgText]: reactions[
 let callState = {};     // key: conversationKey => { caller, target, active, time, reason }
 let activeChatState = {}; // key: username => friendUsername they are currently chatting with
 let profileState = {};    // key: username => { username, displayName, avatarType, avatarUri, avatarPresetId, avatarColor, isVerified, bio }
+let chatConfigState = {}; // key: convKey => { themeId, quickEmoji, background, updatedBy, updatedAt }
+let messageState = {}; // key: convKey => array of { id, sender, text, time, timestamp, reactions, replyTo, deliveryStatus }
 
 function getConvKey(u1, u2) {
   return [u1.toLowerCase().replace(/^@/, '').trim(), u2.toLowerCase().replace(/^@/, '').trim()].sort().join('_');
@@ -139,6 +141,66 @@ const server = http.createServer((req, res) => {
           }
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ success: true }));
+          return;
+        }
+
+        if (pathname === '/chat-config') {
+          const from = (data.from || '').toLowerCase().replace(/^@/, '').trim();
+          const to = (data.to || '').toLowerCase().replace(/^@/, '').trim();
+          if (from && to) {
+            const ck = getConvKey(from, to);
+            chatConfigState[ck] = {
+              ...(chatConfigState[ck] || {}),
+              themeId: data.themeId || chatConfigState[ck]?.themeId || 'default',
+              quickEmoji: data.quickEmoji || chatConfigState[ck]?.quickEmoji || '👍',
+              background: data.background || chatConfigState[ck]?.background || 'default',
+              updatedBy: from,
+              updatedAt: Date.now()
+            };
+            presenceState[from] = Date.now();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, config: chatConfigState[ck] }));
+            return;
+          }
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: 'Missing from/to' }));
+          return;
+        }
+
+        if (pathname === '/message') {
+          const from = (data.from || '').toLowerCase().replace(/^@/, '').trim();
+          const to = (data.to || '').toLowerCase().replace(/^@/, '').trim();
+          const text = data.text !== undefined ? String(data.text) : '';
+          if (from && to && text) {
+            const ck = getConvKey(from, to);
+            if (!messageState[ck]) messageState[ck] = [];
+            const msgObj = {
+              id: data.id || `rl-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+              sender: from,
+              text: text,
+              time: data.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              timestamp: Number(data.timestamp) || Date.now(),
+              reactions: Array.isArray(data.reactions) ? data.reactions : [],
+              replyTo: data.replyTo || undefined,
+              deliveryStatus: 'delivered'
+            };
+            // deduplicate if same id exists
+            const existingIdx = messageState[ck].findIndex(m => m.id === msgObj.id);
+            if (existingIdx !== -1) {
+              messageState[ck][existingIdx] = msgObj;
+            } else {
+              messageState[ck].push(msgObj);
+              if (messageState[ck].length > 200) {
+                messageState[ck] = messageState[ck].slice(-200);
+              }
+            }
+            presenceState[from] = Date.now();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, message: msgObj }));
+            return;
+          }
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: 'Missing from/to/text' }));
           return;
         }
 
@@ -324,6 +386,58 @@ const server = http.createServer((req, res) => {
       const reactions = reactionState[ck] || {};
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ reactions }));
+    } else if (pathname === '/chat-config') {
+      const u1 = (url.searchParams.get('u1') || '').toLowerCase().replace(/^@/, '').trim();
+      const u2 = (url.searchParams.get('u2') || '').toLowerCase().replace(/^@/, '').trim();
+      const ck = getConvKey(u1, u2);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, config: chatConfigState[ck] || null }));
+    } else if (pathname === '/chat-sync') {
+      const target = (url.searchParams.get('target') || '').toLowerCase().replace(/^@/, '').trim();
+      const me = (url.searchParams.get('me') || '').toLowerCase().replace(/^@/, '').trim();
+      const ck = getConvKey(me, target);
+      const now = Date.now();
+
+      // 1. Typing
+      const lastTyping = typingState[`${target}->${me}`] || 0;
+      const isTyping = (now - lastTyping) < 3000;
+
+      // 2. Seen & Presence
+      const lastSeen = seenState[`${target}->${me}`] || 0;
+      const targetLastOnline = presenceState[target] || 0;
+      const fromOnline = (now - targetLastOnline) < 75000;
+      const isCurrentlyActive = fromOnline && (activeChatState[target] === me);
+
+      // 3. Block
+      const isBlocked = !!(blockState[target] && blockState[target][me]);
+
+      // 4. Presence Text
+      let presenceText = 'Hoạt động gần đây';
+      if (fromOnline) {
+        presenceText = 'Đang hoạt động';
+      } else if (targetLastOnline > 0) {
+        const diffSec = Math.floor((now - targetLastOnline) / 1000);
+        if (diffSec < 60) presenceText = 'Vừa mới online';
+        else if (diffSec < 3600) presenceText = `Hoạt động ${Math.floor(diffSec / 60)} phút trước`;
+        else presenceText = `Hoạt động ${Math.floor(diffSec / 3600)} giờ trước`;
+      }
+
+      const prof = profileState[target] || null;
+      const reactions = (ck && reactionState[ck]) || {};
+      const config = (ck && chatConfigState[ck]) || null;
+      const msgs = (ck && messageState[ck]) || [];
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        success: true,
+        isTyping,
+        seen: { lastSeen, isCurrentlyActive, fromOnline },
+        isBlocked,
+        presence: { text: presenceText, isOnline: fromOnline, profile: prof },
+        reactions,
+        chatConfig: config,
+        messages: msgs
+      }));
     } else if (pathname === '/call/incoming') {
       const u = (url.searchParams.get('username') || '').toLowerCase().replace(/^@/, '').trim();
       let incomingCall = null;
@@ -364,6 +478,6 @@ const server = http.createServer((req, res) => {
   }
 });
 
-server.listen(8089, '127.0.0.1', () => {
-  console.log('Relay server running on http://127.0.0.1:8089');
+server.listen(8089, () => {
+  console.log('Relay server running on port 8089 (http://127.0.0.1:8089 & http://localhost:8089)');
 });

@@ -546,16 +546,21 @@ export interface ChatThemeConfig {
   bubbleColor: string;
   accent: string;
   gradient: [string, string];
+  bgColor: string;
 }
 
 export const CHAT_THEMES: ChatThemeConfig[] = [
-  { id: 'default', name: 'Ocean Blue (Mặc định)', bubbleColor: '#007AFF', accent: '#007AFF', gradient: ['#0A84FF', '#007AFF'] },
-  { id: 'neon_cyber', name: 'Neon Cyber', bubbleColor: '#00C7BE', accent: '#00C7BE', gradient: ['#00E5FF', '#7C4DFF'] },
-  { id: 'sunset_orange', name: 'Sunset Warm', bubbleColor: '#FF9500', accent: '#FF9500', gradient: ['#FF9500', '#FF2D55'] },
-  { id: 'emerald_green', name: 'Emerald Forest', bubbleColor: '#34C759', accent: '#34C759', gradient: ['#34C759', '#30D158'] },
-  { id: 'midnight_purple', name: 'Midnight Purple', bubbleColor: '#AF52DE', accent: '#AF52DE', gradient: ['#AF52DE', '#5856D6'] },
-  { id: 'berry_pink', name: 'Berry Romance', bubbleColor: '#FF2D55', accent: '#FF2D55', gradient: ['#FF375F', '#FF7597'] },
+  { id: 'default', name: 'Ocean Blue (Mặc định)', bubbleColor: '#007AFF', accent: '#007AFF', gradient: ['#0A84FF', '#007AFF'], bgColor: '#000000' },
+  { id: 'neon_cyber', name: 'Neon Cyber', bubbleColor: '#00C7BE', accent: '#00C7BE', gradient: ['#00E5FF', '#7C4DFF'], bgColor: '#041217' },
+  { id: 'sunset_orange', name: 'Sunset Warm', bubbleColor: '#FF9500', accent: '#FF9500', gradient: ['#FF9500', '#FF2D55'], bgColor: '#1A0C06' },
+  { id: 'emerald_green', name: 'Emerald Forest', bubbleColor: '#34C759', accent: '#34C759', gradient: ['#34C759', '#30D158'], bgColor: '#06170A' },
+  { id: 'midnight_purple', name: 'Midnight Purple', bubbleColor: '#AF52DE', accent: '#AF52DE', gradient: ['#AF52DE', '#5856D6'], bgColor: '#11071A' },
+  { id: 'berry_pink', name: 'Berry Romance', bubbleColor: '#FF2D55', accent: '#FF2D55', gradient: ['#FF375F', '#FF7597'], bgColor: '#1A050D' },
 ];
+
+export const getChatConvKey = (u1: string, u2: string) => {
+  return [u1.replace(/^@/, '').toLowerCase().trim(), u2.replace(/^@/, '').toLowerCase().trim()].sort().join('_');
+};
 
 export const QUICK_EMOJIS = ['👍', '❤️', '🔥', '🎉', '😂', '👏', '🚀', '⚡', '😎', '💯', '🥰', '✨'];
 
@@ -2960,7 +2965,8 @@ export const EnterpriseAuthScreen = ({
   triggerToast,
   savedAccount,
   setSavedAccount,
-  savedDisplayName = 'Người Dùng LockX',
+  savedDisplayName = 'Quảng Trọng Tuấn',
+  savedAvatarUri = '',
   useFaceId = false,
 }: {
   authMode: 'login' | 'register';
@@ -2992,6 +2998,7 @@ export const EnterpriseAuthScreen = ({
   savedAccount: string;
   setSavedAccount: (acc: string) => void;
   savedDisplayName?: string;
+  savedAvatarUri?: string;
   useFaceId?: boolean;
 }) => {
   const [isEditingAccount, setIsEditingAccount] = useState<boolean>(false);
@@ -3427,11 +3434,19 @@ export const EnterpriseAuthScreen = ({
                 overflow: 'hidden',
               }}
             >
-              <Image
-                source={require('./assets/icon.png')}
-                style={{ width: '100%', height: '100%' }}
-                resizeMode="cover"
-              />
+              {authMode === 'login' && savedAvatarUri ? (
+                <Image
+                  source={{ uri: savedAvatarUri }}
+                  style={{ width: '100%', height: '100%' }}
+                  resizeMode="cover"
+                />
+              ) : (
+                <Image
+                  source={require('./assets/icon.png')}
+                  style={{ width: '100%', height: '100%' }}
+                  resizeMode="cover"
+                />
+              )}
             </View>
           </Animated.View>
 
@@ -3445,7 +3460,13 @@ export const EnterpriseAuthScreen = ({
               textAlign: 'center',
             }}
           >
-            {authMode === 'login' ? 'LockX Enterprise' : 'Khởi Tạo Tài Khoản'}
+            {authMode === 'login'
+              ? `Hi ${(savedDisplayName && savedDisplayName !== 'Người Dùng LockX')
+                  ? savedDisplayName
+                  : (authUsername.toLowerCase().includes('tuan') || (savedAccount && savedAccount.toLowerCase().includes('tuan')))
+                  ? 'Quảng Trọng Tuấn'
+                  : (savedDisplayName || 'Quảng Trọng Tuấn')}`
+              : 'Khởi Tạo Tài Khoản'}
           </Text>
           <Text
             style={{
@@ -4687,6 +4708,16 @@ export default function App() {
     activeChatFriendRef.current = activeChatFriend;
   }, [activeChatFriend]);
 
+  const friendsListRef = useRef<FriendUser[]>(friendsList);
+  useEffect(() => {
+    friendsListRef.current = friendsList;
+  }, [friendsList]);
+
+  const serverUsersRef = useRef<FriendUser[]>(serverUsers);
+  useEffect(() => {
+    serverUsersRef.current = serverUsers;
+  }, [serverUsers]);
+
   const appSettingsRef = useRef<AppSettings>(appSettings);
   useEffect(() => {
     appSettingsRef.current = appSettings;
@@ -4805,7 +4836,7 @@ export default function App() {
           avatarIcon: u.avatar_preset_id ? 'shield-checkmark' : 'person',
           status: u.status === 'active' ? 'online' : 'offline',
           isBot: u.username === 'support_bot' || u.username === 'gehihi',
-          bio: (u.is_verified === '1' || u.is_verified === 1) ? 'Tài khoản LockX Verified 🛡️✨' : (u.email ? `Email: ${u.email}` : 'Thành viên LockX Vault 🛡️'),
+          bio: u.bio || (u.email ? `Email: ${u.email}` : ''),
           lastMessage: 'Đã sẵn sàng kết nối bảo mật.',
           lastTime: 'Vừa xong',
           unreadCount: 0,
@@ -4854,6 +4885,8 @@ export default function App() {
     title: string;
     message: string;
     type: 'success' | 'info' | 'warning' | 'security';
+    customIcon?: string;
+    customColor?: string;
   } | null>(null);
 
   const popupScaleAnim = useRef(new Animated.Value(0.8)).current;
@@ -4949,7 +4982,7 @@ export default function App() {
         const diffDays = Math.max(1, Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1);
 
         const updatedProfile: UserProfile = {
-          displayName: (p && p.displayName) ? p.displayName : 'Người Dùng LockX',
+          displayName: (p && p.displayName && p.displayName !== 'Người Dùng LockX') ? p.displayName : 'Quảng Trọng Tuấn',
           username: (p && p.username) ? p.username : '@lockx_user',
           avatarColor: (p && p.avatarColor) || '#0A84FF',
           avatarType: (p && p.avatarType) || 'preset',
@@ -4986,6 +5019,14 @@ export default function App() {
         if (acc) {
           setSavedAccount(acc);
           setAuthUsername(acc);
+        }
+      })
+      .catch(() => {});
+
+    AsyncStorage.getItem('lockx_saved_display_name')
+      .then((sdn) => {
+        if (sdn) {
+          setUserProfile((prev) => ({ ...prev, displayName: sdn }));
         }
       })
       .catch(() => {});
@@ -5480,15 +5521,20 @@ export default function App() {
         try {
           AsyncStorage.setItem('lockx_registered_users', JSON.stringify(updatedUsers));
           AsyncStorage.setItem('lockx_saved_account', cleanUser);
+          AsyncStorage.setItem('lockx_saved_display_name', loggedUser.displayName);
         } catch (e) {}
-        setUserProfile((prev) => ({
-          ...prev,
-          username: `@${loggedUser.username}`,
-          displayName: loggedUser.displayName,
-          email: u.email || '',
-          phone: u.phone || '',
-          isVerified: !!u.is_verified,
-        }));
+        setUserProfile((prev) => {
+          const next = {
+            ...prev,
+            username: `@${loggedUser.username}`,
+            displayName: loggedUser.displayName,
+            email: u.email || '',
+            phone: u.phone || '',
+            isVerified: !!u.is_verified,
+          };
+          AsyncStorage.setItem('lockx_user_profile', JSON.stringify(next)).catch(() => {});
+          return next;
+        });
         setEditDisplayNameInput(loggedUser.displayName);
         setEditUsernameInput(`@${loggedUser.username}`);
         setEditEmailInput(u.email || '');
@@ -5505,13 +5551,17 @@ export default function App() {
       (u) => u.username.toLowerCase() === cleanUser.toLowerCase() && u.password === trimmedPass
     );
     if (found || (cleanUser.toLowerCase() === 'admin' && trimmedPass === '123456')) {
-      const activeUser = found || { username: 'admin', password: '123456', displayName: 'Admin LockX' };
-      setUserProfile((prev) => ({
-        ...prev,
-        username: `@${activeUser.username}`,
-        displayName: activeUser.displayName,
-        currentPasscode: activeUser.password,
-      }));
+      const activeUser = found || { username: 'admin', password: '123456', displayName: 'Quảng Trọng Tuấn' };
+      setUserProfile((prev) => {
+        const next = {
+          ...prev,
+          username: `@${activeUser.username}`,
+          displayName: activeUser.displayName,
+          currentPasscode: activeUser.password,
+        };
+        AsyncStorage.setItem('lockx_user_profile', JSON.stringify(next)).catch(() => {});
+        return next;
+      });
       setEditDisplayNameInput(activeUser.displayName);
       setEditUsernameInput(`@${activeUser.username}`);
       const newLog = createRealLoginRecord('Mật khẩu', true);
@@ -5519,6 +5569,7 @@ export default function App() {
       setSavedAccount(cleanUser);
       try {
         AsyncStorage.setItem('lockx_saved_account', cleanUser);
+        AsyncStorage.setItem('lockx_saved_display_name', activeUser.displayName);
       } catch (e) {}
       setIsAuthenticated(true);
       triggerToast(`Chào mừng ${activeUser.displayName} quay trở lại két sắt an toàn.`, 'Đăng Nhập Thành Công', 'success');
@@ -5681,6 +5732,11 @@ export default function App() {
     setAuthPassword('');
     setAuthConfirmPassword('');
     setAuthError(null);
+    try {
+      if (userProfile.displayName && userProfile.displayName !== 'Người Dùng LockX') {
+        AsyncStorage.setItem('lockx_saved_display_name', userProfile.displayName);
+      }
+    } catch (e) {}
     triggerToast('Phiên làm việc đã được đóng và mã hóa bảo vệ an toàn.', 'Đã Đăng Xuất An Toàn', 'info');
   };
 
@@ -6113,6 +6169,51 @@ export default function App() {
     }
   };
 
+  // Helper lấy toàn bộ tin nhắn liên quan đến bạn bè một cách nhất quán (hỗ trợ cả srv-*, fr-*, username và convKey)
+  const getActiveChatMessages = useCallback((friend: FriendUser | null): ChatMessage[] => {
+    if (!friend) return [];
+    const cleanU = (friend.username || '').replace(/^@/, '').toLowerCase().trim();
+    const myClean = (userProfile.username || '').replace(/^@/, '').toLowerCase().trim();
+    const convKey = getChatConvKey(myClean, cleanU);
+
+    const keys = [
+      friend.id,
+      cleanU,
+      `@${cleanU}`,
+      `fr-${cleanU}`,
+      `srv-${cleanU}`,
+      convKey,
+    ];
+
+    const seenMap = new Map<string, ChatMessage>();
+
+    keys.forEach((k) => {
+      if (k && chatMessages[k]) {
+        chatMessages[k].forEach((m) => {
+          if (!seenMap.has(m.id)) {
+            seenMap.set(m.id, m);
+          }
+        });
+      }
+    });
+
+    for (const k in chatMessages) {
+      if ((cleanU && k.toLowerCase().includes(cleanU)) || (friend.id && k === friend.id)) {
+        (chatMessages[k] || []).forEach((m) => {
+          if (!seenMap.has(m.id)) {
+            seenMap.set(m.id, m);
+          }
+        });
+      }
+    }
+
+    return Array.from(seenMap.values()).sort((a, b) => {
+      const timeA = a.timestamp || 0;
+      const timeB = b.timestamp || 0;
+      return timeA - timeB;
+    });
+  }, [chatMessages, userProfile.username]);
+
   // Thả / gỡ cảm xúc tin nhắn (Apple iMessage Reactions - Đồng bộ đa trình duyệt)
   const handleToggleReaction = (msgId: string, emoji: string) => {
     if (!activeChatFriend) return;
@@ -6480,11 +6581,11 @@ export default function App() {
 
     if (isTargetOnline) {
       setCallPhase('ringing');
-      setCallStatusText('Đang đổ chuông... (25s)');
+      setCallStatusText('Đang đổ chuông...');
       startRingtone();
     } else {
       setCallPhase('connecting');
-      setCallStatusText('Đang kết nối (25s)...');
+      setCallStatusText('Đang kết nối...');
     }
 
     // 3. Gửi thông tin cuộc gọi lên relay server
@@ -6691,9 +6792,9 @@ export default function App() {
           setCallCountdown((prev) => {
             const next = prev - 1;
             if (callPhase === 'connecting') {
-              setCallStatusText(`Đang kết nối (${Math.max(0, next)}s)...`);
+              setCallStatusText('Đang kết nối...');
             } else {
-              setCallStatusText(`Đang đổ chuông... (${Math.max(0, next)}s)`);
+              setCallStatusText('Đang đổ chuông...');
             }
             if (next <= 0) {
               handleEndCall('Không trả lời');
@@ -6838,26 +6939,27 @@ export default function App() {
     } catch (e) {}
   }, [activeChatFriend, userProfile.username]);
 
-  // Polling trạng thái đang soạn tin (Typing), Đã xem (Seen), Hiện diện (Presence), Cảm xúc (Reactions) và Chặn
+  // Polling đồng bộ trạng thái chat thời gian thực (Typing, Seen, Presence, Reactions, Chặn, và Chủ đề/Icon 2 chiều)
   useEffect(() => {
     if (!activeChatFriend) return;
     const targetClean = (activeChatFriend.username || '').replace(/^@/, '').toLowerCase();
     const myClean = (userProfile.username || 'user').replace(/^@/, '').toLowerCase();
+    const convKey = getChatConvKey(myClean, targetClean);
 
     const timer = setInterval(async () => {
       try {
-        // 1. Kiểm tra đối phương có đang soạn tin cho mình không
-        const res = await fetch(`http://127.0.0.1:8089/typing?from=${targetClean}&to=${myClean}`);
-        const data = await res.json();
-        if (data && typeof data.isTyping === 'boolean') {
+        const syncRes = await fetch(`http://127.0.0.1:8089/chat-sync?target=${targetClean}&me=${myClean}`);
+        const data = await syncRes.json();
+        if (!data || !data.success) return;
+
+        // 1. Soạn tin
+        if (typeof data.isTyping === 'boolean') {
           setIsFriendTyping(data.isTyping);
         }
 
-        // 2. Kiểm tra đối phương đã nhận / đã xem tin nhắn thời gian thực
-        const seenRes = await fetch(`http://127.0.0.1:8089/seen?from=${targetClean}&to=${myClean}`);
-        const seenData = await seenRes.json();
-        if (seenData) {
-          const { lastSeen = 0, isCurrentlyActive = false, fromOnline = false } = seenData;
+        // 2. Trạng thái đã nhận / đã xem
+        if (data.seen) {
+          const { lastSeen = 0, isCurrentlyActive = false, fromOnline = false } = data.seen;
           setChatMessages((prev) => {
             const msgs = prev[activeChatFriend.id] || [];
             let changed = false;
@@ -6877,35 +6979,26 @@ export default function App() {
               }
               return m;
             });
-            if (changed) {
-              const nextMap = { ...prev, [activeChatFriend.id]: updated };
-              saveChatMessages(nextMap);
-              return nextMap;
-            }
-            return prev;
+            return changed ? { ...prev, [activeChatFriend.id]: updated } : prev;
           });
         }
 
-        // 3. Kiểm tra đối phương có chặn mình không (gán vào blockedByUsers, KHÔNG đụng vào blockedUsers)
-        const blockRes = await fetch(`http://127.0.0.1:8089/block?blocker=${targetClean}&target=${myClean}`);
-        const blockData = await blockRes.json();
-        if (blockData && typeof blockData.isBlocked === 'boolean') {
-          if (blockData.isBlocked) {
+        // 3. Trạng thái chặn
+        if (typeof data.isBlocked === 'boolean') {
+          if (data.isBlocked) {
             setBlockedByUsers((prev) => Array.from(new Set([...prev, activeChatFriend.id, targetClean])));
           } else {
             setBlockedByUsers((prev) => prev.filter((id) => id !== activeChatFriend.id && id !== targetClean));
           }
         }
 
-        // 4. Cập nhật trạng thái hiện diện (Đang hoạt động / Treo app / Hoạt động xxx phút trước)
-        const presRes = await fetch(`http://127.0.0.1:8089/presence?username=${targetClean}`);
-        const presData = await presRes.json();
-        if (presData && presData.text) {
-          setFriendPresenceStatus(presData.text);
-        }
-        if (presData && presData.profile) {
-          const prof = presData.profile;
-          if (prof.avatarUri || prof.displayName || prof.isVerified !== undefined) {
+        // 4. Trạng thái hiện diện & hồ sơ bạn bè
+        if (data.presence) {
+          if (data.presence.text) {
+            setFriendPresenceStatus(data.presence.text);
+          }
+          const prof = data.presence.profile;
+          if (prof && (prof.avatarUri || prof.displayName || prof.isVerified !== undefined)) {
             setActiveChatFriend((prev) => {
               if (!prev) return null;
               if (
@@ -6923,57 +7016,12 @@ export default function App() {
               }
               return prev;
             });
-            setViewingFriendProfile((prev) => {
-              if (!prev) return null;
-              if (
-                prev.avatarUri !== prof.avatarUri ||
-                prev.displayName !== prof.displayName ||
-                prev.isVerified !== prof.isVerified
-              ) {
-                return {
-                  ...prev,
-                  avatarUri: prof.avatarUri || prev.avatarUri,
-                  avatarType: prof.avatarType || prev.avatarType,
-                  displayName: prof.displayName || prev.displayName,
-                  isVerified: prof.isVerified !== undefined ? prof.isVerified : true,
-                };
-              }
-              return prev;
-            });
-            setFriendsList((prev) => {
-              let updated = false;
-              const mapped = prev.map((f) => {
-                if (f.username.replace(/^@/, '').toLowerCase() === targetClean || f.id === activeChatFriend.id) {
-                  if (
-                    f.avatarUri !== prof.avatarUri ||
-                    f.displayName !== prof.displayName ||
-                    f.isVerified !== prof.isVerified
-                  ) {
-                    updated = true;
-                    return {
-                      ...f,
-                      avatarUri: prof.avatarUri || f.avatarUri,
-                      avatarType: prof.avatarType || f.avatarType,
-                      displayName: prof.displayName || f.displayName,
-                      isVerified: prof.isVerified !== undefined ? prof.isVerified : true,
-                    };
-                  }
-                }
-                return f;
-              });
-              if (updated) {
-                saveFriends(mapped);
-              }
-              return mapped;
-            });
           }
         }
 
-        // 5. Đồng bộ cảm xúc tin nhắn thời gian thực
-        const rxRes = await fetch(`http://127.0.0.1:8089/reactions?u1=${myClean}&u2=${targetClean}`);
-        const rxData = await rxRes.json();
-        if (rxData && rxData.reactions) {
-          const reactionMap = rxData.reactions;
+        // 5. Cảm xúc tin nhắn thời gian thực
+        if (data.reactions) {
+          const reactionMap = data.reactions;
           setChatMessages((prev) => {
             const msgs = prev[activeChatFriend.id] || [];
             let changed = false;
@@ -6985,17 +7033,69 @@ export default function App() {
               }
               return m;
             });
+            return changed ? { ...prev, [activeChatFriend.id]: nextMsgs } : prev;
+          });
+        }
+
+        // 6. Đồng bộ Chủ đề & Biểu tượng cảm xúc nhanh 2 chiều thời gian thực (Messenger Style)
+        if (data.chatConfig) {
+          const cfg = data.chatConfig;
+          if (cfg.themeId) {
+            setChatThemes((prev) => {
+              if (prev[convKey] !== cfg.themeId || prev[activeChatFriend.id] !== cfg.themeId) {
+                return { ...prev, [convKey]: cfg.themeId, [activeChatFriend.id]: cfg.themeId };
+              }
+              return prev;
+            });
+          }
+          if (cfg.quickEmoji) {
+            setChatQuickEmojis((prev) => {
+              if (prev[convKey] !== cfg.quickEmoji || prev[activeChatFriend.id] !== cfg.quickEmoji) {
+                return { ...prev, [convKey]: cfg.quickEmoji, [activeChatFriend.id]: cfg.quickEmoji };
+              }
+              return prev;
+            });
+          }
+        }
+
+        // 7. Đồng bộ tin nhắn tức thì từ Relay Server (0ms latency giữa Cốc Cốc & Chrome)
+        if (Array.isArray(data.messages) && data.messages.length > 0) {
+          setChatMessages((prev) => {
+            let changed = false;
+            let current = prev[activeChatFriend.id] || prev[targetClean] || [];
+            data.messages.forEach((rm: any) => {
+              const isFromMe = (rm.sender || '').toLowerCase().replace(/^@/, '') === myClean;
+              const alreadyHas = current.some((m) => m.id === rm.id || (m.timestamp && rm.timestamp && Math.abs(m.timestamp - rm.timestamp) < 2000 && m.text === rm.text));
+              if (!alreadyHas) {
+                changed = true;
+                const newM: ChatMessage = {
+                  id: rm.id,
+                  sender: isFromMe ? 'me' : 'friend',
+                  text: rm.text,
+                  time: rm.time || clockStr,
+                  timestamp: Number(rm.timestamp) || Date.now(),
+                  reactions: rm.reactions || [],
+                  replyTo: rm.replyTo || undefined,
+                  deliveryStatus: isFromMe ? 'delivered' : undefined,
+                };
+                current = [...current, newM];
+              }
+            });
             if (changed) {
-              const nextMap = { ...prev, [activeChatFriend.id]: nextMsgs };
-              saveChatMessages(nextMap);
-              return nextMap;
+              const updated = {
+                ...prev,
+                [activeChatFriend.id]: current,
+                [targetClean]: current,
+                [`fr-${targetClean}`]: current,
+              };
+              saveChatMessages(updated);
+              return updated;
             }
             return prev;
           });
         }
-
       } catch (err) {}
-    }, 450);
+    }, 1200);
 
     return () => clearInterval(timer);
   }, [activeChatFriend, userProfile.username, isCallingModalOpen]);
@@ -7146,10 +7246,11 @@ export default function App() {
     if (!myUsername) return;
 
     try {
-      const res = await fetch(`https://aecongnghe.online/api/messages/list.php?username=${encodeURIComponent(myUsername)}&limit=40`);
+      const res = await fetch(`https://aecongnghe.online/api/messages/list.php?username=${encodeURIComponent(myUsername)}&limit=100`);
       const data = await res.json();
       if (data && data.success && Array.isArray(data.data?.messages)) {
-        const serverMsgs = data.data.messages;
+        // Đảo ngược để duyệt từ tin cũ nhất đến mới nhất theo đúng dòng thời gian
+        const serverMsgs = [...data.data.messages].reverse();
         let hasNewIncoming = false;
 
         setChatMessages((prevMap) => {
@@ -7157,19 +7258,24 @@ export default function App() {
           let mapChanged = false;
 
           serverMsgs.forEach((sm: any) => {
-            const senderClean = (sm.sender_username || '').replace(/^@/, '');
-            const recipientClean = (sm.recipient_username || '').replace(/^@/, '');
+            const senderClean = (sm.sender_username || '').replace(/^@/, '').toLowerCase().trim();
+            const recipientClean = (sm.recipient_username || '').replace(/^@/, '').toLowerCase().trim();
             if (!senderClean || !recipientClean) return;
 
             // Tin nhắn gửi cho tôi
-            const isIncomingForMe = recipientClean.toLowerCase() === myUsername.toLowerCase();
+            const isIncomingForMe = recipientClean === myUsername.toLowerCase();
             const otherUserClean = isIncomingForMe ? senderClean : recipientClean;
             const otherUsernameFormatted = `@${otherUserClean}`;
 
-            // Tìm friend theo username
-            const foundFriend = friendsList.find(
-              (f) => f.username.toLowerCase().replace(/^@/, '') === otherUserClean.toLowerCase()
-            );
+            // Tìm friend theo username trong friendsList, activeChatFriend, hoặc serverUsers
+            const currentFriends = friendsListRef.current || [];
+            const curActive = activeChatFriendRef.current;
+            const currentServerUsers = serverUsersRef.current || [];
+
+            const foundFriend =
+              (curActive && (curActive.username || '').toLowerCase().replace(/^@/, '') === otherUserClean ? curActive : null) ||
+              currentFriends.find((f) => (f.username || '').toLowerCase().replace(/^@/, '') === otherUserClean) ||
+              currentServerUsers.find((u) => (u.username || '').toLowerCase().replace(/^@/, '') === otherUserClean);
 
             const targetFriendId = foundFriend ? foundFriend.id : `fr-${otherUserClean}`;
 
@@ -7188,7 +7294,7 @@ export default function App() {
                 unreadCount: 1,
               };
               setFriendsList((prevFriends) => {
-                if (prevFriends.some((f) => f.username.toLowerCase().replace(/^@/, '') === otherUserClean.toLowerCase())) {
+                if (prevFriends.some((f) => (f.username || '').toLowerCase().replace(/^@/, '') === otherUserClean)) {
                   return prevFriends;
                 }
                 const next = [newFriendObj, ...prevFriends];
@@ -7206,26 +7312,80 @@ export default function App() {
               playAppleNotificationSound('info');
             }
 
-            const currentMsgs = updatedMap[targetFriendId] || [];
+            let currentMsgs = [
+              ...(updatedMap[targetFriendId] || updatedMap[otherUserClean] || updatedMap[`fr-${otherUserClean}`] || [])
+            ];
             const msgId = `srv-${sm.id}`;
 
-            // Kiểm tra nếu tin nhắn chưa có trong state
-            if (!currentMsgs.some((m) => m.id === msgId || (m.text === sm.content && m.sender === (isIncomingForMe ? 'friend' : 'me')))) {
+            // 1. Kiểm tra đã có tin nhắn với id srv-${sm.id} chưa
+            let alreadyExists = currentMsgs.some((m) => m.id === msgId);
+
+            // 2. Đối soát tin nhắn của tôi: nếu có tin nhắn local tạm thời (id bắt đầu bằng 'msg-'), thay thế id thành srv-${sm.id}
+            if (!alreadyExists && !isIncomingForMe) {
+              const tempIdx = currentMsgs.findIndex(
+                (m) => m.sender === 'me' && m.id.startsWith('msg-') && m.text === sm.content
+              );
+              if (tempIdx !== -1) {
+                currentMsgs[tempIdx] = {
+                  ...currentMsgs[tempIdx],
+                  id: msgId,
+                  deliveryStatus: 'delivered',
+                };
+                alreadyExists = true;
+                mapChanged = true;
+              }
+            }
+
+            // Đồng bộ theme & emoji nếu tin nhắn chứa thông tin đổi chủ đề / icon
+            const convKey = getChatConvKey(myUsername, otherUserClean);
+            if (sm.message_type === 'theme_change' || sm.content?.startsWith('🎨 ')) {
+              try {
+                if (sm.encrypted_payload) {
+                  const p = JSON.parse(sm.encrypted_payload);
+                  if (p.themeId) {
+                    setChatThemes((prev) => ({ ...prev, [convKey]: p.themeId, [targetFriendId]: p.themeId }));
+                  }
+                } else {
+                  const matched = CHAT_THEMES.find((th) => sm.content.includes(th.name));
+                  if (matched) {
+                    setChatThemes((prev) => ({ ...prev, [convKey]: matched.id, [targetFriendId]: matched.id }));
+                  }
+                }
+              } catch (e) {}
+            } else if (sm.message_type === 'emoji_change' || sm.content?.startsWith('✨ ')) {
+              try {
+                if (sm.encrypted_payload) {
+                  const p = JSON.parse(sm.encrypted_payload);
+                  if (p.emoji) {
+                    setChatQuickEmojis((prev) => ({ ...prev, [convKey]: p.emoji, [targetFriendId]: p.emoji }));
+                  }
+                } else {
+                  const emojiChar = sm.content.slice(-2).trim();
+                  if (emojiChar) {
+                    setChatQuickEmojis((prev) => ({ ...prev, [convKey]: emojiChar, [targetFriendId]: emojiChar }));
+                  }
+                }
+              } catch (e) {}
+            }
+
+            if (!alreadyExists) {
               const timeStr = sm.created_at ? sm.created_at.split(' ')[1]?.substring(0, 5) || clockStr : clockStr;
+              const msgTime = sm.created_at ? new Date(sm.created_at.replace(/-/g, '/')).getTime() : Date.now();
               const newMsgObj: ChatMessage = {
                 id: msgId,
                 sender: isIncomingForMe ? 'friend' : 'me',
                 text: sm.content,
                 time: timeStr,
+                timestamp: msgTime,
                 deliveryStatus: isIncomingForMe ? undefined : 'delivered',
               };
               if (isIncomingForMe) {
                 const msgsWithSeen = currentMsgs.map((m) =>
                   m.sender === 'me' ? { ...m, deliveryStatus: 'seen' as const } : m
                 );
-                updatedMap[targetFriendId] = [...msgsWithSeen, newMsgObj];
+                currentMsgs = [...msgsWithSeen, newMsgObj];
               } else {
-                updatedMap[targetFriendId] = [...currentMsgs, newMsgObj];
+                currentMsgs = [...currentMsgs, newMsgObj];
               }
               mapChanged = true;
 
@@ -7237,7 +7397,9 @@ export default function App() {
                 // Cập nhật tin nhắn gần nhất trong danh sách bạn bè
                 setFriendsList((prevFriends) =>
                   prevFriends.map((f) =>
-                    f.id === targetFriendId ? { ...f, lastMessage: sm.content, lastTime: timeStr, unreadCount: (f.unreadCount || 0) + 1 } : f
+                    (f.id === targetFriendId || (f.username || '').toLowerCase().replace(/^@/, '') === otherUserClean)
+                      ? { ...f, lastMessage: sm.content, lastTime: timeStr, unreadCount: (f.unreadCount || 0) + 1 }
+                      : f
                   )
                 );
 
@@ -7247,7 +7409,7 @@ export default function App() {
                 if (!isFriendMuted) {
                   // Gửi thông báo hệ thống ra Màn hình chính / Màn hình khóa (giống Messenger / iMessage)
                   const curSettings = appSettingsRef.current;
-                  const curActive = activeChatFriendRef.current;
+                  const activeUser = activeChatFriendRef.current;
                   if (curSettings && curSettings.enableNotifications !== false) {
                     try {
                       Notifications.scheduleNotificationAsync({
@@ -7286,7 +7448,7 @@ export default function App() {
                   }
 
                   // Nếu người dùng đang mở app nhưng không ở trong phòng chat với người này -> Hiện biểu ngữ Toast
-                  if (!curActive || curActive.id !== targetFriendId) {
+                  if (!activeUser || (activeUser.id !== targetFriendId && (activeUser.username || '').toLowerCase().replace(/^@/, '') !== otherUserClean)) {
                     triggerToast(
                       `💬 ${senderTitle}: "${msgBody}"`,
                       'Tin Nhắn Mới',
@@ -7297,6 +7459,11 @@ export default function App() {
                 }
               }
             }
+
+            // Đồng bộ danh sách tin nhắn vào cả 3 khóa: targetFriendId, otherUserClean, và fr-${otherUserClean}
+            updatedMap[targetFriendId] = currentMsgs;
+            updatedMap[otherUserClean] = currentMsgs;
+            updatedMap[`fr-${otherUserClean}`] = currentMsgs;
           });
 
           if (mapChanged) {
@@ -7319,7 +7486,14 @@ export default function App() {
     } catch (err) {
       // Silent error handling for background sync
     }
-  }, [userProfile.username, friendsList, clockStr]);
+  }, [userProfile.username]);
+
+  // Kích hoạt đồng bộ ngay lập tức khi mở phòng chat với một người bạn
+  useEffect(() => {
+    if (activeChatFriend) {
+      syncIncomingMessages();
+    }
+  }, [activeChatFriend, syncIncomingMessages]);
 
   // Polling đồng bộ tin nhắn 2 chiều thời gian thực mỗi 2 giây
   useEffect(() => {
@@ -7526,10 +7700,29 @@ export default function App() {
       deliveryStatus: initStatus,
     };
 
-    const currentList = chatMessages[friendId] || [];
+    const currentList = getActiveChatMessages(currentFriend);
     const updatedList = [...currentList, myMsg];
-    const newChatMap = { ...chatMessages, [friendId]: updatedList };
+    const newChatMap = {
+      ...chatMessages,
+      [friendId]: updatedList,
+      [targetClean]: updatedList,
+      [`fr-${targetClean}`]: updatedList,
+    };
     saveChatMessages(newChatMap);
+
+    // 0. Gửi ngay lập tức lên Relay Server (0ms delay cho Cốc Cốc & Chrome)
+    fetch('http://127.0.0.1:8089/message', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: myClean,
+        to: targetClean,
+        text: textToSend,
+        time: clockStr,
+        timestamp: msgTimestamp,
+        replyTo: quotedReply,
+      }),
+    }).catch(() => {});
 
     // Xác nhận tức thì với relay-server: nếu đối phương đang mở xem chat -> seen, nếu online -> delivered, nếu offline -> sent
     fetch(`http://127.0.0.1:8089/presence?username=${targetClean}&viewer=${myClean}`)
@@ -7545,7 +7738,12 @@ export default function App() {
             setChatMessages((prev) => {
               const msgs = prev[friendId] || [];
               const updated = msgs.map((m) => (m.id === myMsg.id ? { ...m, deliveryStatus: refinedStatus } : m));
-              const nextMap = { ...prev, [friendId]: updated };
+              const nextMap = {
+                ...prev,
+                [friendId]: updated,
+                [targetClean]: updated,
+                [`fr-${targetClean}`]: updated,
+              };
               saveChatMessages(nextMap);
               return nextMap;
             });
@@ -7555,7 +7753,7 @@ export default function App() {
       .catch(() => {});
 
     setFriendsList((prev) =>
-      prev.map((f) => (f.id === friendId ? { ...f, lastMessage: textToSend, lastTime: clockStr } : f))
+      prev.map((f) => (f.id === friendId || (f.username || '').toLowerCase().replace(/^@/, '') === targetClean ? { ...f, lastMessage: textToSend, lastTime: clockStr } : f))
     );
 
     playAppleNotificationSound('tap');
@@ -7578,7 +7776,11 @@ export default function App() {
           content: textToSend,
           message_type: 'text',
         }),
-      }).catch((err) => console.log('Lỗi gửi tin nhắn Server:', err));
+      })
+      .then(() => {
+        syncIncomingMessages();
+      })
+      .catch((err) => console.log('Lỗi gửi tin nhắn Server:', err));
     }
 
     // 2. NẾU LÀ BOT GEHIHI -> XỬ LÝ TRẢ LỜI GOOGLE GEMINI AI STUDIO (KHÔNG DÙNG ICON)
@@ -8129,29 +8331,15 @@ export default function App() {
   }, []);
 
   const dismissSuccessPopup = () => {
-    if (popupTimeoutRef.current) {
-      clearTimeout(popupTimeoutRef.current);
-      popupTimeoutRef.current = null;
+    if (bannerTimeoutRef.current) {
+      clearTimeout(bannerTimeoutRef.current);
+      bannerTimeoutRef.current = null;
     }
     Animated.parallel([
-      Animated.timing(popupScaleAnim, {
-        toValue: 0.85,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-      Animated.timing(popupOpacityAnim, {
-        toValue: 0,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-      Animated.timing(ringOpacityAnim, {
-        toValue: 0,
-        duration: 150,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setSuccessPopup(null);
-    });
+      Animated.timing(bannerAnimY, { toValue: -120, duration: 180, useNativeDriver: true }),
+      Animated.timing(bannerAnimOpacity, { toValue: 0, duration: 160, useNativeDriver: true }),
+    ]).start(() => setBannerNotification(null));
+    setSuccessPopup(null);
   };
 
   const showSuccessPopup = (
@@ -8161,91 +8349,35 @@ export default function App() {
     customIcon?: string,
     customColor?: string
   ) => {
-    if (popupTimeoutRef.current) {
-      clearTimeout(popupTimeoutRef.current);
-      popupTimeoutRef.current = null;
-    }
-
-    setSuccessPopup({
-      id: String(Date.now()),
-      title,
-      message,
-      type,
-      customIcon,
-      customColor,
-    });
-
-    popupScaleAnim.setValue(0.75);
-    popupOpacityAnim.setValue(0);
-    checkScaleAnim.setValue(0);
-    checkRotateAnim.setValue(0);
-    ringScaleAnim.setValue(0.8);
-    ringOpacityAnim.setValue(0.85);
-
-    // 1. Popup card springs in smoothly in the center of the screen
-    Animated.parallel([
-      Animated.spring(popupScaleAnim, {
-        toValue: 1,
-        friction: 6,
-        tension: 65,
-        useNativeDriver: true,
-      }),
-      Animated.timing(popupOpacityAnim, {
-        toValue: 1,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-    ]).start();
-
-    // 2. Animated checkmark with expanding ripple ring effect
-    setTimeout(() => {
-      Animated.parallel([
-        Animated.timing(ringScaleAnim, {
-          toValue: 1.5,
-          duration: 650,
-          useNativeDriver: true,
-        }),
-        Animated.timing(ringOpacityAnim, {
-          toValue: 0,
-          duration: 650,
-          useNativeDriver: true,
-        }),
-        Animated.spring(checkScaleAnim, {
-          toValue: 1,
-          friction: 4.5,
-          tension: 80,
-          useNativeDriver: true,
-        }),
-        Animated.spring(checkRotateAnim, {
-          toValue: 1,
-          friction: 5,
-          tension: 70,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }, 90);
-
-    popupTimeoutRef.current = setTimeout(() => {
-      dismissSuccessPopup();
-    }, 2400);
+    // Chuyển hướng sang biểu ngữ đầu màn hình (Dynamic Island Banner) - không hiện popup modal chắn màn hình
+    showBannerToast(title, message, type, customIcon, customColor);
   };
 
   const showBannerToast = (
     title: string,
     message: string,
-    type: 'success' | 'info' | 'warning' | 'security' = 'info'
+    type: 'success' | 'info' | 'warning' | 'security' = 'info',
+    customIcon?: string,
+    customColor?: string
   ) => {
     if (bannerTimeoutRef.current) {
       clearTimeout(bannerTimeoutRef.current);
       bannerTimeoutRef.current = null;
     }
-    setBannerNotification({ id: String(Date.now()), title, message, type });
-    bannerAnimY.setValue(-100);
+    setBannerNotification({ id: String(Date.now()), title, message, type, customIcon, customColor });
+    bannerAnimY.setValue(-120);
+    bannerAnimScale.setValue(0.9);
     bannerAnimOpacity.setValue(0);
 
     Animated.parallel([
       Animated.spring(bannerAnimY, {
         toValue: Platform.OS === 'web' ? 14 : 44,
+        friction: 7,
+        tension: 60,
+        useNativeDriver: true,
+      }),
+      Animated.spring(bannerAnimScale, {
+        toValue: 1,
         friction: 7,
         tension: 60,
         useNativeDriver: true,
@@ -8261,6 +8393,11 @@ export default function App() {
       Animated.parallel([
         Animated.timing(bannerAnimY, {
           toValue: -120,
+          duration: 220,
+          useNativeDriver: true,
+        }),
+        Animated.timing(bannerAnimScale, {
+          toValue: 0.9,
           duration: 220,
           useNativeDriver: true,
         }),
@@ -8351,8 +8488,8 @@ export default function App() {
       playAppleNotificationSound(resolvedType);
     }
 
-    // Luôn hiển thị popup ở GIỮA MÀN HÌNH (Center Screen HUD)
-    showSuccessPopup(resolvedTitle, cleanMsg, resolvedType, resolvedIcon, resolvedColor);
+    // Biểu ngữ trượt tinh tế ở đầu màn hình (Apple Dynamic Island Top Banner Toast)
+    showBannerToast(resolvedTitle, cleanMsg, resolvedType, resolvedIcon, resolvedColor);
 
     // 2. Lưu vào danh sách Thông báo
     const newNotif: AppNotification = {
@@ -8822,167 +8959,140 @@ export default function App() {
     <SafeAreaView style={styles.safeRoot}>
       <StatusBar style="light" />
 
-      {/* POPUP MODAL: APPLE IOS SUCCESS & ACTION HUD POPUP */}
-      <Modal
-        visible={!!successPopup}
-        transparent
-        animationType="none"
-        onRequestClose={dismissSuccessPopup}
-      >
-        <TouchableOpacity
-          activeOpacity={1}
-          onPress={dismissSuccessPopup}
-          style={styles.popupBackdrop}
+      {/* APPLE IOS 18 DYNAMIC ISLAND TOP BANNER TOAST (BIỂU NGỮ TINH TẾ ĐẦU MÀN HÌNH - KHÔNG CHE MÀN HÌNH, TỰ ĐỘNG TRƯỢT ẨN) */}
+      {bannerNotification && (
+        <Animated.View
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            alignItems: 'center',
+            zIndex: 999999,
+            pointerEvents: 'box-none',
+            transform: [
+              { translateY: bannerAnimY },
+              { scale: bannerAnimScale },
+            ],
+            opacity: bannerAnimOpacity,
+          }}
         >
-          <Animated.View
-            style={[
-              styles.popupCard,
-              isLight && styles.popupCardLight,
-              {
-                transform: [{ scale: popupScaleAnim }],
-                opacity: popupOpacityAnim,
-              },
-            ]}
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => {
+              if (bannerTimeoutRef.current) clearTimeout(bannerTimeoutRef.current);
+              Animated.parallel([
+                Animated.timing(bannerAnimY, { toValue: -120, duration: 180, useNativeDriver: true }),
+                Animated.timing(bannerAnimOpacity, { toValue: 0, duration: 160, useNativeDriver: true }),
+              ]).start(() => setBannerNotification(null));
+            }}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              maxWidth: 420,
+              width: '92%',
+              backgroundColor: isLight ? 'rgba(255, 255, 255, 0.95)' : 'rgba(28, 28, 30, 0.95)',
+              paddingVertical: 10,
+              paddingHorizontal: 14,
+              borderRadius: 24,
+              borderWidth: 0.5,
+              borderColor: isLight ? 'rgba(0, 0, 0, 0.08)' : 'rgba(255, 255, 255, 0.14)',
+              shadowColor: '#000000',
+              shadowOffset: { width: 0, height: 6 },
+              shadowOpacity: isLight ? 0.12 : 0.45,
+              shadowRadius: 14,
+              elevation: 12,
+              gap: 12,
+            }}
           >
-            {/* Top Glowing Icon Badge with Animated Checkmark and Pulse Ring */}
-            <View style={{ alignItems: 'center', justifyContent: 'center', marginBottom: 18, marginTop: 4 }}>
-              {/* Expanding Ripple Ring */}
-              <Animated.View
-                pointerEvents="none"
-                style={{
-                  position: 'absolute',
-                  width: 78,
-                  height: 78,
-                  borderRadius: 39,
-                  borderWidth: 2.5,
-                  borderColor:
-                    successPopup?.type === 'success'
-                      ? '#30D158'
-                      : successPopup?.customColor ||
-                        (successPopup?.type === 'warning'
-                          ? '#FF9F0A'
-                          : successPopup?.type === 'security'
-                          ? appSettings.accentColor
-                          : '#0A84FF'),
-                  transform: [{ scale: ringScaleAnim }],
-                  opacity: ringOpacityAnim,
-                }}
+            {/* Left Icon Badge */}
+            <View
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: 19,
+                backgroundColor:
+                  bannerNotification.type === 'success'
+                    ? 'rgba(48, 209, 88, 0.18)'
+                    : bannerNotification.type === 'warning'
+                    ? 'rgba(255, 159, 10, 0.18)'
+                    : bannerNotification.type === 'security'
+                    ? 'rgba(10, 132, 255, 0.18)'
+                    : 'rgba(142, 142, 147, 0.18)',
+                justifyContent: 'center',
+                alignItems: 'center',
+              }}
+            >
+              <Ionicons
+                name={
+                  (bannerNotification.customIcon ||
+                    (bannerNotification.type === 'success'
+                      ? 'checkmark-circle'
+                      : bannerNotification.type === 'warning'
+                      ? 'warning'
+                      : bannerNotification.type === 'security'
+                      ? 'shield-checkmark'
+                      : 'chatbubble-ellipses')) as any
+                }
+                size={22}
+                color={
+                  bannerNotification.customColor ||
+                  (bannerNotification.type === 'success'
+                    ? '#30D158'
+                    : bannerNotification.type === 'warning'
+                    ? '#FF9F0A'
+                    : bannerNotification.type === 'security'
+                    ? '#0A84FF'
+                    : appSettings.accentColor)
+                }
               />
-
-              {/* Main Badge Container */}
-              <View
-                style={[
-                  styles.popupIconCircle,
-                  { marginBottom: 0 },
-                  successPopup?.type === 'success'
-                    ? { backgroundColor: 'rgba(48, 209, 88, 0.16)', borderColor: 'rgba(48, 209, 88, 0.45)' }
-                    : successPopup?.type === 'warning'
-                    ? { backgroundColor: 'rgba(255, 159, 10, 0.16)', borderColor: 'rgba(255, 159, 10, 0.45)' }
-                    : successPopup?.type === 'security'
-                    ? { backgroundColor: 'rgba(10, 132, 255, 0.16)', borderColor: 'rgba(10, 132, 255, 0.45)' }
-                    : {
-                        backgroundColor: `${successPopup?.customColor || '#0A84FF'}22`,
-                        borderColor: `${successPopup?.customColor || '#0A84FF'}50`,
-                      },
-                ]}
-              >
-                {successPopup?.type === 'success' ? (
-                  <Animated.View
-                    style={{
-                      transform: [{ scale: checkScaleAnim }, { rotate: checkRotation }],
-                      width: 52,
-                      height: 52,
-                      borderRadius: 26,
-                      backgroundColor: '#30D158',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      shadowColor: '#30D158',
-                      shadowOffset: { width: 0, height: 4 },
-                      shadowOpacity: 0.5,
-                      shadowRadius: 10,
-                      elevation: 8,
-                    }}
-                  >
-                    <Ionicons name="checkmark" size={35} color="#FFFFFF" />
-                  </Animated.View>
-                ) : (
-                  <Animated.View
-                    style={{
-                      transform: [{ scale: checkScaleAnim }],
-                      width: 52,
-                      height: 52,
-                      borderRadius: 26,
-                      backgroundColor:
-                        successPopup?.customColor ||
-                        (successPopup?.type === 'warning'
-                          ? '#FF9F0A'
-                          : successPopup?.type === 'security'
-                          ? appSettings.accentColor
-                          : '#0A84FF'),
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      shadowColor:
-                        successPopup?.customColor ||
-                        (successPopup?.type === 'warning'
-                          ? '#FF9F0A'
-                          : successPopup?.type === 'security'
-                          ? appSettings.accentColor
-                          : '#0A84FF'),
-                      shadowOffset: { width: 0, height: 4 },
-                      shadowOpacity: 0.45,
-                      shadowRadius: 10,
-                      elevation: 8,
-                    }}
-                  >
-                    <Ionicons
-                      name={
-                        (successPopup?.customIcon ||
-                          (successPopup?.type === 'warning'
-                            ? 'alert'
-                            : successPopup?.type === 'security'
-                            ? 'shield-checkmark'
-                            : 'information')) as any
-                      }
-                      size={30}
-                      color="#FFFFFF"
-                    />
-                  </Animated.View>
-                )}
-              </View>
             </View>
 
-            {/* Title */}
-            <Text style={[styles.popupTitle, isLight && { color: '#000000' }]}>
-              {successPopup?.title}
-            </Text>
+            {/* Content Text */}
+            <View style={{ flex: 1 }}>
+              <Text
+                style={{
+                  fontSize: 14,
+                  fontWeight: '700',
+                  color: isLight ? '#000000' : '#FFFFFF',
+                  letterSpacing: -0.2,
+                }}
+                numberOfLines={1}
+              >
+                {bannerNotification.title}
+              </Text>
+              <Text
+                style={{
+                  fontSize: 12.5,
+                  color: isLight ? '#636366' : '#AEAEB2',
+                  marginTop: 1,
+                  lineHeight: 16,
+                }}
+                numberOfLines={2}
+              >
+                {bannerNotification.message}
+              </Text>
+            </View>
 
-            {/* Subtitle Message */}
-            <Text style={[styles.popupMessage, isLight && { color: '#3C3C43' }]}>
-              {successPopup?.message}
-            </Text>
-
-            {/* Bottom Button */}
-            <TouchableOpacity
-              activeOpacity={0.85}
-              onPress={dismissSuccessPopup}
-              style={[
-                styles.popupActionBtn,
-                {
-                  backgroundColor:
-                    successPopup?.type === 'success'
-                      ? '#30D158'
-                      : successPopup?.customColor ||
-                        (successPopup?.type === 'security'
-                          ? appSettings.accentColor
-                          : isLight ? '#000000' : '#2C2C2E'),
-                },
-              ]}
-            >
-              <Text style={styles.popupActionBtnText}>{t.understood}</Text>
-            </TouchableOpacity>
-          </Animated.View>
-        </TouchableOpacity>
-      </Modal>
+            {/* Right Subtle Pill Indicator */}
+            <View
+              style={{
+                width: 4,
+                height: 22,
+                borderRadius: 2,
+                backgroundColor:
+                  bannerNotification.type === 'success'
+                    ? '#30D158'
+                    : bannerNotification.type === 'warning'
+                    ? '#FF9F0A'
+                    : bannerNotification.type === 'security'
+                    ? '#0A84FF'
+                    : appSettings.accentColor,
+              }}
+            />
+          </TouchableOpacity>
+        </Animated.View>
+      )}
 
             {!isAuthenticated ? (
         <EnterpriseAuthScreen
@@ -9009,6 +9119,7 @@ export default function App() {
           savedAccount={savedAccount}
           setSavedAccount={setSavedAccount}
           savedDisplayName={userProfile.displayName || 'Quảng Trọng Tuấn'}
+          savedAvatarUri={userProfile.avatarUri}
           useFaceId={appSettings.useFaceId}
         />
       ) : (
@@ -10193,13 +10304,22 @@ export default function App() {
 
         {/* TAB 2: BẠN BÈ & NHẮN TIN (CHUẨN APPLE iOS 18 HIG ĐỒNG BỘ SETTINGS & PROFILE) */}
         {currentTab === 'chat' && (
-          activeChatFriend ? (
-            /* PHÒNG CHAT IMESSAGE CHUẨN APPLE iOS 18 (USER THẬT, NO BOT) */
-            <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-              style={{ flex: 1, backgroundColor: isLight ? '#F2F2F7' : '#000000' }}
-              keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-            >
+          activeChatFriend ? (() => {
+            const activeConvKey = getChatConvKey(userProfile.username || '', activeChatFriend.username || activeChatFriend.id);
+            const activeThemeId = chatThemes[activeConvKey] || chatThemes[activeChatFriend.id] || 'default';
+            const activeThemeObj = CHAT_THEMES.find((t) => t.id === activeThemeId);
+            const themeBubbleColor = activeThemeObj ? activeThemeObj.bubbleColor : appSettings.accentColor;
+            const themeBgColor = isLight ? '#F2F2F7' : (activeThemeObj?.bgColor || '#000000');
+            const activeQuickEmoji = chatQuickEmojis[activeConvKey] || chatQuickEmojis[activeChatFriend.id] || '👍';
+            const currentActiveMessages = getActiveChatMessages(activeChatFriend);
+
+            return (
+              /* PHÒNG CHAT IMESSAGE CHUẨN APPLE iOS 18 (USER THẬT, NO BOT) */
+              <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                style={{ flex: 1, backgroundColor: themeBgColor }}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+              >
               {/* Apple iMessage Top Navigation Bar */}
               <View style={[styles.fullScreenNavBar, isLight && { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E5EA' }]}>
                 <TouchableOpacity
@@ -10236,21 +10356,26 @@ export default function App() {
                       <Ionicons name="notifications-off" size={12} color="#8E8E93" />
                     )}
                   </View>
-                  <Text style={{ color: (blockedByUsers.includes(activeChatFriend.id) || blockedByUsers.includes(activeChatFriend.username.replace(/^@/, '').toLowerCase())) ? '#8E8E93' : isFriendTyping ? appSettings.accentColor : (blockedUsers.includes(activeChatFriend.id) || blockedUsers.includes(activeChatFriend.username.replace(/^@/, '').toLowerCase())) ? '#FF3B30' : (friendPresenceStatus.includes('🟢') || activeChatFriend.status === 'online' ? '#34C759' : '#8E8E93'), fontSize: 11, fontWeight: '500' }}>
-                    {(blockedByUsers.includes(activeChatFriend.id) || blockedByUsers.includes(activeChatFriend.username.replace(/^@/, '').toLowerCase()))
-                      ? 'Không thể nhận tin'
-                      : isFriendTyping
-                      ? 'Đang soạn tin...'
-                      : (blockedUsers.includes(activeChatFriend.id) || blockedUsers.includes(activeChatFriend.username.replace(/^@/, '').toLowerCase()))
-                      ? '🚫 Đã chặn tài khoản'
-                      : activeChatFriend.isBot
-                      ? '🟢 Trợ lý AI sẵn sàng'
-                      : (activeChatFriend.status === 'online'
-                          ? '🟢 Đang hoạt động • E2E'
-                          : (friendPresenceStatus
-                              ? friendPresenceStatus.replace(/^[🟢⚪\s]+/, '').replace(/Ngoại tuyến/g, 'Hoạt động gần đây')
-                              : 'Hoạt động gần đây'))}
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 1 }}>
+                    {((activeChatFriend.status === 'online' || friendPresenceStatus.includes('🟢')) && !activeChatFriend.isBot && !blockedUsers.includes(activeChatFriend.id) && !blockedUsers.includes(activeChatFriend.username.replace(/^@/, '').toLowerCase()) && !blockedByUsers.includes(activeChatFriend.id) && !blockedByUsers.includes(activeChatFriend.username.replace(/^@/, '').toLowerCase()) && !isFriendTyping) && (
+                      <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#34C759' }} />
+                    )}
+                    <Text style={{ color: (blockedByUsers.includes(activeChatFriend.id) || blockedByUsers.includes(activeChatFriend.username.replace(/^@/, '').toLowerCase())) ? '#8E8E93' : isFriendTyping ? appSettings.accentColor : (blockedUsers.includes(activeChatFriend.id) || blockedUsers.includes(activeChatFriend.username.replace(/^@/, '').toLowerCase())) ? '#FF3B30' : (friendPresenceStatus.includes('🟢') || activeChatFriend.status === 'online' ? '#34C759' : '#8E8E93'), fontSize: 11, fontWeight: '500' }}>
+                      {(blockedByUsers.includes(activeChatFriend.id) || blockedByUsers.includes(activeChatFriend.username.replace(/^@/, '').toLowerCase()))
+                        ? 'Không thể nhận tin'
+                        : isFriendTyping
+                        ? 'Đang soạn tin...'
+                        : (blockedUsers.includes(activeChatFriend.id) || blockedUsers.includes(activeChatFriend.username.replace(/^@/, '').toLowerCase()))
+                        ? '🚫 Đã chặn tài khoản'
+                        : activeChatFriend.isBot
+                        ? 'Trợ lý AI sẵn sàng'
+                        : (activeChatFriend.status === 'online' || friendPresenceStatus.includes('🟢'))
+                        ? 'Đang hoạt động'
+                        : (friendPresenceStatus
+                            ? friendPresenceStatus.replace(/^[🟢⚪\s]+/, '').replace(/Ngoại tuyến/g, 'Hoạt động gần đây')
+                            : 'Hoạt động gần đây')}
+                    </Text>
+                  </View>
                 </TouchableOpacity>
 
                 {/* Right Profile & Actions */}
@@ -10359,7 +10484,7 @@ export default function App() {
                   {chatSearchQuery.length > 0 && (
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       <Text style={{ fontSize: 11.5, color: '#8E8E93' }}>
-                        {(chatMessages[activeChatFriend.id] || []).filter((m) => m.text.toLowerCase().includes(chatSearchQuery.toLowerCase())).length} kết quả
+                        {currentActiveMessages.filter((m) => m.text.toLowerCase().includes(chatSearchQuery.toLowerCase())).length} kết quả
                       </Text>
                       <TouchableOpacity onPress={() => setChatSearchQuery('')}>
                         <Ionicons name="close-circle" size={15} color="#8E8E93" />
@@ -10393,11 +10518,17 @@ export default function App() {
                   </View>
                 </View>
 
-                {(chatMessages[activeChatFriend.id] || []).map((msg) => {
+                {currentActiveMessages.map((msg) => {
+                  if (msg.text.startsWith('🎨 ') || msg.text.startsWith('✨ ') || msg.text.startsWith('🖼️ ')) {
+                    return (
+                      <View key={msg.id} style={{ alignSelf: 'center', marginVertical: 8, paddingHorizontal: 14, paddingVertical: 6, borderRadius: 14, backgroundColor: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)' }}>
+                        <Text style={{ fontSize: 12.5, color: isLight ? '#6C6C70' : '#8E8E93', fontWeight: '500', textAlign: 'center' }}>
+                          {msg.text}
+                        </Text>
+                      </View>
+                    );
+                  }
                   const isMe = msg.sender === 'me';
-                  const activeThemeId = chatThemes[activeChatFriend.id] || 'default';
-                  const activeThemeObj = CHAT_THEMES.find((t) => t.id === activeThemeId);
-                  const themeBubbleColor = activeThemeObj ? activeThemeObj.bubbleColor : appSettings.accentColor;
                   const isSearchMatch = isChatSearchActive && !!chatSearchQuery.trim() && msg.text.toLowerCase().includes(chatSearchQuery.trim().toLowerCase());
                   return (
                     <TouchableOpacity
@@ -10827,9 +10958,9 @@ export default function App() {
                           justifyContent: 'center',
                           alignItems: 'center',
                         }}
-                        onPress={() => handleSendMessage(chatQuickEmojis[activeChatFriend.id] || '👍')}
+                        onPress={() => handleSendMessage(activeQuickEmoji)}
                       >
-                        <Text style={{ fontSize: 22 }}>{chatQuickEmojis[activeChatFriend.id] || '👍'}</Text>
+                        <Text style={{ fontSize: 22 }}>{activeQuickEmoji}</Text>
                       </TouchableOpacity>
                     ) : (
                       <TouchableOpacity
@@ -10841,7 +10972,7 @@ export default function App() {
                             ? '#BF5AF2'
                             : (chatSenderMode === 'friend'
                             ? activeChatFriend.avatarColor
-                            : (CHAT_THEMES.find((t) => t.id === (chatThemes[activeChatFriend.id] || 'default'))?.bubbleColor || appSettings.accentColor)),
+                            : themeBubbleColor),
                           justifyContent: 'center',
                           alignItems: 'center',
                         }}
@@ -10854,7 +10985,8 @@ export default function App() {
                 </>
               )}
             </KeyboardAvoidingView>
-          ) : friendsSubView === 'add_friend' ? (
+          );
+        })() : friendsSubView === 'add_friend' ? (
             /* MÀN HÌNH THÊM BẠN BÈ MỚI ĐẦY ĐỦ TÍNH NĂNG CHUẨN APPLE */
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: isLight ? '#F2F2F7' : '#000000' }}>
               {/* Apple Top Navigation Bar */}
@@ -11343,7 +11475,7 @@ export default function App() {
                       {t.tabFriends}
                     </Text>
                     <Text style={{ fontSize: 13, color: isLight ? '#6C6C70' : '#8E8E93', marginTop: 2 }}>
-                      Tin nhắn mã hóa E2E • Bạn bè an toàn
+                      Kết nối trò chuyện • Bạn bè an toàn
                     </Text>
                   </View>
                   <TouchableOpacity
@@ -13608,7 +13740,7 @@ export default function App() {
                     {viewingFriendProfile.username}
                   </Text>
 
-                  {viewingFriendProfile.bio && (
+                  {viewingFriendProfile.bio && !viewingFriendProfile.bio.includes('LockX Verified') && viewingFriendProfile.bio.trim() !== '' && (
                     <View
                       style={{
                         marginTop: 10,
@@ -13730,13 +13862,18 @@ export default function App() {
                     <View style={[styles.cellContent, { flex: 1 }]}>
                       <Text style={{ fontSize: 15, color: isLight ? '#000000' : '#FFFFFF' }}>Trạng thái mạng</Text>
                     </View>
-                    <Text style={{ fontSize: 15, color: viewingFriendProfile.status === 'online' ? '#34C759' : '#8E8E93', fontWeight: '500' }}>
-                      {viewingFriendProfile.status === 'online'
-                        ? 'Đang hoạt động'
-                        : (friendPresenceStatus
-                            ? friendPresenceStatus.replace(/^[🟢⚪\s]+/, '').replace(/Ngoại tuyến/g, 'Hoạt động gần đây')
-                            : 'Hoạt động gần đây')}
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      {viewingFriendProfile.status === 'online' && (
+                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#34C759' }} />
+                      )}
+                      <Text style={{ fontSize: 15, color: viewingFriendProfile.status === 'online' ? '#34C759' : '#8E8E93', fontWeight: '500' }}>
+                        {viewingFriendProfile.status === 'online'
+                          ? 'Đang hoạt động'
+                          : (friendPresenceStatus
+                              ? friendPresenceStatus.replace(/^[🟢⚪\s]+/, '').replace(/Ngoại tuyến/g, 'Hoạt động gần đây')
+                              : 'Hoạt động gần đây')}
+                      </Text>
+                    </View>
                   </View>
 
                   <View style={[styles.cellItem, { borderBottomWidth: 0 }]}>
@@ -13971,7 +14108,7 @@ export default function App() {
               >
                 <CallSvgIcon name="phone-incoming" size={14} color="#34C759" />
                 <Text style={{ color: '#34C759', fontSize: 11, fontWeight: '700', letterSpacing: 0.5 }}>
-                  CUỘC GỌI THOẠI ĐẾN E2EE
+                  CUỘC GỌI THOẠI ĐẾN
                 </Text>
               </View>
 
@@ -13995,7 +14132,7 @@ export default function App() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12 }}>
                 <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#34C759' }} />
                 <Text style={{ color: '#34C759', fontSize: 16, fontWeight: '600' }}>
-                  Cuộc gọi thoại đến... ({Math.max(1, Math.floor((Date.now() - incomingCallData.startTime) / 1000))}s)
+                  Cuộc gọi thoại đến...
                 </Text>
               </View>
             </View>
@@ -14122,7 +14259,7 @@ export default function App() {
                 >
                   <Ionicons name="lock-closed" size={13} color="#34C759" />
                   <Text style={{ color: '#34C759', fontSize: 11, fontWeight: '700', letterSpacing: 0.5 }}>
-                    MÃ HÓA ĐẦU CUỐI E2EE
+                    CUỘC GỌI THOẠI BẢO MẬT
                   </Text>
                 </View>
 
@@ -15974,8 +16111,12 @@ export default function App() {
 
               <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }]}>
                 {CHAT_THEMES.map((th, idx) => {
-                  const targetFriendId = activeChatFriend?.id || viewingFriendProfile?.id || '';
-                  const currentThemeId = chatThemes[targetFriendId] || 'default';
+                  const targetFriend = activeChatFriend || viewingFriendProfile;
+                  const targetFriendId = targetFriend?.id || '';
+                  const myUsername = (userProfile.username || '').replace(/^@/, '').toLowerCase();
+                  const otherUsername = (targetFriend?.username || targetFriend?.id || '').replace(/^@/, '').toLowerCase();
+                  const convKey = getChatConvKey(myUsername, otherUsername);
+                  const currentThemeId = chatThemes[convKey] || chatThemes[targetFriendId] || 'default';
                   const isSelected = currentThemeId === th.id;
 
                   return (
@@ -15984,9 +16125,48 @@ export default function App() {
                       style={[styles.cellItem, idx === CHAT_THEMES.length - 1 && { borderBottomWidth: 0 }]}
                       onPress={() => {
                         if (targetFriendId) {
-                          const next = { ...chatThemes, [targetFriendId]: th.id };
+                          const next = { ...chatThemes, [targetFriendId]: th.id, [convKey]: th.id };
                           setChatThemes(next);
                           AsyncStorage.setItem('lockx_chat_themes', JSON.stringify(next)).catch(() => {});
+
+                          // 1. Đồng bộ tức thì qua Relay Server
+                          fetch('http://127.0.0.1:8089/chat-config', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              from: myUsername,
+                              to: otherUsername,
+                              themeId: th.id,
+                              background: th.bgColor || 'default',
+                            }),
+                          }).catch(() => {});
+
+                          // 2. Gửi thông báo hệ thống qua Backend API MySQL
+                          const themeNotice = `🎨 Đã đổi chủ đề cuộc trò chuyện thành ${th.name}`;
+                          fetch('https://aecongnghe.online/api/messages/send.php', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              sender: userProfile.username || 'user',
+                              receiver: targetFriend?.username || targetFriend?.id,
+                              content: themeNotice,
+                              message_type: 'theme_change',
+                              encrypted_payload: JSON.stringify({ themeId: th.id }),
+                            }),
+                          }).catch(() => {});
+
+                          // 3. Hiển thị thông báo dạng pill ngay trong tin nhắn của mình
+                          const sysMsg: ChatMessage = {
+                            id: `theme-${Date.now()}`,
+                            sender: 'me',
+                            text: themeNotice,
+                            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                          };
+                          setChatMessages((prev) => {
+                            const cur = prev[targetFriendId] || [];
+                            return { ...prev, [targetFriendId]: [...cur, sysMsg] };
+                          });
+
                           triggerToast(`Đã áp dụng chủ đề ${th.name}`, 'Chủ Đề Chat', 'success', 'color-palette');
                         }
                         setIsThemeModalOpen(false);
@@ -16036,8 +16216,12 @@ export default function App() {
 
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-around', gap: 14 }}>
                 {QUICK_EMOJIS.map((emoji) => {
-                  const targetFriendId = activeChatFriend?.id || viewingFriendProfile?.id || '';
-                  const currentEmoji = chatQuickEmojis[targetFriendId] || '👍';
+                  const targetFriend = activeChatFriend || viewingFriendProfile;
+                  const targetFriendId = targetFriend?.id || '';
+                  const myUsername = (userProfile.username || '').replace(/^@/, '').toLowerCase();
+                  const otherUsername = (targetFriend?.username || targetFriend?.id || '').replace(/^@/, '').toLowerCase();
+                  const convKey = getChatConvKey(myUsername, otherUsername);
+                  const currentEmoji = chatQuickEmojis[convKey] || chatQuickEmojis[targetFriendId] || '👍';
                   const isSelected = currentEmoji === emoji;
 
                   return (
@@ -16059,9 +16243,47 @@ export default function App() {
                       }}
                       onPress={() => {
                         if (targetFriendId) {
-                          const next = { ...chatQuickEmojis, [targetFriendId]: emoji };
+                          const next = { ...chatQuickEmojis, [targetFriendId]: emoji, [convKey]: emoji };
                           setChatQuickEmojis(next);
                           AsyncStorage.setItem('lockx_chat_quick_emojis', JSON.stringify(next)).catch(() => {});
+
+                          // 1. Đồng bộ tức thì qua Relay Server
+                          fetch('http://127.0.0.1:8089/chat-config', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              from: myUsername,
+                              to: otherUsername,
+                              quickEmoji: emoji,
+                            }),
+                          }).catch(() => {});
+
+                          // 2. Gửi thông báo hệ thống qua Backend API MySQL
+                          const emojiNotice = `✨ Đã đổi biểu tượng cảm xúc nhanh thành ${emoji}`;
+                          fetch('https://aecongnghe.online/api/messages/send.php', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              sender: userProfile.username || 'user',
+                              receiver: targetFriend?.username || targetFriend?.id,
+                              content: emojiNotice,
+                              message_type: 'emoji_change',
+                              encrypted_payload: JSON.stringify({ emoji }),
+                            }),
+                          }).catch(() => {});
+
+                          // 3. Hiển thị thông báo dạng pill ngay trong tin nhắn của mình
+                          const sysMsg: ChatMessage = {
+                            id: `emoji-${Date.now()}`,
+                            sender: 'me',
+                            text: emojiNotice,
+                            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                          };
+                          setChatMessages((prev) => {
+                            const cur = prev[targetFriendId] || [];
+                            return { ...prev, [targetFriendId]: [...cur, sysMsg] };
+                          });
+
                           triggerToast(`Đã chọn ${emoji} làm biểu tượng nhanh`, 'Biểu Tượng Nhanh', 'success');
                         }
                         setIsQuickEmojiModalOpen(false);
