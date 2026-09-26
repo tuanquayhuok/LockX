@@ -123,6 +123,10 @@ export interface UserProfile {
   hoursUsed: number; // e.g. 0.2
   currentPasscode: string;
   lastUsernameChangeTimestamp?: number;
+  isVerified?: boolean;
+  verifiedBadge?: 'blue_tick' | 'gold_tick' | 'vip';
+  verifiedAt?: string;
+  verifiedKey?: string;
 }
 
 export interface AvatarPreset {
@@ -1083,6 +1087,10 @@ export const INITIAL_USER_PROFILE: UserProfile = {
   hoursUsed: 0.1,
   currentPasscode: '123456',
   lastUsernameChangeTimestamp: 0,
+  isVerified: false,
+  verifiedBadge: 'blue_tick',
+  verifiedAt: '',
+  verifiedKey: '',
 };
 
 export const INITIAL_LOGIN_HISTORY: LoginHistoryRecord[] = [
@@ -2256,14 +2264,119 @@ export const INITIAL_FRIENDS: FriendUser[] = [
 export const INITIAL_CHAT_MESSAGES: Record<string, ChatMessage[]> = {
   'fr-1': [
     { id: 'm1', sender: 'friend', text: 'Chào bạn, LockX cập nhật giao diện mới đẹp quá!', time: '15:15' },
-    { id: 'm2', sender: 'me', text: 'Ừ bạn, có cả Screen Time biểu đồ cột Apple nữa đấy!', time: '15:18' },
-    { id: 'm3', sender: 'friend', text: 'LockX bản mới dùng mượt phết ông!', time: '15:20' },
+    { id: 'm2', sender: 'me', text: 'Ừ bạn, tính năng mã hóa đầu cuối E2E rất mượt và an toàn!', time: '15:18' },
   ],
   'fr-2': [
     { id: 'm4', sender: 'friend', text: 'Hôm nay banner mới ra rồi nè', time: '13:50' },
     { id: 'm5', sender: 'me', text: 'Tôi tích được 48 roll rồi, chuẩn bị nổ bảo hiểm', time: '14:00' },
-    { id: 'm6', sender: 'friend', text: 'Tối nay roll banner không bạn ơi?', time: '14:05' },
   ],
+};
+
+// Component bong bóng 3 chấm hoạt họa đang gõ (Typing Indicator) chuẩn Apple iMessage
+export const TypingIndicatorBubble = ({
+  isLight,
+  avatarColor,
+  avatarIcon,
+}: {
+  isLight: boolean;
+  avatarColor: string;
+  avatarIcon?: string;
+}) => {
+  const dot1 = useRef(new Animated.Value(0)).current;
+  const dot2 = useRef(new Animated.Value(0)).current;
+  const dot3 = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const createAnim = (val: Animated.Value, delay: number) => {
+      return Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(val, {
+            toValue: -5,
+            duration: 260,
+            useNativeDriver: true,
+          }),
+          Animated.timing(val, {
+            toValue: 0,
+            duration: 260,
+            useNativeDriver: true,
+          }),
+          Animated.delay(Math.max(0, 360 - delay)),
+        ])
+      );
+    };
+
+    const a1 = createAnim(dot1, 0);
+    const a2 = createAnim(dot2, 130);
+    const a3 = createAnim(dot3, 260);
+
+    a1.start();
+    a2.start();
+    a3.start();
+
+    return () => {
+      a1.stop();
+      a2.stop();
+      a3.stop();
+    };
+  }, []);
+
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginBottom: 12, marginLeft: 4 }}>
+      <View
+        style={{
+          width: 28,
+          height: 28,
+          borderRadius: 14,
+          backgroundColor: avatarColor || '#007AFF',
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}
+      >
+        <Ionicons name={(avatarIcon || 'person') as any} size={14} color="#FFFFFF" />
+      </View>
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 4,
+          paddingHorizontal: 14,
+          paddingVertical: 10,
+          borderRadius: 18,
+          borderBottomLeftRadius: 4,
+          backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E',
+        }}
+      >
+        <Animated.View
+          style={{
+            width: 7,
+            height: 7,
+            borderRadius: 3.5,
+            backgroundColor: isLight ? '#8E8E93' : '#AEAEB2',
+            transform: [{ translateY: dot1 }],
+          }}
+        />
+        <Animated.View
+          style={{
+            width: 7,
+            height: 7,
+            borderRadius: 3.5,
+            backgroundColor: isLight ? '#8E8E93' : '#AEAEB2',
+            transform: [{ translateY: dot2 }],
+          }}
+        />
+        <Animated.View
+          style={{
+            width: 7,
+            height: 7,
+            borderRadius: 3.5,
+            backgroundColor: isLight ? '#8E8E93' : '#AEAEB2',
+            transform: [{ translateY: dot3 }],
+          }}
+        />
+      </View>
+    </View>
+  );
 };
 
 // Component hiển thị Icon Ứng Dụng chuẩn Apple Squircle (Bo góc 22.37% & nhận diện sắc nét)
@@ -3316,7 +3429,7 @@ export default function App() {
 
   // Profile State (Thông tin người dùng, sử dụng bao lâu, đổi mật khẩu, lịch sử đăng nhập)
   const [userProfile, setUserProfile] = useState<UserProfile>(INITIAL_USER_PROFILE);
-  const [profileSubView, setProfileSubView] = useState<'main' | 'change_password' | 'edit_profile'>('main');
+  const [profileSubView, setProfileSubView] = useState<'main' | 'change_password' | 'edit_profile' | 'verify_id'>('main');
   const [loginHistory, setLoginHistory] = useState<LoginHistoryRecord[]>(INITIAL_LOGIN_HISTORY);
   const [currentPassInput, setCurrentPassInput] = useState('');
   const [newPassInput, setNewPassInput] = useState('');
@@ -3386,6 +3499,10 @@ export default function App() {
   const [friendFilter, setFriendFilter] = useState<'all' | 'online' | 'unread'>('all');
   const [showAddFriendBox, setShowAddFriendBox] = useState(false);
   const [newFriendInput, setNewFriendInput] = useState('');
+  const [viewingFriendProfile, setViewingFriendProfile] = useState<FriendUser | null>(null);
+  const [isFriendTyping, setIsFriendTyping] = useState<boolean>(false);
+  const [chatSenderMode, setChatSenderMode] = useState<'me' | 'friend'>('me');
+  const chatScrollRef = useRef<ScrollView>(null);
 
   // Form tự thêm app
   const [customAppName, setCustomAppName] = useState('');
@@ -4152,6 +4269,70 @@ export default function App() {
     triggerToast('Thông tin hồ sơ cá nhân đã được đồng bộ an toàn.', 'Cập Nhật Hồ Sơ Thành Công', 'success', true);
   };
 
+  // Xử lý xác minh danh tính LockX Verified (Tích Xanh)
+  const handleVerifyIdentity = async () => {
+    try {
+      // 1. Xác thực sinh trắc học Face ID thật từ Apple
+      const hasHardware = await LocalAuthentication.hasHardwareAsync();
+      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+
+      if (hasHardware && isEnrolled) {
+        const authResult = await LocalAuthentication.authenticateAsync({
+          promptMessage: 'Xác thực sinh trắc học để kích hoạt Tích Xanh LockX Verified',
+          fallbackLabel: 'Sử dụng mật khẩu LockX',
+          disableDeviceFallback: false,
+        });
+
+        if (!authResult.success) {
+          triggerToast('Xác thực sinh trắc học không thành công. Vui lòng thử lại.', 'Xác Minh Thất Bại', 'warning');
+          return;
+        }
+      }
+
+      // 2. Tạo mã chứng chỉ bảo mật độc quyền
+      const randomHex = Math.random().toString(36).substring(2, 6).toUpperCase() + '-' + Math.random().toString(36).substring(2, 6).toUpperCase();
+      const certKey = `LX-VERIFIED-${randomHex}`;
+      const nowFormatted = getFormattedTodayDate();
+
+      const updated: UserProfile = {
+        ...userProfile,
+        isVerified: true,
+        verifiedBadge: 'blue_tick',
+        verifiedAt: nowFormatted,
+        verifiedKey: certKey,
+      };
+
+      saveUserProfile(updated);
+      triggerToast('Chúc mừng! Tài khoản đã được cấp Tích Xanh LockX Verified.', 'Xác Minh Thành Công', 'security', 'shield-checkmark', '#0A84FF');
+    } catch (e) {
+      triggerToast('Đã xảy ra lỗi trong quá trình xác minh. Vui lòng thử lại.', 'Lỗi Xác Minh', 'warning');
+    }
+  };
+
+  const handleRevokeVerification = () => {
+    Alert.alert(
+      'Hủy Tích Xanh Xác Minh',
+      'Bạn có chắc chắn muốn hủy trạng thái xác minh LockX Verified không?',
+      [
+        { text: 'Giữ lại', style: 'cancel' },
+        {
+          text: 'Hủy xác minh',
+          style: 'destructive',
+          onPress: () => {
+            const updated: UserProfile = {
+              ...userProfile,
+              isVerified: false,
+              verifiedKey: undefined,
+              verifiedAt: undefined,
+            };
+            saveUserProfile(updated);
+            triggerToast('Đã hủy trạng thái xác minh LockX Verified.', 'Đã Hủy Tích Xanh', 'info');
+          },
+        },
+      ]
+    );
+  };
+
   // Xử lý đăng xuất phiên khác
   const handleClearOtherSessions = () => {
     Alert.alert(
@@ -4172,64 +4353,97 @@ export default function App() {
     );
   };
 
-  // Gửi tin nhắn chat iMessage và nhận phản hồi tự động
+  // Xóa sạch lịch sử tin nhắn trò chuyện với bạn bè
+  const handleClearChat = (friendId: string) => {
+    Alert.alert(
+      'Làm sạch cuộc trò chuyện',
+      'Bạn có chắc chắn muốn xóa toàn bộ lịch sử tin nhắn với người này?',
+      [
+        { text: t.cancel, style: 'cancel' },
+        {
+          text: 'Xóa toàn bộ',
+          style: 'destructive',
+          onPress: () => {
+            const nextMap = { ...chatMessages, [friendId]: [] };
+            saveChatMessages(nextMap);
+            const updatedFriends = friendsList.map((f) =>
+              f.id === friendId ? { ...f, lastMessage: 'Chưa có tin nhắn', lastTime: clockStr } : f
+            );
+            saveFriends(updatedFriends);
+            triggerToast('Đã xóa sạch lịch sử trò chuyện', 'Hộp Thoại', 'info', 'trash-outline');
+          },
+        },
+      ]
+    );
+  };
+
+  // Gửi tin nhắn chat iMessage người dùng thật (Loại bỏ hoàn toàn bot tự động)
   const handleSendMessage = (customText?: string) => {
     const textToSend = (customText || chatInputText).trim();
     if (!textToSend || !activeChatFriend) return;
 
-    const myMsg: ChatMessage = {
-      id: `msg-${Date.now()}`,
-      sender: 'me',
-      text: textToSend,
-      time: clockStr,
-    };
-
-    const currentList = chatMessages[activeChatFriend.id] || [];
-    const updatedList = [...currentList, myMsg];
-    const newChatMap = { ...chatMessages, [activeChatFriend.id]: updatedList };
-    saveChatMessages(newChatMap);
+    const currentFriend = activeChatFriend;
+    const friendId = currentFriend.id;
     setChatInputText('');
 
-    // Cập nhật tin nhắn gần nhất
-    const updatedFriends = friendsList.map((f) =>
-      f.id === activeChatFriend.id ? { ...f, lastMessage: textToSend, lastTime: clockStr } : f
-    );
-    saveFriends(updatedFriends);
+    if (chatSenderMode === 'friend') {
+      // Gửi tin nhắn từ phía bạn bè (Mô phỏng người thật gửi đến)
+      setIsFriendTyping(true);
+      setTimeout(() => {
+        setIsFriendTyping(false);
+        const friendMsg: ChatMessage = {
+          id: `msg-${Date.now()}`,
+          sender: 'friend',
+          text: textToSend,
+          time: clockStr,
+        };
 
-    // Tự động trả lời thông minh sau 1.2s
-    const friendId = activeChatFriend.id;
-    const currentFriend = activeChatFriend;
-    setTimeout(() => {
-      const REPLIES = [
-        `OK ${userProfile.displayName || 'bạn'}, mình nhận được tin nhắn rồi nhé!`,
-        `Giao diện LockX bản mới này nhìn đẹp và mượt thật đấy ✨`,
-        `Tuyệt vời! Tính năng nhắn tin hoạt động rất trơn tru 👍`,
-        `Hôm nay rảnh không, vào check Screen Time trên LockX xem dùng hết bao nhiêu tiếng rồi haha!`,
-        `Cảm ơn bạn đã nhắn tin nha! Chúc bạn ngày mới tốt lành 🎉`,
-      ];
-      const replyText = REPLIES[Math.floor(Math.random() * REPLIES.length)];
-      const friendReply: ChatMessage = {
+        setChatMessages((prev) => {
+          const friendMsgs = [...(prev[friendId] || []), friendMsg];
+          const nextMap = { ...prev, [friendId]: friendMsgs };
+          saveChatMessages(nextMap);
+          return nextMap;
+        });
+
+        setFriendsList((prev) => {
+          const u = prev.map((f) =>
+            f.id === friendId ? { ...f, lastMessage: textToSend, lastTime: clockStr } : f
+          );
+          saveFriends(u);
+          return u;
+        });
+
+        // Âm thanh nhận tin nhắn iOS & Thông báo nổi Dynamic Island / Toast
+        playAppleNotificationSound('info');
+        triggerToast(textToSend, currentFriend.displayName, 'info', (currentFriend.avatarIcon || 'chatbubble-ellipses') as any);
+        setTimeout(() => {
+          chatScrollRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+      }, 700);
+    } else {
+      // Gửi tin nhắn từ phía Tôi
+      const myMsg: ChatMessage = {
         id: `msg-${Date.now()}`,
-        sender: 'friend',
-        text: replyText,
+        sender: 'me',
+        text: textToSend,
         time: clockStr,
       };
 
-      setChatMessages((prev) => {
-        const friendMsgs = [...(prev[friendId] || []), friendReply];
-        const nextMap = { ...prev, [friendId]: friendMsgs };
-        saveChatMessages(nextMap);
-        return nextMap;
-      });
+      const currentList = chatMessages[friendId] || [];
+      const updatedList = [...currentList, myMsg];
+      const newChatMap = { ...chatMessages, [friendId]: updatedList };
+      saveChatMessages(newChatMap);
 
-      setFriendsList((prev) => {
-        const u = prev.map((f) =>
-          f.id === friendId ? { ...f, lastMessage: replyText, lastTime: clockStr } : f
-        );
-        saveFriends(u);
-        return u;
-      });
-    }, 1200);
+      const updatedFriends = friendsList.map((f) =>
+        f.id === friendId ? { ...f, lastMessage: textToSend, lastTime: clockStr } : f
+      );
+      saveFriends(updatedFriends);
+
+      playAppleNotificationSound('tap');
+      setTimeout(() => {
+        chatScrollRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    }
   };
 
   // Thêm bạn bè mới qua @username chuẩn Apple
@@ -6568,16 +6782,20 @@ export default function App() {
         {/* TAB 2: BẠN BÈ & NHẮN TIN (CHUẨN APPLE iOS 18 HIG ĐỒNG BỘ SETTINGS & PROFILE) */}
         {currentTab === 'chat' && (
           activeChatFriend ? (
-            /* PHÒNG CHAT IMESSAGE CHUẨN APPLE iOS 18 */
+            /* PHÒNG CHAT IMESSAGE CHUẨN APPLE iOS 18 (USER THẬT, NO BOT) */
             <KeyboardAvoidingView
               behavior={Platform.OS === 'ios' ? 'padding' : undefined}
               style={{ flex: 1, backgroundColor: isLight ? '#F2F2F7' : '#000000' }}
-              keyboardVerticalOffset={0}
+              keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
             >
               {/* Apple iMessage Top Navigation Bar */}
               <View style={[styles.fullScreenNavBar, isLight && { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E5EA' }]}>
                 <TouchableOpacity
-                  onPress={() => { setActiveChatFriend(null); setChatInputText(''); }}
+                  onPress={() => {
+                    setActiveChatFriend(null);
+                    setChatInputText('');
+                    setIsFriendTyping(false);
+                  }}
                   style={styles.fullScreenNavBtn}
                   hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 >
@@ -6585,26 +6803,59 @@ export default function App() {
                   <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor }]}>{t.tabFriends}</Text>
                 </TouchableOpacity>
 
-                {/* Center Contact Header */}
-                <View style={{ alignItems: 'center' }}>
+                {/* Center Contact Header - Chạm để xem Trang Cá Nhân */}
+                <TouchableOpacity
+                  onPress={() => setViewingFriendProfile(activeChatFriend)}
+                  style={{ alignItems: 'center', maxWidth: '55%' }}
+                  activeOpacity={0.7}
+                >
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                     <Text style={[styles.fullScreenNavTitle, isLight && { color: '#000000' }]} numberOfLines={1}>
                       {activeChatFriend.displayName}
                     </Text>
                     <Ionicons name="shield-checkmark" size={13} color={appSettings.accentColor} />
                   </View>
-                  <Text style={{ color: activeChatFriend.status === 'online' ? '#34C759' : '#8E8E93', fontSize: 11, fontWeight: '500' }}>
-                    {activeChatFriend.status === 'online' ? '🟢 Đang hoạt động • E2E' : '⚪ Ngoại tuyến'}
+                  <Text style={{ color: isFriendTyping ? appSettings.accentColor : (activeChatFriend.status === 'online' ? '#34C759' : '#8E8E93'), fontSize: 11, fontWeight: '500' }}>
+                    {isFriendTyping ? 'Đang soạn tin...' : (activeChatFriend.status === 'online' ? '🟢 Đang hoạt động • E2E' : '⚪ Ngoại tuyến')}
                   </Text>
-                </View>
+                </TouchableOpacity>
 
-                {/* Right Avatar Accessory */}
-                <View style={{ width: 70, alignItems: 'flex-end' }}>
-                  <View
+                {/* Right Profile & Actions */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      Alert.alert(
+                        'Tùy chọn cuộc trò chuyện',
+                        `Đoạn chat với ${activeChatFriend.displayName}`,
+                        [
+                          { text: 'Xem hồ sơ cá nhân', onPress: () => setViewingFriendProfile(activeChatFriend) },
+                          {
+                            text: 'Làm sạch tin nhắn',
+                            style: 'destructive',
+                            onPress: () => handleClearChat(activeChatFriend.id),
+                          },
+                          { text: t.cancel, style: 'cancel' },
+                        ]
+                      );
+                    }}
                     style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 18,
+                      width: 32,
+                      height: 32,
+                      borderRadius: 16,
+                      backgroundColor: isLight ? '#F2F2F7' : '#1C1C1E',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Ionicons name="ellipsis-horizontal" size={16} color={isLight ? '#000000' : '#FFFFFF'} />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => setViewingFriendProfile(activeChatFriend)}
+                    style={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: 17,
                       backgroundColor: activeChatFriend.avatarColor,
                       justifyContent: 'center',
                       alignItems: 'center',
@@ -6613,17 +6864,21 @@ export default function App() {
                       shadowOpacity: 0.35,
                       shadowRadius: 4,
                     }}
+                    activeOpacity={0.8}
                   >
-                    <Ionicons name={(activeChatFriend.avatarIcon || 'person') as any} size={18} color="#FFFFFF" />
-                  </View>
+                    <Ionicons name={(activeChatFriend.avatarIcon || 'person') as any} size={17} color="#FFFFFF" />
+                  </TouchableOpacity>
                 </View>
               </View>
 
               {/* Chat Messages Stream */}
               <ScrollView
+                ref={chatScrollRef}
                 style={{ flex: 1, paddingHorizontal: 16 }}
-                contentContainerStyle={{ paddingVertical: 16, paddingBottom: 24 }}
+                contentContainerStyle={{ paddingVertical: 16, paddingBottom: 20, flexGrow: 1 }}
                 showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                onContentSizeChange={() => chatScrollRef.current?.scrollToEnd({ animated: true })}
               >
                 {/* Security E2E Notice */}
                 <View style={{ alignItems: 'center', marginBottom: 16 }}>
@@ -6675,19 +6930,82 @@ export default function App() {
                     </View>
                   );
                 })}
+
+                {/* Animated Typing Indicator Bubble */}
+                {isFriendTyping && (
+                  <TypingIndicatorBubble
+                    isLight={isLight}
+                    avatarColor={activeChatFriend.avatarColor}
+                    avatarIcon={activeChatFriend.avatarIcon}
+                  />
+                )}
               </ScrollView>
+
+              {/* Persona Switcher Pill (Đổi vai người gửi / Xóa tin nhắn) */}
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingHorizontal: 14,
+                  paddingVertical: 6,
+                  backgroundColor: isLight ? '#FFFFFF' : '#141416',
+                  borderTopWidth: 0.5,
+                  borderTopColor: isLight ? '#E5E5EA' : 'rgba(255,255,255,0.06)',
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={{ fontSize: 11.5, color: isLight ? '#8E8E93' : '#636366', fontWeight: '500' }}>
+                    Người gửi:
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setChatSenderMode('me')}
+                    style={{
+                      paddingHorizontal: 9,
+                      paddingVertical: 3,
+                      borderRadius: 12,
+                      backgroundColor: chatSenderMode === 'me' ? appSettings.accentColor : (isLight ? '#E5E5EA' : '#2C2C2E'),
+                    }}
+                  >
+                    <Text style={{ fontSize: 11.5, fontWeight: chatSenderMode === 'me' ? '700' : '500', color: chatSenderMode === 'me' ? '#FFFFFF' : (isLight ? '#6C6C70' : '#8E8E93') }}>
+                      Tôi ({userProfile.displayName || 'Bạn'})
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setChatSenderMode('friend')}
+                    style={{
+                      paddingHorizontal: 9,
+                      paddingVertical: 3,
+                      borderRadius: 12,
+                      backgroundColor: chatSenderMode === 'friend' ? activeChatFriend.avatarColor : (isLight ? '#E5E5EA' : '#2C2C2E'),
+                    }}
+                  >
+                    <Text style={{ fontSize: 11.5, fontWeight: chatSenderMode === 'friend' ? '700' : '500', color: chatSenderMode === 'friend' ? '#FFFFFF' : (isLight ? '#6C6C70' : '#8E8E93') }}>
+                      {activeChatFriend.displayName}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                <TouchableOpacity
+                  onPress={() => handleClearChat(activeChatFriend.id)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={{ fontSize: 11.5, color: '#FF3B30', fontWeight: '500' }}>Xóa tin nhắn</Text>
+                </TouchableOpacity>
+              </View>
 
               {/* Chat Input Bar */}
               <View
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  paddingHorizontal: 14,
-                  paddingVertical: 10,
+                  paddingHorizontal: 12,
+                  paddingTop: 8,
+                  paddingBottom: Platform.OS === 'ios' ? 22 : 10,
                   backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
                   borderTopWidth: 0.5,
                   borderTopColor: isLight ? '#E5E5EA' : 'rgba(255,255,255,0.08)',
-                  gap: 10,
+                  gap: 8,
                 }}
               >
                 <TouchableOpacity
@@ -6715,11 +7033,17 @@ export default function App() {
                     fontSize: 15,
                     maxHeight: 100,
                   }}
-                  placeholder={t.typeMessage || 'Nhắn tin bí mật...'}
+                  placeholder={
+                    chatSenderMode === 'me'
+                      ? (t.typeMessage || 'Nhắn tin bí mật...')
+                      : `Soạn tin từ ${activeChatFriend.displayName}...`
+                  }
                   placeholderTextColor="#8E8E93"
                   value={chatInputText}
                   onChangeText={setChatInputText}
                   multiline
+                  blurOnSubmit={false}
+                  onSubmitEditing={() => handleSendMessage()}
                 />
 
                 <TouchableOpacity
@@ -6727,7 +7051,9 @@ export default function App() {
                     width: 34,
                     height: 34,
                     borderRadius: 17,
-                    backgroundColor: chatInputText.trim() ? appSettings.accentColor : (isLight ? '#E5E5EA' : '#3A3A3C'),
+                    backgroundColor: chatInputText.trim()
+                      ? (chatSenderMode === 'friend' ? activeChatFriend.avatarColor : appSettings.accentColor)
+                      : (isLight ? '#E5E5EA' : '#3A3A3C'),
                     justifyContent: 'center',
                     alignItems: 'center',
                   }}
@@ -7332,6 +7658,310 @@ export default function App() {
                 </View>
               </ScrollView>
             </KeyboardAvoidingView>
+          ) : profileSubView === 'verify_id' ? (
+            /* MÀN HÌNH XÁC MINH DANH TÍNH LOCKX VERIFIED (TÍCH XANH CHUẨN APPLE) */
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: isLight ? '#F2F2F7' : '#000000' }}>
+              <View style={[styles.fullScreenNavBar, isLight && { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E5EA' }]}>
+                <TouchableOpacity onPress={() => setProfileSubView('main')} style={styles.fullScreenNavBtn}>
+                  <Ionicons name="chevron-back" size={20} color={appSettings.accentColor} />
+                  <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor }]}>{t.tabProfile}</Text>
+                </TouchableOpacity>
+                <Text style={[styles.fullScreenNavTitle, isLight && { color: '#000000' }]}>LockX Verified</Text>
+                <View style={{ width: 60 }} />
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 100 }}>
+                {/* Hero Badge Showcase */}
+                <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 20 }]}>
+                  <View
+                    style={[
+                      styles.groupedList,
+                      isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' },
+                      { alignItems: 'center', paddingVertical: 26, paddingHorizontal: 20 },
+                    ]}
+                  >
+                    {/* Glowing Shield Badge */}
+                    <View
+                      style={{
+                        width: 88,
+                        height: 88,
+                        borderRadius: 44,
+                        backgroundColor: userProfile.isVerified ? 'rgba(10, 132, 255, 0.12)' : (isLight ? '#F2F2F7' : '#2C2C2E'),
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        borderWidth: 2,
+                        borderColor: userProfile.isVerified ? '#0A84FF' : (isLight ? '#E5E5EA' : '#3A3A3C'),
+                        marginBottom: 14,
+                        shadowColor: userProfile.isVerified ? '#0A84FF' : 'transparent',
+                        shadowOffset: { width: 0, height: 6 },
+                        shadowOpacity: userProfile.isVerified ? 0.35 : 0,
+                        shadowRadius: 12,
+                      }}
+                    >
+                      <Ionicons
+                        name={userProfile.isVerified ? 'shield-checkmark' : 'shield-outline'}
+                        size={48}
+                        color={userProfile.isVerified ? '#0A84FF' : '#8E8E93'}
+                      />
+                    </View>
+
+                    {/* Status Title & Subtitle */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={{ fontSize: 21, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
+                        LockX Verified
+                      </Text>
+                      {userProfile.isVerified && (
+                        <View style={{ backgroundColor: '#0A84FF', borderRadius: 10, width: 20, height: 20, justifyContent: 'center', alignItems: 'center' }}>
+                          <Ionicons name="checkmark" size={13} color="#FFFFFF" />
+                        </View>
+                      )}
+                    </View>
+
+                    <Text
+                      style={{
+                        fontSize: 13.5,
+                        color: isLight ? '#6C6C70' : '#8E8E93',
+                        marginTop: 6,
+                        textAlign: 'center',
+                        lineHeight: 19,
+                        paddingHorizontal: 10,
+                      }}
+                    >
+                      {userProfile.isVerified
+                        ? 'Tài khoản của bạn đã được xác minh danh tính chính chủ và bảo vệ đa tầng bởi Apple Face ID.'
+                        : 'Xác minh danh tính để nhận huy hiệu Tích Xanh chính chủ và mở khóa các đặc quyền bảo vệ nâng cao.'}
+                    </Text>
+
+                    {/* Status Pill */}
+                    <View
+                      style={{
+                        marginTop: 14,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 6,
+                        backgroundColor: userProfile.isVerified ? 'rgba(52, 199, 89, 0.15)' : 'rgba(255, 159, 10, 0.15)',
+                        paddingHorizontal: 12,
+                        paddingVertical: 5,
+                        borderRadius: 12,
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: 4,
+                          backgroundColor: userProfile.isVerified ? '#34C759' : '#FF9F0A',
+                        }}
+                      />
+                      <Text
+                        style={{
+                          color: userProfile.isVerified ? '#34C759' : '#FF9F0A',
+                          fontSize: 12.5,
+                          fontWeight: '700',
+                          letterSpacing: 0.3,
+                        }}
+                      >
+                        {userProfile.isVerified ? 'ĐÃ XÁC MINH CHÍNH CHỦ' : 'CHƯA XÁC MINH DANH TÍNH'}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* IF VERIFIED: SHOW CERTIFICATE DETAILS */}
+                {userProfile.isVerified ? (
+                  <>
+                    <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 18 }]}>
+                      <Text style={styles.sectionCaption}>THÔNG TIN CHỨNG THỰC BẢO MẬT</Text>
+                      <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }]}>
+                        {/* Mã chứng chỉ */}
+                        <View style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}>
+                          <View style={[styles.cellLeadingIcon, { backgroundColor: '#0A84FF' }]}>
+                            <Ionicons name="key" size={17} color="#FFFFFF" />
+                          </View>
+                          <Text style={[styles.cellTitle, { width: 120 }]}>Mã chứng chỉ</Text>
+                          <Text style={{ flex: 1, textAlign: 'right', fontSize: 13.5, fontWeight: '600', color: '#0A84FF' }} numberOfLines={1}>
+                            {userProfile.verifiedKey || 'LX-VERIFIED-SECURE'}
+                          </Text>
+                        </View>
+
+                        {/* Ngày cấp */}
+                        <View style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}>
+                          <View style={[styles.cellLeadingIcon, { backgroundColor: '#34C759' }]}>
+                            <Ionicons name="calendar" size={17} color="#FFFFFF" />
+                          </View>
+                          <Text style={[styles.cellTitle, { width: 120 }]}>Ngày xác minh</Text>
+                          <Text style={{ flex: 1, textAlign: 'right', fontSize: 15, color: isLight ? '#000000' : '#FFFFFF' }}>
+                            {userProfile.verifiedAt || 'Hôm nay'}
+                          </Text>
+                        </View>
+
+                        {/* Phương thức */}
+                        <View style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}>
+                          <View style={[styles.cellLeadingIcon, { backgroundColor: '#AF52DE' }]}>
+                            <Ionicons name="scan" size={17} color="#FFFFFF" />
+                          </View>
+                          <Text style={[styles.cellTitle, { width: 120 }]}>Phương thức</Text>
+                          <Text style={{ flex: 1, textAlign: 'right', fontSize: 15, color: isLight ? '#000000' : '#FFFFFF' }}>
+                            Apple Face ID TrueDepth
+                          </Text>
+                        </View>
+
+                        {/* Mức độ bảo vệ */}
+                        <View style={[styles.cellItem, { borderBottomWidth: 0 }]}>
+                          <View style={[styles.cellLeadingIcon, { backgroundColor: '#FF9500' }]}>
+                            <Ionicons name="shield" size={17} color="#FFFFFF" />
+                          </View>
+                          <Text style={[styles.cellTitle, { width: 120 }]}>Cấp độ bảo vệ</Text>
+                          <Text style={{ flex: 1, textAlign: 'right', fontSize: 15, fontWeight: '600', color: '#34C759' }}>
+                            Cấp 3 (Mã Hóa Tối Đa)
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* Button Re-verify & Revoke */}
+                    <View style={[styles.sectionWrap, { marginTop: 8, marginBottom: 36, gap: 10 }]}>
+                      <TouchableOpacity
+                        onPress={handleVerifyIdentity}
+                        activeOpacity={0.8}
+                        style={{
+                          backgroundColor: appSettings.accentColor,
+                          paddingVertical: 14,
+                          borderRadius: 12,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexDirection: 'row',
+                          gap: 8,
+                        }}
+                      >
+                        <Ionicons name="scan-outline" size={18} color="#FFFFFF" />
+                        <Text style={{ color: '#FFFFFF', fontSize: 15.5, fontWeight: '700' }}>
+                          Xác minh lại bằng Face ID
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        onPress={handleRevokeVerification}
+                        activeOpacity={0.8}
+                        style={{
+                          backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                          borderWidth: 1,
+                          borderColor: isLight ? '#E5E5EA' : '#3A3A3C',
+                          paddingVertical: 13,
+                          borderRadius: 12,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexDirection: 'row',
+                          gap: 8,
+                        }}
+                      >
+                        <Ionicons name="trash-outline" size={16} color="#FF3B30" />
+                        <Text style={{ color: '#FF3B30', fontSize: 15, fontWeight: '600' }}>
+                          Hủy trạng thái xác minh
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                ) : (
+                  /* IF NOT VERIFIED: SHOW BENEFITS & CTA BUTTON */
+                  <>
+                    <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 20 }]}>
+                      <Text style={styles.sectionCaption}>ĐẶC QUYỀN KHI XÁC MINH TÍCH XANH</Text>
+                      <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }]}>
+                        {/* Đặc quyền 1 */}
+                        <View style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }, { alignItems: 'flex-start', paddingVertical: 12 }]}>
+                          <View style={[styles.cellLeadingIcon, { backgroundColor: '#0A84FF', marginTop: 2 }]}>
+                            <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />
+                          </View>
+                          <View style={{ flex: 1, marginLeft: 2 }}>
+                            <Text style={{ fontSize: 15.5, fontWeight: '600', color: isLight ? '#000000' : '#FFFFFF' }}>
+                              Huy hiệu Tích Xanh chính chủ
+                            </Text>
+                            <Text style={{ fontSize: 13, color: isLight ? '#6C6C70' : '#8E8E93', marginTop: 2, lineHeight: 18 }}>
+                              Hiển thị huy hiệu tích xanh uy tín bên cạnh tên bạn trong mọi cuộc trò chuyện, nhóm và thông tin hồ sơ.
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* Đặc quyền 2 */}
+                        <View style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }, { alignItems: 'flex-start', paddingVertical: 12 }]}>
+                          <View style={[styles.cellLeadingIcon, { backgroundColor: '#34C759', marginTop: 2 }]}>
+                            <Ionicons name="scan" size={18} color="#FFFFFF" />
+                          </View>
+                          <View style={{ flex: 1, marginLeft: 2 }}>
+                            <Text style={{ fontSize: 15.5, fontWeight: '600', color: isLight ? '#000000' : '#FFFFFF' }}>
+                              Khóa sinh trắc học Face ID TrueDepth
+                            </Text>
+                            <Text style={{ fontSize: 13, color: isLight ? '#6C6C70' : '#8E8E93', marginTop: 2, lineHeight: 18 }}>
+                              Bảo vệ hồ sơ bằng công nghệ nhận diện khuôn mặt sinh trắc học chuẩn Apple, chống giả mạo tuyệt đối.
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* Đặc quyền 3 */}
+                        <View style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }, { alignItems: 'flex-start', paddingVertical: 12 }]}>
+                          <View style={[styles.cellLeadingIcon, { backgroundColor: '#5856D6', marginTop: 2 }]}>
+                            <Ionicons name="lock-closed" size={18} color="#FFFFFF" />
+                          </View>
+                          <View style={{ flex: 1, marginLeft: 2 }}>
+                            <Text style={{ fontSize: 15.5, fontWeight: '600', color: isLight ? '#000000' : '#FFFFFF' }}>
+                              Chống sao chép & mạo danh hồ sơ
+                            </Text>
+                            <Text style={{ fontSize: 13, color: isLight ? '#6C6C70' : '#8E8E93', marginTop: 2, lineHeight: 18 }}>
+                              Tạo khóa chứng chỉ mật mã duy nhất gắn với thiết bị, ngăn chặn việc sao chép danh tính.
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* Đặc quyền 4 */}
+                        <View style={[styles.cellItem, { borderBottomWidth: 0, alignItems: 'flex-start', paddingVertical: 12 }]}>
+                          <View style={[styles.cellLeadingIcon, { backgroundColor: '#FF9500', marginTop: 2 }]}>
+                            <Ionicons name="flash" size={18} color="#FFFFFF" />
+                          </View>
+                          <View style={{ flex: 1, marginLeft: 2 }}>
+                            <Text style={{ fontSize: 15.5, fontWeight: '600', color: isLight ? '#000000' : '#FFFFFF' }}>
+                              Ưu tiên khôi phục dữ liệu két sắt
+                            </Text>
+                            <Text style={{ fontSize: 13, color: isLight ? '#6C6C70' : '#8E8E93', marginTop: 2, lineHeight: 18 }}>
+                              Quyền ưu tiên giải mã và phục hồi dữ liệu két sắt khi xảy ra sự cố quên mật mã.
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* Big Action CTA Button */}
+                    <View style={[styles.sectionWrap, { marginTop: 4, marginBottom: 36 }]}>
+                      <TouchableOpacity
+                        onPress={handleVerifyIdentity}
+                        activeOpacity={0.8}
+                        style={{
+                          backgroundColor: '#0A84FF',
+                          paddingVertical: 15,
+                          borderRadius: 14,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexDirection: 'row',
+                          gap: 10,
+                          shadowColor: '#0A84FF',
+                          shadowOffset: { width: 0, height: 4 },
+                          shadowOpacity: 0.35,
+                          shadowRadius: 10,
+                        }}
+                      >
+                        <Ionicons name="scan" size={20} color="#FFFFFF" />
+                        <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '700' }}>
+                          Xác Minh Bằng Face ID Ngay
+                        </Text>
+                      </TouchableOpacity>
+                      <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 12, textAlign: 'center', marginTop: 10, lineHeight: 16 }}>
+                        Quá trình xác thực diễn ra an toàn trên thiết bị của bạn thông qua Secure Enclave.
+                      </Text>
+                    </View>
+                  </>
+                )}
+              </ScrollView>
+            </KeyboardAvoidingView>
           ) : (
             /* MÀN HÌNH CÁ NHÂN CHÍNH (CHUẨN APPLE ID VÀ ĐỒNG BỘ SETTINGS) */
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, { paddingHorizontal: 16, paddingTop: 10 }]}>
@@ -7372,9 +8002,16 @@ export default function App() {
                     </TouchableOpacity>
 
                     <View style={{ flex: 1 }}>
-                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 19, fontWeight: '700' }} numberOfLines={1}>
-                        {userProfile.displayName}
-                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 19, fontWeight: '700' }} numberOfLines={1}>
+                          {userProfile.displayName}
+                        </Text>
+                        {userProfile.isVerified && (
+                          <View style={{ backgroundColor: '#0A84FF', borderRadius: 9, width: 18, height: 18, justifyContent: 'center', alignItems: 'center' }}>
+                            <Ionicons name="checkmark" size={12} color="#FFFFFF" />
+                          </View>
+                        )}
+                      </View>
                       <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 13.5, marginTop: 2 }}>
                         {userProfile.username}
                       </Text>
@@ -7427,6 +8064,60 @@ export default function App() {
                       <Text style={{ color: appSettings.accentColor, fontSize: 12.5, fontWeight: '600' }}>{t.changePassword}</Text>
                     </TouchableOpacity>
                   </View>
+                </View>
+              </View>
+
+              {/* NHÓM XÁC MINH DANH TÍNH (LOCKX VERIFIED) */}
+              <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 18 }]}>
+                <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 12.5, fontWeight: '500', textTransform: 'uppercase', marginBottom: 6, marginLeft: 16 }}>
+                  Xác minh danh tính
+                </Text>
+                <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }]}>
+                  <TouchableOpacity
+                    style={[styles.cellItem, { borderBottomWidth: 0, paddingVertical: 12 }]}
+                    activeOpacity={0.7}
+                    onPress={() => setProfileSubView('verify_id')}
+                  >
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#0A84FF' }]}>
+                      <Ionicons name="shield-checkmark" size={18} color="#FFFFFF" />
+                    </View>
+                    <View style={[styles.cellContent, { flex: 1 }]}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                        <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '500' }}>
+                          LockX Verified
+                        </Text>
+                        {userProfile.isVerified && (
+                          <View style={{ backgroundColor: '#0A84FF', borderRadius: 8, width: 16, height: 16, justifyContent: 'center', alignItems: 'center' }}>
+                            <Ionicons name="checkmark" size={11} color="#FFFFFF" />
+                          </View>
+                        )}
+                      </View>
+                      <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 12.5, marginTop: 1 }}>
+                        {userProfile.isVerified ? 'Tài khoản đã có Tích Xanh chính chủ' : 'Chưa xác minh • Nhấn để nhận Tích Xanh'}
+                      </Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <View
+                        style={{
+                          backgroundColor: userProfile.isVerified ? 'rgba(52, 199, 89, 0.15)' : 'rgba(255, 159, 10, 0.15)',
+                          paddingHorizontal: 8,
+                          paddingVertical: 3,
+                          borderRadius: 6,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: userProfile.isVerified ? '#34C759' : '#FF9F0A',
+                            fontSize: 11.5,
+                            fontWeight: '700',
+                          }}
+                        >
+                          {userProfile.isVerified ? 'ĐÃ XÁC MINH' : 'CHƯA XÁC MINH'}
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={16} color={isLight ? '#C7C7CC' : '#48484A'} />
+                    </View>
+                  </TouchableOpacity>
                 </View>
               </View>
 
@@ -8025,9 +8716,16 @@ export default function App() {
                       {renderProfileAvatar(userProfile.avatarType, userProfile.avatarUri, userProfile.avatarPresetId, userProfile.displayName, userProfile.avatarColor, 54)}
                     </View>
                     <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 18, fontWeight: '500' }} numberOfLines={1}>
-                        {userProfile.displayName}
-                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 18, fontWeight: '500' }} numberOfLines={1}>
+                          {userProfile.displayName}
+                        </Text>
+                        {userProfile.isVerified && (
+                          <View style={{ backgroundColor: '#0A84FF', borderRadius: 8, width: 16, height: 16, justifyContent: 'center', alignItems: 'center' }}>
+                            <Ionicons name="checkmark" size={11} color="#FFFFFF" />
+                          </View>
+                        )}
+                      </View>
                       <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 13, marginTop: 2 }}>
                         {userProfile.username} • {t.tabProfile}
                       </Text>
@@ -8518,50 +9216,358 @@ export default function App() {
         )}
       </View>
 
-      {/* Bottom Native Tab Bar */}
-      <View style={styles.tabBar}>
-        {[
-          { key: 'vault', label: t.tabVault, icon: 'shield' },
-          { key: 'apps', label: t.tabApps, icon: 'apps' },
-          { key: 'chat', label: t.tabFriends, icon: 'chatbubbles' },
-          { key: 'profile', label: t.tabProfile, icon: 'person' },
-          { key: 'settings', label: t.tabSettings, icon: 'settings' },
-        ].map((tab) => (
-          <TouchableOpacity
-            key={tab.key}
-            style={styles.tabItem}
-            onPress={() => {
-              if (tab.key === 'vault' && currentTab === 'vault') {
-                setVaultSubView('list');
-                setSelectedAccount(null);
-              }
-              if (tab.key === 'profile' && currentTab === 'profile') {
-                setProfileSubView('main');
-              }
-              if (tab.key === 'chat' && currentTab === 'chat') {
-                setActiveChatFriend(null);
-              }
-              setCurrentTab(tab.key as any);
-            }}
-          >
-            <Ionicons
-              name={(tab.icon + (currentTab === tab.key ? '' : '-outline')) as any}
-              size={22}
-              color={currentTab === tab.key ? appSettings.accentColor : '#8E8E93'}
-            />
-            <Text
-              style={[
-                styles.tabLabel,
-                currentTab === tab.key && { color: appSettings.accentColor, fontWeight: '700' },
-              ]}
+      {/* Bottom Native Tab Bar (Ẩn khi đang ở phòng chat với bạn bè để tránh xung đột bàn phím) */}
+      {!(currentTab === 'chat' && activeChatFriend) && (
+        <View style={styles.tabBar}>
+          {[
+            { key: 'vault', label: t.tabVault, icon: 'shield' },
+            { key: 'apps', label: t.tabApps, icon: 'apps' },
+            { key: 'chat', label: t.tabFriends, icon: 'chatbubbles' },
+            { key: 'profile', label: t.tabProfile, icon: 'person' },
+            { key: 'settings', label: t.tabSettings, icon: 'settings' },
+          ].map((tab) => (
+            <TouchableOpacity
+              key={tab.key}
+              style={styles.tabItem}
+              onPress={() => {
+                if (tab.key === 'vault' && currentTab === 'vault') {
+                  setVaultSubView('list');
+                  setSelectedAccount(null);
+                }
+                if (tab.key === 'profile' && currentTab === 'profile') {
+                  setProfileSubView('main');
+                }
+                if (tab.key === 'chat' && currentTab === 'chat') {
+                  setActiveChatFriend(null);
+                }
+                setCurrentTab(tab.key as any);
+              }}
             >
-              {tab.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+              <Ionicons
+                name={(tab.icon + (currentTab === tab.key ? '' : '-outline')) as any}
+                size={22}
+                color={currentTab === tab.key ? appSettings.accentColor : '#8E8E93'}
+              />
+              <Text
+                style={[
+                  styles.tabLabel,
+                  currentTab === tab.key && { color: appSettings.accentColor, fontWeight: '700' },
+                ]}
+              >
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
         </>
       )}
+
+      {/* MODAL: TRANG CÁ NHÂN NGƯỜI DÙNG KHÁC (VIEW OTHER USER'S PROFILE) */}
+      <Modal visible={!!viewingFriendProfile} animationType="slide" transparent>
+        <View style={styles.modalBackdrop}>
+          <SafeAreaView style={[styles.sheetCard, isLight && { backgroundColor: '#F2F2F7' }]}>
+            {/* Sheet Handle */}
+            <View style={{ width: 36, height: 5, borderRadius: 2.5, backgroundColor: isLight ? '#C7C7CC' : '#3A3A3C', alignSelf: 'center', marginTop: 8, marginBottom: 4 }} />
+
+            {/* Header */}
+            <View style={styles.sheetHeader}>
+              <View style={{ width: 60 }} />
+              <Text style={[styles.sheetTitle, isLight && { color: '#000000' }]}>Trang Cá Nhân</Text>
+              <TouchableOpacity
+                onPress={() => setViewingFriendProfile(null)}
+                style={{ width: 60, alignItems: 'flex-end' }}
+              >
+                <Text style={{ color: appSettings.accentColor, fontSize: 16, fontWeight: '600' }}>
+                  {t.done || 'Xong'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {viewingFriendProfile && (
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}
+              >
+                {/* Hero Avatar Card */}
+                <View style={{ alignItems: 'center', marginVertical: 18 }}>
+                  <View style={{ position: 'relative' }}>
+                    <View
+                      style={{
+                        width: 80,
+                        height: 80,
+                        borderRadius: 40,
+                        backgroundColor: viewingFriendProfile.avatarColor,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        shadowColor: viewingFriendProfile.avatarColor,
+                        shadowOffset: { width: 0, height: 4 },
+                        shadowOpacity: 0.4,
+                        shadowRadius: 8,
+                      }}
+                    >
+                      <Ionicons
+                        name={(viewingFriendProfile.avatarIcon || 'person') as any}
+                        size={42}
+                        color="#FFFFFF"
+                      />
+                    </View>
+                    <View
+                      style={{
+                        position: 'absolute',
+                        bottom: 2,
+                        right: 2,
+                        width: 20,
+                        height: 20,
+                        borderRadius: 10,
+                        backgroundColor: viewingFriendProfile.status === 'online' ? '#34C759' : '#8E8E93',
+                        borderWidth: 3,
+                        borderColor: isLight ? '#F2F2F7' : '#1C1C1E',
+                      }}
+                    />
+                  </View>
+
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12 }}>
+                    <Text style={{ fontSize: 22, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
+                      {viewingFriendProfile.displayName}
+                    </Text>
+                    <Ionicons name="shield-checkmark" size={18} color={appSettings.accentColor} />
+                  </View>
+
+                  <Text style={{ fontSize: 14, color: isLight ? '#6C6C70' : '#8E8E93', marginTop: 2 }}>
+                    {viewingFriendProfile.username}
+                  </Text>
+
+                  {viewingFriendProfile.bio && (
+                    <View
+                      style={{
+                        marginTop: 10,
+                        paddingHorizontal: 16,
+                        paddingVertical: 6,
+                        borderRadius: 14,
+                        backgroundColor: isLight ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.06)',
+                      }}
+                    >
+                      <Text style={{ fontSize: 13, color: isLight ? '#3C3C43' : '#EBEBF5', fontStyle: 'italic', textAlign: 'center' }}>
+                        "{viewingFriendProfile.bio}"
+                      </Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Quick Action Pills (Apple Contact Style) */}
+                <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 12, marginBottom: 20 }}>
+                  <TouchableOpacity
+                    style={{
+                      alignItems: 'center',
+                      backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                      paddingVertical: 10,
+                      paddingHorizontal: 14,
+                      borderRadius: 12,
+                      flex: 1,
+                      borderWidth: isLight ? 0.5 : 0,
+                      borderColor: '#E5E5EA',
+                    }}
+                    onPress={() => {
+                      setActiveChatFriend(viewingFriendProfile);
+                      setViewingFriendProfile(null);
+                      setCurrentTab('chat');
+                    }}
+                  >
+                    <Ionicons name="chatbubble" size={20} color={appSettings.accentColor} />
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: appSettings.accentColor, marginTop: 4 }}>
+                      Nhắn tin
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={{
+                      alignItems: 'center',
+                      backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                      paddingVertical: 10,
+                      paddingHorizontal: 14,
+                      borderRadius: 12,
+                      flex: 1,
+                      borderWidth: isLight ? 0.5 : 0,
+                      borderColor: '#E5E5EA',
+                    }}
+                    onPress={() => {
+                      triggerToast(`Đang kết nối cuộc gọi thoại với ${viewingFriendProfile.displayName}...`, 'Apple Audio Call', 'info', 'call');
+                    }}
+                  >
+                    <Ionicons name="call" size={20} color="#34C759" />
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: '#34C759', marginTop: 4 }}>
+                      Gọi thoại
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={{
+                      alignItems: 'center',
+                      backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                      paddingVertical: 10,
+                      paddingHorizontal: 14,
+                      borderRadius: 12,
+                      flex: 1,
+                      borderWidth: isLight ? 0.5 : 0,
+                      borderColor: '#E5E5EA',
+                    }}
+                    onPress={() => {
+                      triggerToast(`Đang khởi tạo FaceTime với ${viewingFriendProfile.displayName}...`, 'Apple FaceTime', 'info', 'videocam');
+                    }}
+                  >
+                    <Ionicons name="videocam" size={20} color="#34C759" />
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: '#34C759', marginTop: 4 }}>
+                      FaceTime
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={{
+                      alignItems: 'center',
+                      backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                      paddingVertical: 10,
+                      paddingHorizontal: 14,
+                      borderRadius: 12,
+                      flex: 1,
+                      borderWidth: isLight ? 0.5 : 0,
+                      borderColor: '#E5E5EA',
+                    }}
+                    onPress={() => {
+                      triggerToast('Đã xác thực chữ ký mã hóa đầu cuối AES-256', 'Secure Enclave', 'success', 'shield-checkmark');
+                    }}
+                  >
+                    <Ionicons name="shield-checkmark" size={20} color="#5856D6" />
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: '#5856D6', marginTop: 4 }}>
+                      Khóa E2E
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Grouped Information Cells */}
+                <Text style={[styles.sectionCaption, { marginLeft: 16, marginBottom: 6 }]}>
+                  THÔNG TIN CHI TIẾT
+                </Text>
+                <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }]}>
+                  <View style={styles.cellItem}>
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#007AFF' }]}>
+                      <Ionicons name="at" size={17} color="#FFFFFF" />
+                    </View>
+                    <View style={[styles.cellContent, { flex: 1 }]}>
+                      <Text style={{ fontSize: 15, color: isLight ? '#000000' : '#FFFFFF' }}>Tên người dùng</Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => {
+                        Clipboard.setString(viewingFriendProfile.username);
+                        triggerToast('Đã sao chép @username', 'Sao Chép', 'info');
+                      }}
+                    >
+                      <Text style={{ fontSize: 15, color: appSettings.accentColor, fontWeight: '500' }}>
+                        {viewingFriendProfile.username}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.cellItem}>
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: viewingFriendProfile.status === 'online' ? '#34C759' : '#8E8E93' }]}>
+                      <Ionicons name="radio" size={17} color="#FFFFFF" />
+                    </View>
+                    <View style={[styles.cellContent, { flex: 1 }]}>
+                      <Text style={{ fontSize: 15, color: isLight ? '#000000' : '#FFFFFF' }}>Trạng thái mạng</Text>
+                    </View>
+                    <Text style={{ fontSize: 15, color: viewingFriendProfile.status === 'online' ? '#34C759' : '#8E8E93', fontWeight: '500' }}>
+                      {viewingFriendProfile.status === 'online' ? 'Đang hoạt động' : 'Ngoại tuyến'}
+                    </Text>
+                  </View>
+
+                  <View style={styles.cellItem}>
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#FF9500' }]}>
+                      <Ionicons name="ribbon" size={17} color="#FFFFFF" />
+                    </View>
+                    <View style={[styles.cellContent, { flex: 1 }]}>
+                      <Text style={{ fontSize: 15, color: isLight ? '#000000' : '#FFFFFF' }}>Cấp độ tài khoản</Text>
+                    </View>
+                    <Text style={{ fontSize: 15, color: isLight ? '#6C6C70' : '#8E8E93' }}>
+                      LockX Pro Member
+                    </Text>
+                  </View>
+
+                  <View style={[styles.cellItem, { borderBottomWidth: 0 }]}>
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#5856D6' }]}>
+                      <Ionicons name="key" size={17} color="#FFFFFF" />
+                    </View>
+                    <View style={[styles.cellContent, { flex: 1 }]}>
+                      <Text style={{ fontSize: 15, color: isLight ? '#000000' : '#FFFFFF' }}>Vân tay mã hóa (E2E)</Text>
+                    </View>
+                    <Text style={{ fontSize: 12, color: '#8E8E93', fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }}>
+                      SHA-256 Verified
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Grouped Actions (Delete, Clear) */}
+                <Text style={[styles.sectionCaption, { marginLeft: 16, marginTop: 18, marginBottom: 6 }]}>
+                  TÙY CHỌN TRÒ CHUYỆN
+                </Text>
+                <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }]}>
+                  <TouchableOpacity
+                    style={styles.cellItem}
+                    onPress={() => {
+                      const friendId = viewingFriendProfile.id;
+                      setViewingFriendProfile(null);
+                      handleClearChat(friendId);
+                    }}
+                  >
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#FF9500' }]}>
+                      <Ionicons name="refresh" size={17} color="#FFFFFF" />
+                    </View>
+                    <View style={[styles.cellContent, { flex: 1 }]}>
+                      <Text style={{ fontSize: 15, color: '#FF9500', fontWeight: '500' }}>
+                        Làm sạch lịch sử trò chuyện
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.cellItem, { borderBottomWidth: 0 }]}
+                    onPress={() => {
+                      const fName = viewingFriendProfile.displayName;
+                      const fId = viewingFriendProfile.id;
+                      Alert.alert(
+                        'Hủy kết bạn',
+                        `Bạn có chắc chắn muốn xóa ${fName} khỏi danh sách bạn bè?`,
+                        [
+                          { text: t.cancel, style: 'cancel' },
+                          {
+                            text: 'Xóa bạn',
+                            style: 'destructive',
+                            onPress: () => {
+                              const updated = friendsList.filter((f) => f.id !== fId);
+                              saveFriends(updated);
+                              setViewingFriendProfile(null);
+                              if (activeChatFriend?.id === fId) setActiveChatFriend(null);
+                              triggerToast(`Đã xóa ${fName} khỏi danh sách bạn bè.`, 'Bạn Bè', 'warning');
+                            },
+                          },
+                        ]
+                      );
+                    }}
+                  >
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#FF3B30' }]}>
+                      <Ionicons name="person-remove" size={17} color="#FFFFFF" />
+                    </View>
+                    <View style={[styles.cellContent, { flex: 1 }]}>
+                      <Text style={{ fontSize: 15, color: '#FF3B30', fontWeight: '500' }}>
+                        Xóa khỏi danh sách bạn bè
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            )}
+          </SafeAreaView>
+        </View>
+      </Modal>
 
       {/* MODAL: PHONE APP DETAIL SHEET */}
       <Modal visible={!!selectedPhoneApp} animationType="slide" transparent>

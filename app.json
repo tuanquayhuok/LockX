@@ -11,6 +11,9 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.lockx.app",
+      "entitlements": {
+        "com.apple.developer.family-controls": true
+      },
       "infoPlist": {
         "LSApplicationQueriesSchemes": [
           "zalo",
@@ -45,7 +48,8 @@
           "chatgpt",
           "canva"
         ],
-        "NSFaceIDUsageDescription": "LockX sử dụng Face ID để xác thực và bảo vệ an toàn cho tài khoản và két sắt của bạn."
+        "NSFaceIDUsageDescription": "LockX sử dụng Face ID để xác thực và bảo vệ an toàn cho tài khoản và két sắt của bạn.",
+        "NSFamilyControlsUsageDescription": "LockX cần quyền Thời Gian Sử Dụng & Quản Lý Ứng Dụng để bảo vệ và đặt giới hạn cho các ứng dụng trên iPhone của bạn."
       }
     },
     "android": {
