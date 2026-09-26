@@ -1,0 +1,32 @@
+# ==============================================================================
+# LockX Vault PHP Backend - .htaccess Cấu Hình Máy Chủ Apache / Litespeed
+# ==============================================================================
+
+# Bật Rewrite Engine
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+
+    # Bảo vệ các file nhạy cảm không cho tải trực tiếp từ trình duyệt
+    RewriteRule ^(config|sql|\.git|\.env|composer\.(json|lock)) - [F,L,NC]
+    <FilesMatch "\.(sql|log|ini|env|sh|bak)$">
+        Order allow,deny
+        Deny from all
+    </FilesMatch>
+</IfModule>
+
+# Cấu hình CORS và Tiêu chuẩn Header bảo mật
+<IfModule mod_headers.c>
+    Header set Access-Control-Allow-Origin "*"
+    Header set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header set Access-Control-Allow-Headers "Content-Type, Authorization, X-API-KEY, X-Requested-With"
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set X-XSS-Protection "1; mode=block"
+</IfModule>
+
+# Mặc định bộ mã UTF-8
+AddDefaultCharset UTF-8
+
+# Trang chỉ mục mặc định
+DirectoryIndex index.php index.html

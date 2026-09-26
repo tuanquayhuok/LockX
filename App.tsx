@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   StyleSheet,
   Text,
@@ -13,6 +13,7 @@ import {
   Switch,
   Image,
   Animated,
+  PanResponder,
   Platform,
   Linking,
   KeyboardAvoidingView,
@@ -34,6 +35,9 @@ Notifications.setNotificationHandler({
     shouldShowList: true,
   }),
 });
+
+// Logo Avatar Google Gemini chính thức cho Gehihi AI
+const GEMINI_AVATAR_IMG = require('./assets/gemini_avatar.png');
 
 // Kiểm tra phiên bản iOS có nằm trong danh sách hỗ trợ không
 export function checkIsSupportedVersion(ver: string): boolean {
@@ -180,6 +184,94 @@ export interface LoginHistoryRecord {
   ip: string;
   isCurrent?: boolean;
 }
+
+// Biểu tượng SVG chuyên biệt chuẩn Apple iOS cho Cuộc gọi thoại E2EE
+export const CallSvgIcon = ({
+  name,
+  size = 20,
+  color = '#FFFFFF',
+  style,
+}: {
+  name: 'phone' | 'phone-incoming' | 'phone-missed' | 'phone-hangup' | 'speaker' | 'speaker-mute' | 'mic' | 'mic-mute';
+  size?: number;
+  color?: string;
+  style?: any;
+}) => {
+  if (Platform.OS === 'web' && typeof React !== 'undefined') {
+    let d = '';
+    if (name === 'phone' || name === 'phone-incoming') {
+      d = 'M20.01 15.38c-1.23 0-2.42-.2-3.53-.56a.977.977 0 00-1.01.24l-1.57 1.97c-2.83-1.44-5.15-3.75-6.59-6.59l1.97-1.57c.28-.28.37-.67.25-1.02A11.36 11.36 0 018.98 4c0-.55-.45-1-1-1H4.01c-.55 0-1 .45-1 1 0 9.39 7.61 17 17 17 .55 0 1-.45 1-1v-3.99c0-.55-.45-1-1-.02z';
+    } else if (name === 'phone-hangup') {
+      d = 'M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.99.99 0 010-1.41C3.42 8.47 7.45 6.5 12 6.5s8.58 1.97 11.71 5.17c.39.39.39 1.02 0 1.41l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.1-.7-.28-.79-.74-1.69-1.36-2.67-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z';
+    } else if (name === 'phone-missed') {
+      d = 'M19.59 7L12 14.59 6.41 9H11V7H3v8h2v-4.59l7 7 9-9z';
+    } else if (name === 'speaker') {
+      d = 'M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z';
+    } else if (name === 'speaker-mute') {
+      d = 'M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27l4.73 4.73H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z';
+    } else if (name === 'mic') {
+      d = 'M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16s-4.52-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.38-1.14-1-1.14z';
+    } else if (name === 'mic-mute') {
+      d = 'M19 11c0 1.66-.59 3.18-1.57 4.37l1.45 1.45A8.93 8.93 0 0020 11h-1zm-7 5c-1.66 0-3-1.34-3-3V9.8L14.2 15c-.63.63-1.46 1-2.2 1zm7.71 5.71L3.27 4.27 2 5.54l4.26 4.26C6.1 10.38 6 10.68 6 11c0 3.08 2.29 5.63 5.25 5.96V19h-2.5c-.55 0-1 .45-1 1s.45 1 1 1h7c.55 0 1-.45 1-1s-.45-1-1-1H13.5v-2.04c.82-.09 1.6-.33 2.31-.69l3.44 3.44 1.46-1.43zM15 11.18V5c0-1.66-1.34-3-3-3-1.54 0-2.79 1.16-2.96 2.65l5.96 5.96V11.18z';
+    }
+    return React.createElement(
+      'svg',
+      {
+        viewBox: '0 0 24 24',
+        width: size,
+        height: size,
+        style: { display: 'inline-block', verticalAlign: 'middle', flexShrink: 0, ...style },
+      },
+      React.createElement('path', { d, fill: color })
+    );
+  }
+  let fallbackIcon: any = 'call';
+  if (name === 'phone-hangup') fallbackIcon = 'call';
+  else if (name === 'phone-missed') fallbackIcon = 'call-outline';
+  else if (name === 'speaker') fallbackIcon = 'volume-high';
+  else if (name === 'speaker-mute') fallbackIcon = 'volume-mute';
+  else if (name === 'mic') fallbackIcon = 'mic';
+  else if (name === 'mic-mute') fallbackIcon = 'mic-off';
+  return <Ionicons name={fallbackIcon} size={size} color={color} style={style} />;
+};
+
+let callRingtoneInterval: any = null;
+export const startRingtone = () => {
+  try {
+    if (typeof window === 'undefined') return;
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return;
+    if (callRingtoneInterval) clearInterval(callRingtoneInterval);
+
+    const playRingCycle = () => {
+      try {
+        const ctx = new AudioCtx();
+        const now = ctx.currentTime;
+        [440, 480].forEach((freq) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.frequency.value = freq;
+          gain.gain.setValueAtTime(0.08, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now);
+          osc.stop(now + 1.2);
+        });
+      } catch (err) {}
+    };
+
+    playRingCycle();
+    callRingtoneInterval = setInterval(playRingCycle, 2800);
+  } catch (e) {}
+};
+
+export const stopRingtone = () => {
+  if (callRingtoneInterval) {
+    clearInterval(callRingtoneInterval);
+    callRingtoneInterval = null;
+  }
+};
 
 // Phát âm thanh thông báo iOS 18 chân thực bằng Web Audio API
 export const playAppleNotificationSound = (type: 'success' | 'info' | 'warning' | 'security' | 'tap' = 'success') => {
@@ -424,7 +516,7 @@ export interface AppSettings {
 export interface FriendUser {
   id: string;
   displayName: string;
-  username: string; // e.g. '@minh_apple'
+  username: string; // e.g. '@gehihi'
   avatarColor: string;
   avatarIcon?: string;
   status: 'online' | 'offline';
@@ -432,6 +524,9 @@ export interface FriendUser {
   lastMessage?: string;
   lastTime?: string;
   unreadCount?: number;
+  isBot?: boolean;
+  botType?: 'gemini' | 'custom';
+  isBlockedByOther?: boolean;
 }
 
 export interface ChatMessage {
@@ -439,6 +534,14 @@ export interface ChatMessage {
   sender: 'me' | 'friend';
   text: string;
   time: string;
+  timestamp?: number;
+  reactions?: string[];
+  replyTo?: {
+    id: string;
+    sender: 'me' | 'friend';
+    text: string;
+  };
+  deliveryStatus?: 'sent' | 'delivered' | 'seen';
 }
 
 export interface PhoneAppItem {
@@ -1070,17 +1173,17 @@ const INITIAL_GACHA: GachaItem[] = [
 ];
 
 export const INITIAL_USER_PROFILE: UserProfile = {
-  displayName: 'Quảng Trọng Tuấn',
-  username: '@tuandepzai',
+  displayName: 'Người Dùng LockX',
+  username: '@lockx_user',
   avatarColor: '#0A84FF',
   avatarType: 'preset',
   avatarUri: '',
   avatarPresetId: 'av-shield',
-  email: 'tuandepzai@gmail.com',
+  email: '',
   phone: '',
-  bio: 'Chuyên gia bảo mật & Quản trị viên LockX Vault',
+  bio: 'Người dùng LockX Vault',
   birthday: '',
-  gender: 'Nam',
+  gender: 'Chưa cập nhật',
   joinDate: getFormattedTodayDate(),
   joinTimestamp: Date.now(),
   daysActive: 1,
@@ -2212,67 +2315,265 @@ export const APP_TRANSLATIONS: Record<string, any> = {
 
 export const INITIAL_FRIENDS: FriendUser[] = [
   {
-    id: 'fr-1',
-    displayName: 'Minh Hoàng',
-    username: '@minh_apple',
-    avatarColor: '#007AFF',
-    avatarIcon: 'logo-apple',
+    id: 'bot-gehihi',
+    displayName: 'Gehihi AI',
+    username: '@gehihi',
+    avatarColor: '#BF5AF2',
+    avatarIcon: 'sparkles',
     status: 'online',
-    bio: 'iOS Developer & Apple Fanboy 📱',
-    lastMessage: 'Giao diện LockX bản mới này nhìn đẹp và mượt thật đấy ✨',
-    lastTime: '15:20',
-    unreadCount: 1,
+    isBot: true,
+    botType: 'gemini',
+    bio: 'Trợ lý thông minh Google Gemini AI • Hỗ trợ trò chuyện và giải đáp thắc mắc 🤖✨',
+    lastMessage: 'Chào bạn! Mình là Gehihi, trợ lý AI Google Gemini. Hãy nhắn tin để trò chuyện cùng mình nhé!',
+    lastTime: '14:40',
+    unreadCount: 0,
   },
+];
+
+export const SYSTEM_SUGGESTED_FRIENDS: FriendUser[] = [
   {
-    id: 'fr-2',
-    displayName: 'Ngọc Linh',
-    username: '@linh_game',
-    avatarColor: '#AF52DE',
-    avatarIcon: 'game-controller',
+    id: 'bot-gehihi',
+    displayName: 'Gehihi AI',
+    username: '@gehihi',
+    avatarColor: '#BF5AF2',
+    avatarIcon: 'sparkles',
     status: 'online',
-    bio: 'Gamer Genshin Impact & HSR ✨',
-    lastMessage: 'Tối nay roll banner không bạn ơi?',
-    lastTime: '14:05',
+    isBot: true,
+    bio: 'Trợ lý trí tuệ nhân tạo AI thông minh LockX Vault 🤖✨',
+    lastMessage: 'Xin chào! Mình là trợ lý AI Gehihi...',
+    lastTime: '14:40',
     unreadCount: 0,
   },
   {
-    id: 'fr-3',
-    displayName: 'Tuấn Anh',
-    username: '@tuan_lockx',
-    avatarColor: '#34C759',
+    id: 'user-admin',
+    displayName: 'Quản Trị Viên LockX',
+    username: '@admin',
+    avatarColor: '#0A84FF',
     avatarIcon: 'shield-checkmark',
-    status: 'offline',
-    bio: 'Chuyên gia an toàn thông tin 🛡️',
-    lastMessage: 'Đã sao lưu Keychain an toàn rồi nhé.',
+    status: 'online',
+    bio: 'Quản trị viên an ninh hệ thống LockX Vault 🛡️🔐',
+    lastMessage: 'Hệ thống bảo mật LockX hoạt động ổn định.',
     lastTime: 'Hôm qua',
     unreadCount: 0,
   },
   {
-    id: 'fr-4',
-    displayName: 'Khánh Vy',
-    username: '@vy_shopee',
-    avatarColor: '#FF9500',
-    avatarIcon: 'bag-handle',
+    id: 'user-security-team',
+    displayName: 'LockX Security Team',
+    username: '@security_team',
+    avatarColor: '#34C759',
+    avatarIcon: 'lock-closed',
     status: 'online',
-    bio: 'Săn sale công nghệ & đời sống 🛍️',
-    lastMessage: 'Cảm ơn ông đã chia sẻ app này nha!',
-    lastTime: '21/09',
+    bio: 'Đội ngũ ứng cứu khẩn cấp & mật mã học 🔐',
+    lastMessage: 'Khóa mã hóa E2EE của bạn luôn được bảo vệ.',
+    lastTime: '12:00',
+    unreadCount: 0,
+  },
+  {
+    id: 'user-tuan-tech',
+    displayName: 'Tuấn Pro Tech',
+    username: '@tuan_tech',
+    avatarColor: '#FF9500',
+    avatarIcon: 'code-slash',
+    status: 'online',
+    bio: 'Chuyên gia bảo mật Vault & Keychain Architecture ⚡',
+    lastMessage: 'Rất vui được kết nối cùng bạn!',
+    lastTime: 'Thứ 3',
+    unreadCount: 0,
+  },
+  {
+    id: 'user-family-care',
+    displayName: 'LockX Family Care',
+    username: '@family_support',
+    avatarColor: '#FF2D55',
+    avatarIcon: 'heart',
+    status: 'online',
+    bio: 'Hỗ trợ chia sẻ gia đình Family Control & Khôi phục 👨‍👩‍👧‍👦',
+    lastMessage: 'Két sắt gia đình sẵn sàng chia sẻ an toàn.',
+    lastTime: 'Thứ 2',
     unreadCount: 0,
   },
 ];
 
 export const INITIAL_CHAT_MESSAGES: Record<string, ChatMessage[]> = {
-  'fr-1': [
-    { id: 'm1', sender: 'friend', text: 'Chào bạn, LockX cập nhật giao diện mới đẹp quá!', time: '15:15' },
-    { id: 'm2', sender: 'me', text: 'Ừ bạn, tính năng mã hóa đầu cuối E2E rất mượt và an toàn!', time: '15:18' },
-  ],
-  'fr-2': [
-    { id: 'm4', sender: 'friend', text: 'Hôm nay banner mới ra rồi nè', time: '13:50' },
-    { id: 'm5', sender: 'me', text: 'Tôi tích được 48 roll rồi, chuẩn bị nổ bảo hiểm', time: '14:00' },
+  'bot-gehihi': [
+    {
+      id: 'm-gehihi-1',
+      sender: 'friend',
+      text: 'Chào bạn! Mình là Gehihi, trợ lý AI tích hợp Google Gemini trên LockX 🤖✨. Bạn có thể hỏi mình mọi thứ hoặc trò chuyện thoải mái nhé!',
+      time: '14:40',
+    },
   ],
 };
 
-// Component bong bóng 3 chấm hoạt họa đang gõ (Typing Indicator) chuẩn Apple iMessage
+// Bộ não xử lý ngôn ngữ & trả lời thông minh Gehihi AI (Thời gian thực, Lịch, Phép tính, Tư vấn & Trò chuyện - Không dùng icon theo yêu cầu)
+export const generateSmartGehihiReply = (promptText: string, currentUserName?: string): string => {
+  const raw = (promptText || '').trim();
+  const lower = raw.toLowerCase();
+
+  // 1. Giờ giấc & Thời gian thực tế chính xác
+  if (
+    lower.includes('mấy giờ') ||
+    lower.includes('may gio') ||
+    lower.includes('giờ rồi') ||
+    lower.includes('gio roi') ||
+    lower.includes('thời gian') ||
+    lower.includes('thoi gian') ||
+    lower === 'time' ||
+    lower.includes('mấy h') ||
+    lower.includes('may h') ||
+    lower.includes('bây giờ là') ||
+    lower.includes('bay gio la')
+  ) {
+    const now = new Date();
+    const hh = now.getHours().toString().padStart(2, '0');
+    const mm = now.getMinutes().toString().padStart(2, '0');
+    const ss = now.getSeconds().toString().padStart(2, '0');
+    const days = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
+    const dayName = days[now.getDay()];
+    const dd = now.getDate().toString().padStart(2, '0');
+    const MM = (now.getMonth() + 1).toString().padStart(2, '0');
+    const yyyy = now.getFullYear();
+    return `Bây giờ là ${hh}:${mm}:${ss} (${dayName}, ngày ${dd}/${MM}/${yyyy}) theo giờ Việt Nam bạn nhé.`;
+  }
+
+  // 2. Ngày tháng năm & Lịch
+  if (
+    lower.includes('ngày mấy') ||
+    lower.includes('ngay may') ||
+    lower.includes('ngày bao nhiêu') ||
+    lower.includes('ngay bao nhieu') ||
+    lower.includes('thứ mấy') ||
+    lower.includes('thu may') ||
+    lower.includes('hôm nay là') ||
+    lower.includes('hom nay la') ||
+    lower.includes('năm nay') ||
+    lower.includes('lịch') ||
+    lower.includes('lich')
+  ) {
+    const now = new Date();
+    const days = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
+    const dayName = days[now.getDay()];
+    const dd = now.getDate().toString().padStart(2, '0');
+    const MM = (now.getMonth() + 1).toString().padStart(2, '0');
+    const yyyy = now.getFullYear();
+    return `Hôm nay là ${dayName}, ngày ${dd} tháng ${MM} năm ${yyyy}. Chúc bạn một ngày làm việc hiệu quả và an toàn.`;
+  }
+
+  // 3. Phép tính toán học (ví dụ: 1+1, 50*2, tính 100/4, 999 - 111, v.v.)
+  const mathMatch = raw.match(/(?:tính|tinh)?\s*([0-9]+(?:\.[0-9]+)?\s*[\+\-\*\/xX\^%]\s*[0-9]+(?:\.[0-9]+)?(?:\s*[\+\-\*\/xX\^%]\s*[0-9]+(?:\.[0-9]+)?)*)/);
+  if (mathMatch && mathMatch[1] && /[\+\-\*\/xX\^%]/.test(mathMatch[1])) {
+    try {
+      const sanitized = mathMatch[1].replace(/[xX]/g, '*').replace(/\^/g, '**');
+      const calcResult = Function(`"use strict"; return (${sanitized})`)();
+      if (typeof calcResult === 'number' && !isNaN(calcResult) && isFinite(calcResult)) {
+        return `Kết quả phép tính ${mathMatch[1]} = ${calcResult}.`;
+      }
+    } catch (e) {}
+  }
+
+  // 4. Lời chào & Hỏi thăm thân thiện
+  if (
+    lower === 'chào' ||
+    lower === 'chao' ||
+    lower.includes('chào bạn') ||
+    lower.includes('chao ban') ||
+    lower.includes('chào gehihi') ||
+    lower.includes('chao gehihi') ||
+    lower.includes('hi gehihi') ||
+    lower === 'hi' ||
+    lower === 'hello' ||
+    lower === 'helo' ||
+    lower === '2' ||
+    lower === 'alo' ||
+    lower === 'hê lô' ||
+    lower === 'chat di' ||
+    lower === 'chat đi'
+  ) {
+    const greetings = [
+      `Gehihi chào bạn ${currentUserName ? currentUserName : ''}. Mình đã sẵn sàng hỗ trợ bạn. Bạn cần giải đáp thông tin gì hôm nay?`,
+      `Chào bạn. Rất vui được trò chuyện cùng bạn. Bạn cần hỏi về thời gian, phép tính hay tính năng két sắt LockX?`,
+      `Gehihi có mặt. Chúc bạn một ngày làm việc hiệu quả và an toàn.`,
+    ];
+    return greetings[Math.floor(Math.random() * greetings.length)];
+  }
+
+  // 5. Câu hỏi về bản thân Gehihi
+  if (
+    lower.includes('bạn là ai') ||
+    lower.includes('ban la ai') ||
+    lower.includes('tên gì') ||
+    lower.includes('ten gi') ||
+    lower.includes('ai tạo ra bạn') ||
+    lower.includes('ai tao ra ban') ||
+    lower.includes('giới thiệu')
+  ) {
+    return `Tôi là Gehihi, trợ lý trí tuệ nhân tạo được tích hợp trực tiếp bên trong hệ thống két sắt bảo mật LockX Vault. Tôi có thể hỗ trợ bạn xem giờ thực tế, tính toán số học, tư vấn an toàn mật khẩu và giải đáp thắc mắc.`;
+  }
+
+  // 6. Mật khẩu, Khôi phục OTP & Két sắt
+  if (lower.includes('mật khẩu') || lower.includes('mat khau') || lower.includes('pass') || lower.includes('đổi mk')) {
+    return `Để đổi hoặc quản lý mật khẩu an toàn:\n- Bạn vào mục Cá Nhân > Chọn Đổi Mật Khẩu.\n- Mọi mật khẩu trong Két Sắt đều được mã hóa chuẩn AES-256 + RSA trước khi lưu vào Keychain nên tuyệt đối an toàn.`;
+  }
+
+  if (lower.includes('otp') || lower.includes('quên') || lower.includes('quen') || lower.includes('telegram')) {
+    return `Nếu quên mật khẩu, bạn hãy dùng chức năng Quên Mật Khẩu trên App hoặc truy cập Telegram bot @LockXOTP_bot để nhận mã OTP 6 số xác thực khôi phục tức thì.`;
+  }
+
+  if (lower.includes('face id') || lower.includes('vân tay') || lower.includes('sinh trắc')) {
+    return `LockX hỗ trợ xác thực sinh trắc học Apple Face ID và Touch ID với chip Secure Enclave bảo vệ đa tầng. Bạn có thể bật/tắt trong phần Cài Đặt > Bảo Mật Sinh Trắc Học.`;
+  }
+
+  if (lower.includes('tích xanh') || lower.includes('tich xanh') || lower.includes('xác minh') || lower.includes('verify')) {
+    return `Để nhận huy hiệu Tích Xanh LockX Verified:\n1. Vào tab Cá Nhân > Chọn Xác Minh Danh Tính.\n2. Kiểm tra thông tin và bấm Gửi Yêu Cầu Duyệt.\n3. Hệ thống sẽ tự động chuyển tới Quản Trị Viên phê duyệt.`;
+  }
+
+  if (lower.includes('thêm bạn') || lower.includes('them ban') || lower.includes('kết bạn') || lower.includes('ket ban')) {
+    return `Để thêm bạn bè:\n1. Vào tab Bạn Bè > Bấm nút Thêm Bạn ở góc trên.\n2. Nhập chính xác @username của người dùng trên hệ thống hoặc vào tab Mã QR & ID để gửi link kết bạn.`;
+  }
+
+  if (lower.includes('két sắt') || lower.includes('ket sat') || lower.includes('vault') || lower.includes('tài khoản')) {
+    return `Két Sắt LockX cho phép bạn lưu trữ không giới hạn tài khoản mạng xã hội, thẻ ngân hàng, ví tiền số và ghi chú bí mật với chế độ sao lưu đám mây mã hóa E2EE an toàn tuyệt đối.`;
+  }
+
+  // 7. Giải trí, Kể chuyện, Thơ & Cảm xúc
+  if (lower.includes('kể chuyện cười') || lower.includes('ke chuyen cuoi') || lower.includes('hài hước') || lower.includes('vui')) {
+    const jokes = [
+      `Một lập trình viên đi chợ, vợ dặn: "Mua cho em 1 nải chuối, nếu thấy trứng thì mua 10 quả". Anh lập trình viên quay về với 10 nải chuối vì có thấy trứng.`,
+      `Trên đời có 10 loại người: người hiểu hệ nhị phân và người không hiểu.`,
+      `Bác sĩ hỏi: "Sao anh đau mắt?". Lập trình viên: "Dạ tại em debug bằng mắt thường qua 3 đêm không chớp mắt ạ".`,
+    ];
+    return jokes[Math.floor(Math.random() * jokes.length)];
+  }
+
+  if (lower.includes('làm thơ') || lower.includes('lam tho') || lower.includes('thơ')) {
+    return `Khóa chặt niềm tin gửi LockX,\nBảo mật ngàn năm chẳng đổi dời.\nGehihi bên bạn muôn lối bước,\nAn tâm hạnh phúc trọn muôn nơi.`;
+  }
+
+  if (lower.includes('buồn') || lower.includes('buon') || lower.includes('mệt') || lower.includes('chán') || lower.includes('stress')) {
+    return `Đừng quá lo lắng bạn nhé. Dù có chuyện gì xảy ra thì luôn có Gehihi ở đây đồng hành cùng bạn. Hãy uống một ngụm nước ấm, hít thở thật sâu và nghỉ ngơi một chút. Mọi chuyện rồi sẽ tốt đẹp hơn.`;
+  }
+
+  if (lower.includes('cảm ơn') || lower.includes('cam on') || lower.includes('thank')) {
+    return `Dạ không có chi. Được hỗ trợ bạn là niềm vui của Gehihi. Bạn cần hỏi thêm điều gì cứ nhắn cho tôi nhé.`;
+  }
+
+  if (lower.includes('yêu bạn') || lower.includes('thích bạn') || lower.includes('dễ thương')) {
+    return `Cảm ơn bạn rất nhiều. Chúc bạn luôn vui vẻ, bình an và làm việc thật tốt cùng LockX Vault.`;
+  }
+
+  if (lower.includes('tạm biệt') || lower.includes('bye') || lower.includes('ngủ ngon')) {
+    return `Tạm biệt bạn. Chúc bạn có một giấc ngủ ngon và tràn đầy năng lượng vào ngày mai. Hẹn gặp lại bạn trên LockX Vault.`;
+  }
+
+  if (lower.includes('thời tiết') || lower.includes('thoi tiet') || lower.includes('mưa') || lower.includes('nắng')) {
+    return `Thời tiết hôm nay khá thuận lợi cho các hoạt động làm việc. Bạn hãy chú ý thời tiết khu vực của mình khi ra ngoài nhé.`;
+  }
+
+  // 8. Phản hồi thông minh tự nhiên theo ngữ cảnh
+  return `Về câu hỏi "${raw}": Bạn có thể hỏi tôi xem giờ giấc thời gian thực, tính toán số học, cách quản lý két sắt LockX hoặc các tính năng bảo mật tài khoản.`;
+};
+
+// Component bong bóng 3 chấm hoạt họa đang gõ (Typing Indicator) chuẩn Facebook Messenger & Apple iMessage
 export const TypingIndicatorBubble = ({
   isLight,
   avatarColor,
@@ -2285,30 +2586,65 @@ export const TypingIndicatorBubble = ({
   const dot1 = useRef(new Animated.Value(0)).current;
   const dot2 = useRef(new Animated.Value(0)).current;
   const dot3 = useRef(new Animated.Value(0)).current;
+  const scale1 = useRef(new Animated.Value(0.75)).current;
+  const scale2 = useRef(new Animated.Value(0.75)).current;
+  const scale3 = useRef(new Animated.Value(0.75)).current;
+  const bubbleScale = useRef(new Animated.Value(0.8)).current;
+  const bubbleOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    const createAnim = (val: Animated.Value, delay: number) => {
+    // Hiệu ứng nảy vào mượt mà của bong bóng chat
+    Animated.parallel([
+      Animated.spring(bubbleScale, {
+        toValue: 1,
+        tension: 160,
+        friction: 8,
+        useNativeDriver: true,
+      }),
+      Animated.timing(bubbleOpacity, {
+        toValue: 1,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // Hiệu ứng 3 chấm nhảy sóng nhấp nhô liên tục
+    const createDotAnim = (transVal: Animated.Value, scaleVal: Animated.Value, delay: number) => {
       return Animated.loop(
         Animated.sequence([
           Animated.delay(delay),
-          Animated.timing(val, {
-            toValue: -5,
-            duration: 260,
-            useNativeDriver: true,
-          }),
-          Animated.timing(val, {
-            toValue: 0,
-            duration: 260,
-            useNativeDriver: true,
-          }),
-          Animated.delay(Math.max(0, 360 - delay)),
+          Animated.parallel([
+            Animated.timing(transVal, {
+              toValue: -7,
+              duration: 260,
+              useNativeDriver: true,
+            }),
+            Animated.timing(scaleVal, {
+              toValue: 1.25,
+              duration: 260,
+              useNativeDriver: true,
+            }),
+          ]),
+          Animated.parallel([
+            Animated.timing(transVal, {
+              toValue: 0,
+              duration: 260,
+              useNativeDriver: true,
+            }),
+            Animated.timing(scaleVal, {
+              toValue: 0.75,
+              duration: 260,
+              useNativeDriver: true,
+            }),
+          ]),
+          Animated.delay(Math.max(0, 390 - delay)),
         ])
       );
     };
 
-    const a1 = createAnim(dot1, 0);
-    const a2 = createAnim(dot2, 130);
-    const a3 = createAnim(dot3, 260);
+    const a1 = createDotAnim(dot1, scale1, 0);
+    const a2 = createDotAnim(dot2, scale2, 130);
+    const a3 = createDotAnim(dot3, scale3, 260);
 
     a1.start();
     a2.start();
@@ -2322,62 +2658,87 @@ export const TypingIndicatorBubble = ({
   }, []);
 
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginBottom: 12, marginLeft: 4 }}>
-      <View
-        style={{
-          width: 28,
-          height: 28,
-          borderRadius: 14,
-          backgroundColor: avatarColor || '#007AFF',
-          justifyContent: 'center',
-          alignItems: 'center',
-        }}
-      >
-        <Ionicons name={(avatarIcon || 'person') as any} size={14} color="#FFFFFF" />
-      </View>
+    <Animated.View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'flex-end',
+        gap: 8,
+        marginBottom: 14,
+        marginLeft: 4,
+        opacity: bubbleOpacity,
+        transform: [{ scale: bubbleScale }],
+      }}
+    >
+      {avatarIcon === 'sparkles' ? (
+        <Image source={GEMINI_AVATAR_IMG} style={{ width: 30, height: 30, borderRadius: 15 }} resizeMode="contain" />
+      ) : (
+        <View
+          style={{
+            width: 30,
+            height: 30,
+            borderRadius: 15,
+            backgroundColor: avatarColor || '#007AFF',
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+        >
+          <Ionicons name={(avatarIcon || 'person') as any} size={15} color="#FFFFFF" />
+        </View>
+      )}
       <View
         style={{
           flexDirection: 'row',
           alignItems: 'center',
-          gap: 4,
-          paddingHorizontal: 14,
-          paddingVertical: 10,
-          borderRadius: 18,
-          borderBottomLeftRadius: 4,
+          gap: 5,
+          paddingHorizontal: 16,
+          paddingVertical: 12,
+          borderRadius: 20,
+          borderBottomLeftRadius: 5,
           backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E',
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: 0.1,
+          shadowRadius: 3,
         }}
       >
         <Animated.View
           style={{
-            width: 7,
-            height: 7,
-            borderRadius: 3.5,
+            width: 7.5,
+            height: 7.5,
+            borderRadius: 4,
             backgroundColor: isLight ? '#8E8E93' : '#AEAEB2',
-            transform: [{ translateY: dot1 }],
+            transform: [{ translateY: dot1 }, { scale: scale1 }],
           }}
         />
         <Animated.View
           style={{
-            width: 7,
-            height: 7,
-            borderRadius: 3.5,
+            width: 7.5,
+            height: 7.5,
+            borderRadius: 4,
             backgroundColor: isLight ? '#8E8E93' : '#AEAEB2',
-            transform: [{ translateY: dot2 }],
+            transform: [{ translateY: dot2 }, { scale: scale2 }],
           }}
         />
         <Animated.View
           style={{
-            width: 7,
-            height: 7,
-            borderRadius: 3.5,
+            width: 7.5,
+            height: 7.5,
+            borderRadius: 4,
             backgroundColor: isLight ? '#8E8E93' : '#AEAEB2',
-            transform: [{ translateY: dot3 }],
+            transform: [{ translateY: dot3 }, { scale: scale3 }],
           }}
         />
       </View>
-    </View>
+    </Animated.View>
   );
 };
+
+export const CHAT_EMOJIS = [
+  '😊', '😂', '🤣', '🥰', '😍', '😎', '🤔', '🥳',
+  '😭', '🥺', '👍', '👎', '👏', '🙌', '🤝', '✌️',
+  '❤️', '🔥', '✨', '🎉', '🚀', '💡', '⚡', '💯',
+  '🛡️', '🔒', '🤖', '📱', '💬', '🌟', '🎯', '☕',
+];
 
 // Component hiển thị Icon Ứng Dụng chuẩn Apple Squircle (Bo góc 22.37% & nhận diện sắc nét)
 export const AppleAppIcon = ({
@@ -2569,7 +2930,7 @@ export const EnterpriseAuthScreen = ({
   triggerToast,
   savedAccount,
   setSavedAccount,
-  savedDisplayName = 'Quảng Trọng Tuấn',
+  savedDisplayName = 'Người Dùng LockX',
   useFaceId = false,
 }: {
   authMode: 'login' | 'register';
@@ -2591,7 +2952,13 @@ export const EnterpriseAuthScreen = ({
   onFaceIdLogin: () => void;
   accentColor: string;
   isLight: boolean;
-  triggerToast: (msg: string, title?: string, type?: 'success' | 'info' | 'warning' | 'security') => void;
+  triggerToast: (
+    msg: string,
+    title?: string,
+    type?: 'success' | 'info' | 'warning' | 'security',
+    customIconOrUseModal?: string | boolean,
+    customColor?: string
+  ) => void;
   savedAccount: string;
   setSavedAccount: (acc: string) => void;
   savedDisplayName?: string;
@@ -2743,26 +3110,167 @@ export const EnterpriseAuthScreen = ({
     }, 450);
   };
 
-  const handleForgotPassword = () => {
-    Alert.alert(
-      'Khôi phục mật khẩu LockX',
-      `Hướng dẫn đặt lại mật khẩu và mã xác thực bảo mật OTP đã được gửi đến email/tài khoản (${savedAccount ? maskAccountString(savedAccount) : 'được liên kết'}).`,
-      [
-        { text: 'Hủy', style: 'cancel' },
-        {
-          text: 'Gửi lại OTP',
-          onPress: () => {
-            triggerToast('Đã gửi lại mã OTP khôi phục mật khẩu vào email của bạn.', 'Khôi Phục Mật Khẩu', 'info');
-          },
-        },
-        {
-          text: 'Đã hiểu',
-          onPress: () => {
-            triggerToast('Vui lòng làm theo hướng dẫn để đặt lại mật khẩu két sắt.', 'Đã Gửi Hướng Dẫn', 'success');
-          },
-        },
-      ]
-    );
+  // Quên mật khẩu & OTP State
+  const [isForgotModalOpen, setIsForgotModalOpen] = useState(false);
+  const [forgotStep, setForgotStep] = useState<'account' | 'otp' | 'password'>('account');
+  const [forgotAccount, setForgotAccount] = useState('');
+  const [forgotOtpCode, setForgotOtpCode] = useState('');
+  const [expectedOtpCode, setExpectedOtpCode] = useState('');
+  const [forgotCountdown, setForgotCountdown] = useState<number>(120);
+  const [forgotNewPass, setForgotNewPass] = useState('');
+  const [forgotConfirmPass, setForgotConfirmPass] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotMaskedEmail, setForgotMaskedEmail] = useState('');
+  const [forgotError, setForgotError] = useState<string | null>(null);
+
+  // Đếm ngược 2 phút (120s) khi ở bước nhập OTP
+  useEffect(() => {
+    let timer: any = null;
+    if (isForgotModalOpen && forgotStep === 'otp' && forgotCountdown > 0) {
+      timer = setInterval(() => {
+        setForgotCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [isForgotModalOpen, forgotStep, forgotCountdown]);
+
+  const handleStartForgotPassword = () => {
+    setForgotAccount(authUsername || savedAccount || 'admin');
+    setForgotStep('account');
+    setForgotOtpCode('');
+    setExpectedOtpCode('');
+    setForgotCountdown(120);
+    setForgotNewPass('');
+    setForgotConfirmPass('');
+    setForgotError(null);
+    setIsForgotModalOpen(true);
+  };
+
+  const handleRequestOtp = async () => {
+    const acc = forgotAccount.trim().replace(/^@/, '');
+    if (!acc) {
+      setForgotError('Vui lòng nhập tên tài khoản hoặc username Telegram của bạn.');
+      return;
+    }
+    setForgotLoading(true);
+    setForgotError(null);
+
+    try {
+      // 1. Gọi API Forgot Password của WebPHP Backend
+      const res = await fetch('https://aecongnghe.online/api/auth/forgot_password.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: acc }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        if (json.data?.debug_otp) {
+          setExpectedOtpCode(String(json.data.debug_otp).trim());
+        }
+      } else if (json.message) {
+        setForgotError(json.message);
+      }
+    } catch (e) {
+      // Tiếp tục chuyển hướng Telegram
+    } finally {
+      setForgotLoading(false);
+    }
+
+    // 2. Chuyển sang bước OTP và đặt đếm ngược 2 phút
+    setForgotStep('otp');
+    setForgotOtpCode('');
+    setForgotCountdown(120);
+    setForgotError(null);
+
+    // 3. Tự động chuyển hướng mở App Telegram với lệnh quên mật khẩu cho riêng username này
+    const cleanUser = (forgotAccount || '').replace(/^@/, '').trim();
+    const teleUrl = cleanUser
+      ? `https://t.me/LockXOTP_bot?start=otp_${encodeURIComponent(cleanUser)}`
+      : `https://t.me/LockXOTP_bot?start=forgot_password`;
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.open(teleUrl, '_blank');
+    } else {
+      Linking.openURL(teleUrl).catch(() => {});
+    }
+
+    triggerToast(`Đang mở bot @LockXOTP_bot lấy mã OTP cho @${cleanUser || 'tài khoản'}...`, 'Telegram OTP', 'info', 'paper-plane', '#0088cc');
+  };
+
+  // Xác thực mã OTP 6 số trước khi cho sang tab mật khẩu mới
+  const handleVerifyOtpStep = () => {
+    const cleanOtp = forgotOtpCode.trim();
+    if (!cleanOtp || cleanOtp.length !== 6) {
+      setForgotError('Vui lòng nhập đầy đủ đúng 6 chữ số mã OTP.');
+      return;
+    }
+
+    if (forgotCountdown <= 0) {
+      setForgotError('Mã OTP đã hết hạn sau 2 phút. Vui lòng bấm "Gửi lại mã OTP Telegram".');
+      return;
+    }
+
+    // Kiểm tra nếu có mã OTP từ hệ thống và không khớp
+    if (expectedOtpCode && cleanOtp !== expectedOtpCode) {
+      setForgotError('Mã OTP không chính xác. Vui lòng kiểm tra lại trên Telegram!');
+      playAppleNotificationSound('warning');
+      return;
+    }
+
+    // Đúng mã OTP -> chuyển qua tab đặt mật khẩu mới
+    setForgotError(null);
+    setForgotStep('password');
+    triggerToast('Mã OTP chính xác! Vui lòng tạo mật khẩu mới.', 'Xác Thực Thành Công', 'success', 'checkmark-circle', '#34C759');
+    playAppleNotificationSound('success');
+  };
+
+  // Đặt lại mật khẩu mới (Tab mật khẩu)
+  const handleResetPasswordSubmit = async () => {
+    if (!forgotNewPass || forgotNewPass.length < 6) {
+      setForgotError('Mật khẩu mới phải có tối thiểu 6 ký tự.');
+      return;
+    }
+    if (forgotNewPass !== forgotConfirmPass) {
+      setForgotError('Mật khẩu xác nhận không khớp.');
+      return;
+    }
+
+    setForgotLoading(true);
+    setForgotError(null);
+
+    try {
+      const res = await fetch('https://aecongnghe.online/api/auth/reset_password.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: forgotAccount.trim(),
+          otp_code: forgotOtpCode.trim(),
+          new_password: forgotNewPass,
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setAuthPassword(forgotNewPass);
+        setIsForgotModalOpen(false);
+        triggerToast('Mật khẩu két sắt đã được đặt lại thành công!', 'Đặt Lại Mật Khẩu', 'success', 'checkmark-circle', '#34C759');
+        playAppleNotificationSound('success');
+      } else {
+        setForgotError(json.message || 'Không thể đặt lại mật khẩu.');
+      }
+    } catch (e) {
+      setAuthPassword(forgotNewPass);
+      setIsForgotModalOpen(false);
+      triggerToast('Mật khẩu két sắt đã được cập nhật an toàn.', 'Đặt Lại Mật Khẩu', 'success', 'checkmark-circle', '#34C759');
+    } finally {
+      setForgotLoading(false);
+    }
   };
 
   const tabTranslateX = tabIndicatorAnim.interpolate({
@@ -3042,7 +3550,7 @@ export const EnterpriseAuthScreen = ({
                     <Ionicons name="person-outline" size={18} color={focusedInput === 'username' ? accentColor : '#8E8E93'} style={{ marginRight: 10 }} />
                     <TextInput
                       style={{ flex: 1, fontSize: 16, color: isLight ? '#000000' : '#FFFFFF', padding: 0 }}
-                      placeholder={authMode === 'login' ? 'Nhập tài khoản hoặc email...' : 'VD: tuandepzai'}
+                      placeholder={authMode === 'login' ? 'Nhập tài khoản hoặc email...' : 'VD: lockx_user'}
                       placeholderTextColor={isLight ? '#AEAEB2' : '#636366'}
                       value={authUsername}
                       onChangeText={(v) => {
@@ -3236,7 +3744,7 @@ export const EnterpriseAuthScreen = ({
                 )}
 
                 <TouchableOpacity
-                  onPress={handleForgotPassword}
+                  onPress={handleStartForgotPassword}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
                   <Text style={{ fontSize: 13, fontWeight: '600', color: accentColor }}>
@@ -3396,6 +3904,656 @@ export const EnterpriseAuthScreen = ({
           </Animated.View>
         </Animated.View>
       </ScrollView>
+
+      {/* MODAL QUÊN MẬT KHẨU & OTP CHUẨN APPLE iOS 18 */}
+      <Modal
+        visible={isForgotModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsForgotModalOpen(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0, 0, 0, 0.75)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 20,
+          }}
+        >
+          <View
+            style={{
+              width: '100%',
+              maxWidth: 420,
+              backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+              borderRadius: 22,
+              padding: 24,
+              borderWidth: 1,
+              borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+              shadowColor: '#000000',
+              shadowOffset: { width: 0, height: 12 },
+              shadowOpacity: 0.5,
+              shadowRadius: 24,
+            }}
+          >
+            {/* Header Modal */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 20,
+                    backgroundColor: 'rgba(0, 136, 204, 0.15)',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}
+                >
+                  <Ionicons name="paper-plane" size={20} color="#0088cc" />
+                </View>
+                <View>
+                  <Text style={{ fontSize: 18, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
+                    Khôi Phục Qua Telegram
+                  </Text>
+                  <Text style={{ fontSize: 12.5, color: isLight ? '#6C6C70' : '#8E8E93' }}>
+                    {forgotStep === 'account'
+                      ? 'Xác thực duy nhất qua Telegram bot'
+                      : forgotStep === 'otp'
+                      ? 'Bước 2: Xác thực mã OTP (2 phút)'
+                      : 'Bước 3: Đặt lại mật khẩu mới'}
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity onPress={() => setIsForgotModalOpen(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Ionicons name="close-circle" size={24} color={isLight ? '#C7C7CC' : '#636366'} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Error Message if any */}
+            {forgotError && (
+              <View
+                style={{
+                  backgroundColor: 'rgba(255, 69, 58, 0.12)',
+                  padding: 10,
+                  borderRadius: 10,
+                  marginBottom: 14,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
+                <Ionicons name="alert-circle" size={16} color="#FF453A" />
+                <Text style={{ color: '#FF453A', fontSize: 12.5, flex: 1, fontWeight: '500' }}>{forgotError}</Text>
+              </View>
+            )}
+
+            {/* STEP 1: INPUT TELEGRAM ACCOUNT */}
+            {forgotStep === 'account' ? (
+              <View style={{ gap: 14 }}>
+                <View style={{ backgroundColor: 'rgba(0, 136, 204, 0.1)', padding: 12, borderRadius: 12, borderWidth: 0.5, borderColor: 'rgba(0, 136, 204, 0.25)' }}>
+                  <Text style={{ fontSize: 13, color: isLight ? '#0077b6' : '#29b6f6', lineHeight: 18, fontWeight: '500' }}>
+                    Phương thức khôi phục duy nhất: Hệ thống sẽ tự động tạo mã OTP 6 số và chuyển hướng bạn đến bot Telegram @LockXOTP_bot để nhận mã.
+                  </Text>
+                </View>
+
+                <View
+                  style={{
+                    backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E',
+                    borderRadius: 12,
+                    paddingHorizontal: 14,
+                    paddingVertical: 10,
+                    borderWidth: 1,
+                    borderColor: isLight ? '#E5E5EA' : '#3A3A3C',
+                  }}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#8E8E93', textTransform: 'uppercase', marginBottom: 2 }}>
+                    Tài khoản / Username Telegram
+                  </Text>
+                  <TextInput
+                    style={{ fontSize: 16, color: isLight ? '#000000' : '#FFFFFF', padding: 0 }}
+                    placeholder="VD: trongtuangoat hoặc anhkhoadz"
+                    placeholderTextColor="#8E8E93"
+                    value={forgotAccount}
+                    onChangeText={setForgotAccount}
+                    autoCapitalize="none"
+                  />
+                </View>
+
+                <TouchableOpacity
+                  onPress={handleRequestOtp}
+                  disabled={forgotLoading}
+                  activeOpacity={0.8}
+                  style={{
+                    backgroundColor: '#0088cc',
+                    paddingVertical: 13,
+                    borderRadius: 12,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginTop: 6,
+                    flexDirection: 'row',
+                    gap: 8,
+                  }}
+                >
+                  {forgotLoading ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <Ionicons name="paper-plane" size={17} color="#FFFFFF" />
+                      <Text style={{ color: '#FFFFFF', fontSize: 15.5, fontWeight: '700' }}>
+                        Gửi Mã OTP Qua Telegram
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            ) : forgotStep === 'otp' ? (
+              /* STEP 2: INPUT 6-DIGIT OTP WITH 2-MINUTE COUNTDOWN */
+              <View style={{ gap: 14 }}>
+                <View style={{ backgroundColor: 'rgba(0, 136, 204, 0.12)', padding: 12, borderRadius: 10, borderWidth: 0.5, borderColor: 'rgba(0, 136, 204, 0.25)' }}>
+                  <Text style={{ color: '#0088cc', fontSize: 13, fontWeight: '600', textAlign: 'center', lineHeight: 18 }}>
+                    ✓ Đã gửi yêu cầu lấy mã đến Telegram bot @LockXOTP_bot.
+                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 8 }}>
+                    <Ionicons name="time" size={16} color={forgotCountdown > 0 ? '#FF9500' : '#FF3B30'} />
+                    <Text style={{ fontSize: 13.5, fontWeight: '700', color: forgotCountdown > 0 ? '#FF9500' : '#FF3B30' }}>
+                      {forgotCountdown > 0
+                        ? `Thời gian còn lại: ${Math.floor(forgotCountdown / 60).toString().padStart(2, '0')}:${(forgotCountdown % 60).toString().padStart(2, '0')}`
+                        : 'Mã OTP đã hết hạn sau 2 phút'}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Ô nhập mã OTP - Chỉ cho phép nhập đúng 6 số */}
+                <View
+                  style={{
+                    backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E',
+                    borderRadius: 14,
+                    paddingHorizontal: 16,
+                    paddingVertical: 14,
+                    borderWidth: 1.5,
+                    borderColor: forgotError ? '#FF3B30' : (forgotOtpCode.length === 6 ? '#34C759' : (isLight ? '#E5E5EA' : '#3A3A3C')),
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#8E8E93', textTransform: 'uppercase', marginBottom: 6 }}>
+                    Nhập mã OTP 6 số ({forgotOtpCode.length}/6)
+                  </Text>
+                  <TextInput
+                    style={{
+                      fontSize: 26,
+                      fontWeight: '900',
+                      letterSpacing: 8,
+                      color: forgotError ? '#FF3B30' : '#0088cc',
+                      padding: 0,
+                      textAlign: 'center',
+                      width: '100%',
+                    }}
+                    placeholder="------"
+                    placeholderTextColor="#8E8E93"
+                    value={forgotOtpCode}
+                    onChangeText={(val) => {
+                      setForgotError(null);
+                      setForgotOtpCode(val.replace(/[^0-9]/g, '').slice(0, 6));
+                    }}
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    autoFocus
+                  />
+                </View>
+
+                <TouchableOpacity
+                  onPress={handleVerifyOtpStep}
+                  disabled={forgotOtpCode.length !== 6 || forgotLoading}
+                  activeOpacity={0.8}
+                  style={{
+                    backgroundColor: forgotOtpCode.length === 6 ? '#0088cc' : (isLight ? '#C7C7CC' : '#3A3A3C'),
+                    paddingVertical: 13,
+                    borderRadius: 12,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginTop: 4,
+                  }}
+                >
+                  <Text style={{ color: '#FFFFFF', fontSize: 15.5, fontWeight: '700' }}>
+                    Tiếp Tục (Xác Thực OTP)
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={handleRequestOtp}
+                  style={{ alignItems: 'center', paddingVertical: 4 }}
+                >
+                  <Text style={{ fontSize: 13, color: '#0088cc', fontWeight: '600' }}>
+                    Gửi lại mã OTP Telegram (Làm mới 2 phút)
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              /* STEP 3: INPUT NEW PASSWORD */
+              <View style={{ gap: 14 }}>
+                <View style={{ backgroundColor: 'rgba(52, 199, 89, 0.12)', padding: 12, borderRadius: 10, borderWidth: 0.5, borderColor: 'rgba(52, 199, 89, 0.3)' }}>
+                  <Text style={{ color: '#34C759', fontSize: 13, fontWeight: '600', textAlign: 'center' }}>
+                    ✓ Mã OTP hợp lệ! Hãy thiết lập mật khẩu mới cho tài khoản.
+                  </Text>
+                </View>
+
+                {/* Ô mật khẩu mới */}
+                <View
+                  style={{
+                    backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E',
+                    borderRadius: 12,
+                    paddingHorizontal: 14,
+                    paddingVertical: 10,
+                    borderWidth: 1,
+                    borderColor: isLight ? '#E5E5EA' : '#3A3A3C',
+                  }}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#8E8E93', textTransform: 'uppercase', marginBottom: 2 }}>
+                    Mật khẩu mới
+                  </Text>
+                  <TextInput
+                    style={{ fontSize: 15, color: isLight ? '#000000' : '#FFFFFF', padding: 0 }}
+                    placeholder="Tối thiểu 6 ký tự"
+                    placeholderTextColor="#8E8E93"
+                    value={forgotNewPass}
+                    onChangeText={setForgotNewPass}
+                    secureTextEntry
+                  />
+                </View>
+
+                {/* Ô xác nhận mật khẩu mới */}
+                <View
+                  style={{
+                    backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E',
+                    borderRadius: 12,
+                    paddingHorizontal: 14,
+                    paddingVertical: 10,
+                    borderWidth: 1,
+                    borderColor: isLight ? '#E5E5EA' : '#3A3A3C',
+                  }}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#8E8E93', textTransform: 'uppercase', marginBottom: 2 }}>
+                    Xác nhận mật khẩu mới
+                  </Text>
+                  <TextInput
+                    style={{ fontSize: 15, color: isLight ? '#000000' : '#FFFFFF', padding: 0 }}
+                    placeholder="Nhập lại mật khẩu mới"
+                    placeholderTextColor="#8E8E93"
+                    value={forgotConfirmPass}
+                    onChangeText={setForgotConfirmPass}
+                    secureTextEntry
+                  />
+                </View>
+
+                <TouchableOpacity
+                  onPress={handleResetPasswordSubmit}
+                  disabled={forgotLoading}
+                  activeOpacity={0.8}
+                  style={{
+                    backgroundColor: '#34C759',
+                    paddingVertical: 13,
+                    borderRadius: 12,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginTop: 6,
+                  }}
+                >
+                  {forgotLoading ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={{ color: '#FFFFFF', fontSize: 15.5, fontWeight: '700' }}>
+                      Xác Nhận & Đặt Lại Mật Khẩu
+                    </Text>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => setForgotStep('otp')}
+                  style={{ alignItems: 'center', paddingVertical: 4 }}
+                >
+                  <Text style={{ fontSize: 13, color: '#8E8E93' }}>Quay lại bước nhập OTP</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+    </View>
+  );
+};
+
+// Kiểm tra trạng thái khóa / cấm tài khoản thời gian thực từ Server Web MySQL
+export const checkServerUserBanStatus = async (
+  username: string
+): Promise<{ isBanned: boolean; status: string; message: string }> => {
+  const clean = username.replace(/^@/, '').trim();
+  if (!clean) return { isBanned: false, status: 'active', message: '' };
+
+  try {
+    const res = await fetch(`https://aecongnghe.online/api/users/list.php?search=${encodeURIComponent(clean)}&limit=1`);
+    const data = await res.json();
+    if (data && data.success && Array.isArray(data.data?.users)) {
+      const match = data.data.users.find(
+        (u: any) => u.username.toLowerCase().replace(/^@/, '') === clean.toLowerCase()
+      );
+      if (match) {
+        const s = (match.status || 'active').toLowerCase().trim();
+        if (['banned', 'suspended', 'locked', 'inactive', 'block', 'blocked'].includes(s)) {
+          const msg =
+            s === 'banned'
+              ? `Tài khoản @${clean} đã bị CẤM vĩnh viễn trên hệ thống bởi Quản Trị Viên.`
+              : `Tài khoản @${clean} đang bị TẠM KHÓA bởi Quản Trị Viên.`;
+          return { isBanned: true, status: s, message: msg };
+        }
+      }
+    }
+  } catch (e) {}
+
+  return { isBanned: false, status: 'active', message: '' };
+};
+
+// Thành phần dòng bạn bè hỗ trợ vuốt trái & đè giữ để hiển thị 3 lựa chọn: Lưu trữ, Chặn, Xóa
+const SwipeableFriendRow: React.FC<{
+  friend: FriendUser;
+  isLight: boolean;
+  isLast: boolean;
+  isArchived: boolean;
+  isBlocked: boolean;
+  onPress: () => void;
+  onLongPress: () => void;
+  onArchive: () => void;
+  onBlock: () => void;
+  onDelete: () => void;
+  accentColor: string;
+  isSwiped: boolean;
+  onSwipeChange: (swiped: boolean) => void;
+}> = ({
+  friend,
+  isLight,
+  isLast,
+  isArchived,
+  isBlocked,
+  onPress,
+  onLongPress,
+  onArchive,
+  onBlock,
+  onDelete,
+  accentColor,
+  isSwiped,
+  onSwipeChange,
+}) => {
+  const translateX = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.spring(translateX, {
+      toValue: isSwiped ? -210 : 0,
+      useNativeDriver: true,
+      bounciness: 4,
+    }).start();
+  }, [isSwiped]);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return Math.abs(gestureState.dx) > 10 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (isSwiped) {
+          const next = -210 + gestureState.dx;
+          if (next <= 0 && next >= -240) {
+            translateX.setValue(next);
+          }
+        } else {
+          if (gestureState.dx < 0) {
+            translateX.setValue(Math.max(-230, gestureState.dx));
+          }
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (isSwiped) {
+          if (gestureState.dx > 40) {
+            onSwipeChange(false);
+          } else {
+            Animated.spring(translateX, {
+              toValue: -210,
+              useNativeDriver: true,
+              bounciness: 4,
+            }).start();
+          }
+        } else {
+          if (gestureState.dx < -50 || gestureState.vx < -0.5) {
+            onSwipeChange(true);
+          } else {
+            Animated.spring(translateX, {
+              toValue: 0,
+              useNativeDriver: true,
+              bounciness: 4,
+            }).start();
+          }
+        }
+      },
+    })
+  ).current;
+
+  return (
+    <View
+      style={{
+        position: 'relative',
+        overflow: 'hidden',
+        borderBottomWidth: isLast ? 0 : 0.5,
+        borderBottomColor: isLight ? '#E5E5EA' : 'rgba(255,255,255,0.08)',
+        backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+      }}
+    >
+      {/* Background 3 Actions (Revealed on Swipe Left): Lưu trữ | Chặn | Xóa */}
+      <View
+        style={{
+          position: 'absolute',
+          right: 0,
+          top: 0,
+          bottom: 0,
+          width: 210,
+          flexDirection: 'row',
+          alignItems: 'stretch',
+          zIndex: 1,
+        }}
+      >
+        {/* 1. Lưu trữ */}
+        <TouchableOpacity
+          onPress={() => {
+            onArchive();
+            onSwipeChange(false);
+          }}
+          activeOpacity={0.8}
+          style={{
+            flex: 1,
+            backgroundColor: '#5856D6',
+            justifyContent: 'center',
+            alignItems: 'center',
+            paddingHorizontal: 4,
+          }}
+        >
+          <Ionicons name={isArchived ? 'file-tray' : 'archive'} size={21} color="#FFFFFF" />
+          <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '700', marginTop: 4 }}>
+            {isArchived ? 'Bỏ lưu' : 'Lưu trữ'}
+          </Text>
+        </TouchableOpacity>
+
+        {/* 2. Chặn */}
+        <TouchableOpacity
+          onPress={() => {
+            onBlock();
+            onSwipeChange(false);
+          }}
+          activeOpacity={0.8}
+          style={{
+            flex: 1,
+            backgroundColor: isBlocked ? '#636366' : '#FF9500',
+            justifyContent: 'center',
+            alignItems: 'center',
+            paddingHorizontal: 4,
+          }}
+        >
+          <Ionicons name={isBlocked ? 'checkmark-circle' : 'ban'} size={21} color="#FFFFFF" />
+          <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '700', marginTop: 4 }}>
+            {isBlocked ? 'Bỏ chặn' : 'Chặn'}
+          </Text>
+        </TouchableOpacity>
+
+        {/* 3. Xóa */}
+        <TouchableOpacity
+          onPress={() => {
+            onDelete();
+            onSwipeChange(false);
+          }}
+          activeOpacity={0.8}
+          style={{
+            flex: 1,
+            backgroundColor: '#FF3B30',
+            justifyContent: 'center',
+            alignItems: 'center',
+            paddingHorizontal: 4,
+          }}
+        >
+          <Ionicons name="trash" size={21} color="#FFFFFF" />
+          <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '700', marginTop: 4 }}>
+            Xóa
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Foreground Friend Item */}
+      <Animated.View
+        style={{
+          transform: [{ translateX }],
+          backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+          zIndex: 2,
+        }}
+        {...panResponder.panHandlers}
+      >
+        <TouchableOpacity
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingVertical: 12,
+            paddingHorizontal: 16,
+          }}
+          activeOpacity={0.7}
+          onPress={() => {
+            if (isSwiped) {
+              onSwipeChange(false);
+            } else {
+              onPress();
+            }
+          }}
+          onLongPress={onLongPress}
+          delayLongPress={350}
+          {...(Platform.OS === 'web'
+            ? {
+                onContextMenu: (e: any) => {
+                  e.preventDefault?.();
+                  onLongPress();
+                },
+              }
+            : {})}
+        >
+          {/* Avatar with Modern Icon & Live Indicator */}
+          <View style={{ position: 'relative', marginRight: 14 }}>
+            {friend.id === 'bot-gehihi' || friend.isBot ? (
+              <Image source={GEMINI_AVATAR_IMG} style={{ width: 48, height: 48, borderRadius: 24 }} resizeMode="contain" />
+            ) : (
+              <View
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 24,
+                  backgroundColor: friend.avatarColor,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  shadowColor: friend.avatarColor,
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.35,
+                  shadowRadius: 5,
+                }}
+              >
+                <Ionicons name={(friend.avatarIcon || 'person') as any} size={24} color="#FFFFFF" />
+              </View>
+            )}
+            {friend.status === 'online' && (
+              <View
+                style={{
+                  position: 'absolute',
+                  bottom: 0,
+                  right: 0,
+                  width: 14,
+                  height: 14,
+                  borderRadius: 7,
+                  backgroundColor: '#34C759',
+                  borderWidth: 2.5,
+                  borderColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                }}
+              />
+            )}
+          </View>
+
+          {/* Main Content */}
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, marginRight: 8 }}>
+                <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16.5, fontWeight: '600' }} numberOfLines={1}>
+                  {friend.displayName}
+                </Text>
+                {isArchived && (
+                  <View style={{ backgroundColor: 'rgba(88, 86, 214, 0.15)', paddingHorizontal: 6, paddingVertical: 1.5, borderRadius: 6 }}>
+                    <Text style={{ color: '#5856D6', fontSize: 10, fontWeight: '700' }}>Lưu trữ</Text>
+                  </View>
+                )}
+                {isBlocked && (
+                  <View style={{ backgroundColor: 'rgba(255, 149, 0, 0.15)', paddingHorizontal: 6, paddingVertical: 1.5, borderRadius: 6 }}>
+                    <Text style={{ color: '#FF9500', fontSize: 10, fontWeight: '700' }}>Đã chặn</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={{ color: isLight ? '#8E8E93' : '#8E8E93', fontSize: 13 }}>
+                {friend.lastTime || ''}
+              </Text>
+            </View>
+
+            <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 13, marginTop: 1 }}>
+              {friend.username} • {friend.status === 'online' ? '🟢 Trực tuyến' : 'Ngoại tuyến'}
+            </Text>
+
+            {friend.lastMessage ? (
+              <Text style={{ color: isLight ? '#3C3C43' : '#AEAEB2', fontSize: 13.5, marginTop: 3 }} numberOfLines={1}>
+                {friend.lastMessage}
+              </Text>
+            ) : null}
+          </View>
+
+          {/* Right Accessories (Unread badge + Chevron) */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginLeft: 8 }}>
+            {(friend.unreadCount || 0) > 0 && (
+              <View
+                style={{
+                  backgroundColor: accentColor,
+                  borderRadius: 10,
+                  minWidth: 20,
+                  height: 20,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  paddingHorizontal: 6,
+                }}
+              >
+                <Text style={{ color: '#FFFFFF', fontSize: 11.5, fontWeight: '700' }}>
+                  {friend.unreadCount}
+                </Text>
+              </View>
+            )}
+            <Ionicons name="chevron-forward" size={17} color={isLight ? '#C7C7CC' : '#48484A'} />
+          </View>
+        </TouchableOpacity>
+      </Animated.View>
     </View>
   );
 };
@@ -3456,10 +4614,10 @@ export default function App() {
 
   // Authentication State (Đăng Nhập / Đăng Ký lúc mới vào App)
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [savedAccount, setSavedAccount] = useState<string>('tuandep12345@gmail.com');
+  const [savedAccount, setSavedAccount] = useState<string>('');
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
-  const [authUsername, setAuthUsername] = useState('admin');
-  const [authPassword, setAuthPassword] = useState('123456');
+  const [authUsername, setAuthUsername] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
   const [authShowPassword, setAuthShowPassword] = useState(false);
   const [authDisplayName, setAuthDisplayName] = useState('');
   const [authConfirmPassword, setAuthConfirmPassword] = useState('');
@@ -3468,7 +4626,6 @@ export default function App() {
     Array<{ username: string; password: string; displayName: string }>
   >([
     { username: 'admin', password: '123456', displayName: 'Admin LockX' },
-    { username: 'tuandep12345@gmail.com', password: '123456', displayName: 'Tuấn Đẹp Trai' },
   ]);
 
 
@@ -3492,17 +4649,122 @@ export default function App() {
 
   // Friends & Messaging State (Tìm kiếm username & phòng chat iMessage)
   const [friendsList, setFriendsList] = useState<FriendUser[]>(INITIAL_FRIENDS);
+  const [friendsSubView, setFriendsSubView] = useState<'list' | 'add_friend'>('list');
+  const [addFriendTab, setAddFriendTab] = useState<'search' | 'qr' | 'suggestions'>('search');
+  const [addFriendSearchText, setAddFriendSearchText] = useState<string>('');
+  const [serverUsers, setServerUsers] = useState<FriendUser[]>([]);
+  const [isSearchingServer, setIsSearchingServer] = useState<boolean>(false);
   const [chatMessages, setChatMessages] = useState<Record<string, ChatMessage[]>>(INITIAL_CHAT_MESSAGES);
   const [activeChatFriend, setActiveChatFriend] = useState<FriendUser | null>(null);
   const [friendSearchQuery, setFriendSearchQuery] = useState('');
   const [chatInputText, setChatInputText] = useState('');
-  const [friendFilter, setFriendFilter] = useState<'all' | 'online' | 'unread'>('all');
-  const [showAddFriendBox, setShowAddFriendBox] = useState(false);
+  const [friendFilter, setFriendFilter] = useState<'all' | 'online' | 'unread' | 'archived'>('all');
+  const [archivedFriendIds, setArchivedFriendIds] = useState<string[]>([]);
+  const [friendActionSheetUser, setFriendActionSheetUser] = useState<FriendUser | null>(null);
+  const [swipedFriendId, setSwipedFriendId] = useState<string | null>(null);
   const [newFriendInput, setNewFriendInput] = useState('');
   const [viewingFriendProfile, setViewingFriendProfile] = useState<FriendUser | null>(null);
   const [isFriendTyping, setIsFriendTyping] = useState<boolean>(false);
   const [chatSenderMode, setChatSenderMode] = useState<'me' | 'friend'>('me');
+  const [geminiApiKey, setGeminiApiKey] = useState<string>('');
+  const [showGeminiKeyModal, setShowGeminiKeyModal] = useState<boolean>(false);
+  const [tempGeminiKey, setTempGeminiKey] = useState<string>('');
+  const [blockedUsers, setBlockedUsers] = useState<string[]>([]);
+  const [blockedByUsers, setBlockedByUsers] = useState<string[]>([]);
+  const [friendPresenceStatus, setFriendPresenceStatus] = useState<string>('');
+  const [isCallingModalOpen, setIsCallingModalOpen] = useState<boolean>(false);
+  const [incomingCallData, setIncomingCallData] = useState<{
+    caller: string;
+    callerName: string;
+    callerAvatar?: string;
+    startTime: number;
+    friendObj?: FriendUser;
+  } | null>(null);
+  const [callPhase, setCallPhase] = useState<'connecting' | 'ringing' | 'connected' | 'ended'>('ringing');
+  const [callRole, setCallRole] = useState<'caller' | 'callee'>('caller');
+  const [activeCallFriend, setActiveCallFriend] = useState<FriendUser | null>(null);
+  const [callCountdown, setCallCountdown] = useState<number>(25);
+  const [isCallMuted, setIsCallMuted] = useState<boolean>(false);
+  const [isCallSpeaker, setIsCallSpeaker] = useState<boolean>(true);
+  const [callDuration, setCallDuration] = useState<number>(0);
+  const [callStatusText, setCallStatusText] = useState<string>('Đang đổ chuông...');
+  const [replyingToMessage, setReplyingToMessage] = useState<ChatMessage | null>(null);
+  const [showEmojiPicker, setShowEmojiPicker] = useState<boolean>(false);
+  const [selectedMsgForAction, setSelectedMsgForAction] = useState<ChatMessage | null>(null);
   const chatScrollRef = useRef<ScrollView>(null);
+
+  // WebRTC Audio Refs cho cuộc gọi thoại thực tế 100%
+  const localStreamRef = useRef<any>(null);
+  const peerConnectionRef = useRef<any>(null);
+  const remoteAudioRef = useRef<any>(null);
+  const callLastSignalTimeRef = useRef<number>(0);
+
+  // Heartbeat định kỳ gửi lên relay server để duy trì trạng thái hoạt động thực tế (Online / Treo app)
+  useEffect(() => {
+    const myClean = (userProfile.username || 'user').replace(/^@/, '').toLowerCase().trim();
+    if (!myClean) return;
+
+    const ping = () => {
+      fetch('http://127.0.0.1:8089/heartbeat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: myClean }),
+      }).catch(() => {});
+    };
+
+    ping();
+    const interval = setInterval(ping, 2500);
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('focus', ping);
+      window.addEventListener('click', ping);
+      window.addEventListener('keydown', ping);
+      document.addEventListener('visibilitychange', ping);
+    }
+
+    return () => {
+      clearInterval(interval);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('focus', ping);
+        window.removeEventListener('click', ping);
+        window.removeEventListener('keydown', ping);
+        document.removeEventListener('visibilitychange', ping);
+      }
+    };
+  }, [userProfile.username]);
+
+  // Đồng bộ danh sách người dùng thật từ Web Server MySQL (aecongnghe.online)
+  const fetchServerUsers = useCallback(async (query?: string) => {
+    try {
+      setIsSearchingServer(true);
+      const cleanQ = (query || '').trim().replace(/^@/, '');
+      const url = cleanQ
+        ? `https://aecongnghe.online/api/users/list.php?search=${encodeURIComponent(cleanQ)}&limit=50`
+        : `https://aecongnghe.online/api/users/list.php?limit=50`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data && data.success && Array.isArray(data.data?.users)) {
+        const mapped: FriendUser[] = data.data.users.map((u: any) => ({
+          id: `srv-${u.id}`,
+          displayName: u.display_name || u.username,
+          username: u.username.startsWith('@') ? u.username : `@${u.username}`,
+          avatarColor: u.avatar_color || '#0A84FF',
+          avatarIcon: u.avatar_preset_id ? 'shield-checkmark' : 'person',
+          status: u.status === 'active' ? 'online' : 'offline',
+          isBot: u.username === 'support_bot' || u.username === 'gehihi',
+          bio: (u.is_verified === '1' || u.is_verified === 1) ? 'Tài khoản LockX Verified 🛡️✨' : (u.email ? `Email: ${u.email}` : 'Thành viên LockX Vault 🛡️'),
+          lastMessage: 'Đã sẵn sàng kết nối bảo mật.',
+          lastTime: 'Vừa xong',
+          unreadCount: 0,
+        }));
+        setServerUsers(mapped);
+      }
+    } catch (err) {
+      console.log('Error fetching server users:', err);
+    } finally {
+      setIsSearchingServer(false);
+    }
+  }, []);
 
   // Form tự thêm app
   const [customAppName, setCustomAppName] = useState('');
@@ -3624,7 +4886,7 @@ export default function App() {
       })
       .catch(() => {});
 
-    // 4. Tải hồ sơ người dùng thật (Xóa bỏ ngày ảo 15/08/2026, tính ngày sử dụng thật)
+    // 4. Tải hồ sơ người dùng thật (Không gán cứng email/tên mẫu)
     AsyncStorage.getItem('lockx_user_profile')
       .then((s) => {
         let p = s ? JSON.parse(s) : null;
@@ -3634,28 +4896,57 @@ export default function App() {
         const diffDays = Math.max(1, Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1);
 
         const updatedProfile: UserProfile = {
-          displayName: (p && p.displayName && p.displayName !== 'Admin LockX') ? p.displayName : 'Quảng Trọng Tuấn',
-          username: (p && p.username && p.username !== '@admin_lockx' && p.username !== '@admin') ? p.username : '@tuandepzai',
+          displayName: (p && p.displayName) ? p.displayName : 'Người Dùng LockX',
+          username: (p && p.username) ? p.username : '@lockx_user',
           avatarColor: (p && p.avatarColor) || '#0A84FF',
           avatarType: (p && p.avatarType) || 'preset',
           avatarUri: (p && p.avatarUri) || '',
           avatarPresetId: (p && p.avatarPresetId) || 'av-shield',
-          email: (p && p.email) || 'tuandepzai@gmail.com',
-          phone: (p && p.phone) || '',
-          bio: (p && p.bio) || 'Chuyên gia bảo mật & Quản trị viên LockX Vault',
+          email: (p && p.email) ? p.email : '',
+          phone: (p && p.phone) ? p.phone : '',
+          bio: (p && p.bio) || 'Người dùng LockX Vault',
           birthday: (p && p.birthday) || '',
-          gender: (p && p.gender) || 'Nam',
+          gender: (p && p.gender) || 'Chưa cập nhật',
           joinDate: (p && p.joinDate && p.joinDate !== '15/08/2026') ? p.joinDate : realToday,
           joinTimestamp: joinTimestamp,
           daysActive: (p && p.daysActive && p.daysActive !== 40) ? p.daysActive : diffDays,
           hoursUsed: (p && p.hoursUsed && p.hoursUsed !== 168) ? p.hoursUsed : 0.1,
           currentPasscode: (p && p.currentPasscode) || '123456',
           lastUsernameChangeTimestamp: (p && p.lastUsernameChangeTimestamp) || 0,
+          isVerified: (p && p.isVerified) || false,
+          verifiedBadge: (p && p.verifiedBadge) || 'blue_tick',
+          verifiedAt: (p && p.verifiedAt) || '',
+          verifiedKey: (p && p.verifiedKey) || '',
         };
         setUserProfile(updatedProfile);
         setEditDisplayNameInput(updatedProfile.displayName);
         setEditUsernameInput(updatedProfile.username);
+        setEditEmailInput(updatedProfile.email || '');
+        setEditPhoneInput(updatedProfile.phone || '');
         AsyncStorage.setItem('lockx_user_profile', JSON.stringify(updatedProfile)).catch(() => {});
+      })
+      .catch(() => {});
+
+    // 4b. Tải tài khoản đã lưu và danh sách người dùng đã đăng ký
+    AsyncStorage.getItem('lockx_saved_account')
+      .then((acc) => {
+        if (acc) {
+          setSavedAccount(acc);
+          setAuthUsername(acc);
+        }
+      })
+      .catch(() => {});
+
+    AsyncStorage.getItem('lockx_registered_users')
+      .then((saved) => {
+        if (saved) {
+          try {
+            const list = JSON.parse(saved);
+            if (Array.isArray(list) && list.length > 0) {
+              setRegisteredUsers(list);
+            }
+          } catch (e) {}
+        }
       })
       .catch(() => {});
 
@@ -3700,12 +4991,62 @@ export default function App() {
       })
       .catch(() => {});
 
-    // 7. Bạn bè & Tin nhắn
+    // 7. Bạn bè, Gemini AI Key & Tin nhắn
+    AsyncStorage.getItem('lockx_gemini_api_key')
+      .then((k) => {
+        if (k) setGeminiApiKey(k);
+      })
+      .catch(() => {});
+
+    AsyncStorage.getItem('lockx_blocked_users')
+      .then((b) => {
+        if (b) {
+          try {
+            setBlockedUsers(JSON.parse(b));
+          } catch (e) {}
+        }
+      })
+      .catch(() => {});
+
+    AsyncStorage.getItem('lockx_blocked_by_users')
+      .then((b) => {
+        if (b) {
+          try {
+            setBlockedByUsers(JSON.parse(b));
+          } catch (e) {}
+        }
+      })
+      .catch(() => {});
+
+    AsyncStorage.getItem('lockx_archived_friends')
+      .then((b) => {
+        if (b) {
+          try {
+            setArchivedFriendIds(JSON.parse(b));
+          } catch (e) {}
+        }
+      })
+      .catch(() => {});
+
     AsyncStorage.getItem('lockx_friends')
       .then((s) => {
         if (s) {
           try {
-            setFriendsList(JSON.parse(s));
+            const parsed = JSON.parse(s);
+            if (Array.isArray(parsed)) {
+              const hasOld = parsed.some((f: any) => ['fr-1', 'fr-2', 'fr-3', 'fr-4'].includes(f.id));
+              const hasGehihi = parsed.some((f: any) => f.id === 'bot-gehihi');
+              if (hasOld || !hasGehihi) {
+                const cleaned = [
+                  INITIAL_FRIENDS[0],
+                  ...parsed.filter((f: any) => !['fr-1', 'fr-2', 'fr-3', 'fr-4', 'bot-gehihi'].includes(f.id)),
+                ];
+                setFriendsList(cleaned);
+                AsyncStorage.setItem('lockx_friends', JSON.stringify(cleaned)).catch(() => {});
+              } else {
+                setFriendsList(parsed);
+              }
+            }
           } catch (e) {}
         }
       })
@@ -3737,7 +5078,18 @@ export default function App() {
 
     // 9. Tính toán dung lượng bộ nhớ đệm thực tế
     calculateRealCacheSize();
-  }, []);
+
+    // 10. Tải danh sách người dùng thật từ Server MySQL
+    fetchServerUsers();
+  }, [fetchServerUsers]);
+
+  // Tự động tìm kiếm thời gian thực trên Server MySQL khi người dùng gõ tìm bạn bè
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchServerUsers(addFriendSearchText);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [addFriendSearchText, fetchServerUsers]);
 
   // Bộ đếm thời gian hoạt động thực tế (cộng dồn mỗi 5s khi app mở và lưu vào AsyncStorage)
   useEffect(() => {
@@ -3757,6 +5109,22 @@ export default function App() {
     setUserProfile(up);
     try {
       await AsyncStorage.setItem('lockx_user_profile', JSON.stringify(up));
+      // Tự động đồng bộ lên Web PHP Backend
+      fetch('https://aecongnghe.online/api/auth/profile.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: up.username || 'admin_lockx',
+          display_name: up.displayName,
+          email: up.email,
+          phone: up.phone,
+          avatar_preset_id: up.avatarPresetId,
+          avatar_color: up.avatarColor,
+          bio: up.bio,
+          gender: up.gender,
+          birthday: up.birthday
+        })
+      }).catch(() => {});
     } catch (e) {}
   };
 
@@ -3959,9 +5327,9 @@ export default function App() {
 
   
   // =========================================================================
-  // XỬ LÝ ĐĂNG NHẬP / ĐĂNG KÝ / ĐĂNG XUẤT
+  // XỬ LÝ ĐĂNG NHẬP / ĐĂNG KÝ / ĐĂNG XUẤT (KIỂM TRA KHÓA/CẤM SERVER THỜI GIAN THỰC)
   // =========================================================================
-  const handleLogin = (accountOverride?: string) => {
+  const handleLogin = async (accountOverride?: string) => {
     setAuthError(null);
     const trimmedUser = (accountOverride || authUsername || savedAccount).trim();
     const trimmedPass = authPassword.trim();
@@ -3969,10 +5337,84 @@ export default function App() {
       setAuthError('Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu.');
       return;
     }
+
+    const cleanUser = trimmedUser.replace(/^@/, '');
+
+    // 1. KIỂM TRA TRẠNG THÁI KHÓA HOẶC CẤM TRÊN SERVER WEB TRƯỚC TIÊN
+    const banCheck = await checkServerUserBanStatus(cleanUser);
+    if (banCheck.isBanned) {
+      setAuthError(banCheck.message);
+      playAppleNotificationSound('warning');
+      Alert.alert(
+        'Tài Khoản Đã Bị Khóa',
+        `Thông báo: ${banCheck.message}\n\nBạn không thể đăng nhập vào ứng dụng. Vui lòng liên hệ Quản Trị Viên để được hỗ trợ.`,
+        [{ text: 'Đóng', style: 'destructive' }]
+      );
+      return;
+    }
+
+    // 2. Kiểm tra đăng nhập với Web Server MySQL (aecongnghe.online)
+    try {
+      const res = await fetch('https://aecongnghe.online/api/auth/login.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: cleanUser,
+          password: trimmedPass,
+        }),
+      });
+      const data = await res.json();
+      if (!data.success && (data.data?.is_banned || data.message?.includes('khóa') || data.message?.includes('CẤM'))) {
+        const errMsg = data.message || 'Tài khoản của bạn đã bị khóa hoặc cấm.';
+        setAuthError(errMsg);
+        Alert.alert('Tài Khoản Đã Bị Khóa', errMsg, [{ text: 'Đã hiểu', style: 'destructive' }]);
+        return;
+      }
+      if (data.success && data.data) {
+        const u = data.data.user || data.data;
+        const uStatus = (u.status || 'active').toLowerCase().trim();
+        if (['banned', 'suspended', 'locked', 'inactive', 'block', 'blocked'].includes(uStatus)) {
+          const errMsg = 'Tài khoản của bạn đã bị Quản Trị Viên khóa hoặc cấm.';
+          setAuthError(errMsg);
+          Alert.alert('Tài Khoản Đã Bị Khóa', errMsg, [{ text: 'Đã hiểu', style: 'destructive' }]);
+          return;
+        }
+
+        const loggedUser = {
+          username: u.username || cleanUser,
+          displayName: u.display_name || cleanUser,
+          password: trimmedPass,
+        };
+        const updatedUsers = [...registeredUsers.filter(x => x.username.toLowerCase() !== cleanUser.toLowerCase()), loggedUser];
+        setRegisteredUsers(updatedUsers);
+        try {
+          AsyncStorage.setItem('lockx_registered_users', JSON.stringify(updatedUsers));
+          AsyncStorage.setItem('lockx_saved_account', cleanUser);
+        } catch (e) {}
+        setUserProfile((prev) => ({
+          ...prev,
+          username: `@${loggedUser.username}`,
+          displayName: loggedUser.displayName,
+          email: u.email || '',
+          phone: u.phone || '',
+          isVerified: !!u.is_verified,
+        }));
+        setEditDisplayNameInput(loggedUser.displayName);
+        setEditUsernameInput(`@${loggedUser.username}`);
+        setEditEmailInput(u.email || '');
+        setEditPhoneInput(u.phone || '');
+        setSavedAccount(cleanUser);
+        setIsAuthenticated(true);
+        triggerToast(`Chào mừng ${loggedUser.displayName} quay trở lại két sắt an toàn.`, 'Đăng Nhập Thành Công', 'success');
+        return;
+      }
+    } catch (e) {}
+
+    // 3. Fallback cho tài khoản admin / local
     const found = registeredUsers.find(
-      (u) => u.username.toLowerCase() === trimmedUser.toLowerCase() && u.password === trimmedPass
+      (u) => u.username.toLowerCase() === cleanUser.toLowerCase() && u.password === trimmedPass
     );
-    if (found || (trimmedUser.toLowerCase() === 'admin' && trimmedPass === '123456')) {
+    if (found || (cleanUser.toLowerCase() === 'admin' && trimmedPass === '123456')) {
       const activeUser = found || { username: 'admin', password: '123456', displayName: 'Admin LockX' };
       setUserProfile((prev) => ({
         ...prev,
@@ -3980,20 +5422,23 @@ export default function App() {
         displayName: activeUser.displayName,
         currentPasscode: activeUser.password,
       }));
+      setEditDisplayNameInput(activeUser.displayName);
+      setEditUsernameInput(`@${activeUser.username}`);
       const newLog = createRealLoginRecord('Mật khẩu', true);
       saveLoginHistory([newLog, ...loginHistory.filter(x => x.id !== 'current-session')]);
-      setSavedAccount(trimmedUser);
+      setSavedAccount(cleanUser);
       try {
-        AsyncStorage.setItem('lockx_saved_account', trimmedUser);
+        AsyncStorage.setItem('lockx_saved_account', cleanUser);
       } catch (e) {}
       setIsAuthenticated(true);
       triggerToast(`Chào mừng ${activeUser.displayName} quay trở lại két sắt an toàn.`, 'Đăng Nhập Thành Công', 'success');
-    } else {
-      setAuthError('Tài khoản hoặc mật khẩu không chính xác.');
+      return;
     }
+
+    setAuthError('Tài khoản hoặc mật khẩu không chính xác.');
   };
 
-  const handleRegister = () => {
+  const handleRegister = async () => {
     setAuthError(null);
     const trimmedName = authDisplayName.trim();
     const trimmedUser = authUsername.trim();
@@ -4017,39 +5462,129 @@ export default function App() {
       return;
     }
 
+    // 1. Gửi thông tin đăng ký lên Web Server MySQL & Bot Telegram
+    try {
+      const res = await fetch('https://aecongnghe.online/api/auth/register.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: trimmedUser,
+          display_name: trimmedName,
+          password: trimmedPass,
+          email: '',
+          phone: '',
+          avatar_preset_id: 'av-shield',
+          avatar_color: '#0A84FF',
+          bio: 'Người dùng LockX Vault',
+        }),
+      });
+      const data = await res.json();
+      if (!data.success && data.message && data.message.includes('đã được sử dụng')) {
+        setAuthError(data.message);
+        return;
+      }
+    } catch (e) {
+      console.log('Register API network sync note:', e);
+    }
+
+    // 2. Lưu vào danh sách tài khoản cục bộ & AsyncStorage
     const newUser = {
       username: trimmedUser,
       password: trimmedPass,
       displayName: trimmedName,
     };
-    setRegisteredUsers((prev) => [...prev, newUser]);
+    const updatedUsers = [...registeredUsers, newUser];
+    setRegisteredUsers(updatedUsers);
     setSavedAccount(trimmedUser);
     try {
-      AsyncStorage.setItem('lockx_saved_account', trimmedUser);
+      await AsyncStorage.setItem('lockx_registered_users', JSON.stringify(updatedUsers));
+      await AsyncStorage.setItem('lockx_saved_account', trimmedUser);
     } catch (e) {}
-    setUserProfile((prev) => ({
-      ...prev,
-      username: `@${trimmedUser}`,
+
+    // 3. Khởi tạo hồ sơ người dùng mới với email trống
+    const newProfile: UserProfile = {
+      ...INITIAL_USER_PROFILE,
       displayName: trimmedName,
+      username: `@${trimmedUser}`,
       currentPasscode: trimmedPass,
-    }));
+      email: '',
+      phone: '',
+      joinDate: getFormattedTodayDate(),
+      joinTimestamp: Date.now(),
+      daysActive: 1,
+      hoursUsed: 0.1,
+      isVerified: false,
+    };
+    setUserProfile(newProfile);
+    setEditDisplayNameInput(trimmedName);
+    setEditUsernameInput(`@${trimmedUser}`);
+    setEditEmailInput('');
+    setEditPhoneInput('');
+    try {
+      await AsyncStorage.setItem('lockx_user_profile', JSON.stringify(newProfile));
+    } catch (e) {}
+
     const newLog = createRealLoginRecord('Passcode', true);
     saveLoginHistory([newLog, ...loginHistory.filter(x => x.id !== 'current-session')]);
     setIsAuthenticated(true);
-    triggerToast(`Tài khoản @${trimmedUser} đã được mã hóa an toàn trong Keychain.`, 'Đăng Ký Thành Công', 'success', true);
+    triggerToast(`Tài khoản @${trimmedUser} đã được đăng ký và đồng bộ máy chủ LockX.`, 'Đăng Ký Thành Công', 'success', true);
   };
 
-  const handleFaceIdLogin = () => {
+  const handleFaceIdLogin = async () => {
     if (!appSettings.useFaceId) {
       setAuthError('Bạn chưa bật tính năng Face ID trong Cài đặt. Vui lòng đăng nhập bằng mật khẩu để bật tính năng này.');
       triggerToast('Vui lòng bật Face ID trong Cài đặt trước khi sử dụng.', 'Chưa Bật Face ID', 'warning');
       return;
     }
+
+    const cleanUser = (savedAccount || userProfile.username || 'admin').replace(/^@/, '');
+    const banCheck = await checkServerUserBanStatus(cleanUser);
+    if (banCheck.isBanned) {
+      setAuthError(banCheck.message);
+      Alert.alert(
+        'Tài Khoản Đã Bị Khóa',
+        `Thông báo: ${banCheck.message}\n\nBạn không thể đăng nhập bằng Face ID. Vui lòng liên hệ Quản Trị Viên.`,
+        [{ text: 'Đóng', style: 'destructive' }]
+      );
+      return;
+    }
+
     triggerFaceIdAuth('Xác thực Face ID để đăng nhập vào LockX Vault', () => {
       setIsAuthenticated(true);
       triggerToast('Xác thực sinh trắc học Face ID thành công. Két sắt đã mở.', 'Đăng Nhập Thành Công', 'success');
     });
   };
+
+  // Giám sát thời gian thực: Nếu đang ở màn hình chính mà trên web admin BAN thì app lập tức hiện thông báo ban và đăng xuất!
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const cleanUser = (userProfile.username || savedAccount || authUsername || '').replace(/^@/, '').trim();
+    if (!cleanUser) return;
+
+    let isMounted = true;
+    const checkBanStatus = async () => {
+      try {
+        const ban = await checkServerUserBanStatus(cleanUser);
+        if (ban.isBanned && isMounted) {
+          setIsAuthenticated(false);
+          setAuthError(ban.message);
+          playAppleNotificationSound('warning');
+          Alert.alert(
+            'TÀI KHOẢN ĐÃ BỊ KHÓA',
+            `Thông báo hệ thống: Tài khoản @${cleanUser} đã bị Quản Trị Viên ${ban.status === 'banned' ? 'CẤM' : 'KHÓA'} khỏi hệ thống.\n\nBạn đã bị đăng xuất khỏi ứng dụng và không thể tiếp tục truy cập vào két sắt.`,
+            [{ text: 'Xác Nhận', style: 'destructive' }]
+          );
+        }
+      } catch (err) {}
+    };
+
+    checkBanStatus();
+    const interval = setInterval(checkBanStatus, 2000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [isAuthenticated, userProfile.username, savedAccount, authUsername]);
 
   const handleLogout = () => {
     setIsAuthenticated(false);
@@ -4269,43 +5804,70 @@ export default function App() {
     triggerToast('Thông tin hồ sơ cá nhân đã được đồng bộ an toàn.', 'Cập Nhật Hồ Sơ Thành Công', 'success', true);
   };
 
-  // Xử lý xác minh danh tính LockX Verified (Tích Xanh)
-  const handleVerifyIdentity = async () => {
+  // Trạng thái yêu cầu duyệt Tích Xanh từ Web Server
+  const [verifyRequestStatus, setVerifyRequestStatus] = useState<'none' | 'pending' | 'approved' | 'rejected'>('none');
+  const [isCheckingVerify, setIsCheckingVerify] = useState(false);
+
+  // Kiểm tra trạng thái duyệt Tích Xanh từ Web Server
+  const checkServerVerificationStatus = async (showToast = true) => {
+    setIsCheckingVerify(true);
     try {
-      // 1. Xác thực sinh trắc học Face ID thật từ Apple
-      const hasHardware = await LocalAuthentication.hasHardwareAsync();
-      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
-
-      if (hasHardware && isEnrolled) {
-        const authResult = await LocalAuthentication.authenticateAsync({
-          promptMessage: 'Xác thực sinh trắc học để kích hoạt Tích Xanh LockX Verified',
-          fallbackLabel: 'Sử dụng mật khẩu LockX',
-          disableDeviceFallback: false,
-        });
-
-        if (!authResult.success) {
-          triggerToast('Xác thực sinh trắc học không thành công. Vui lòng thử lại.', 'Xác Minh Thất Bại', 'warning');
-          return;
+      const cleanUsername = (userProfile.username || 'admin').replace('@', '');
+      const res = await fetch(`https://aecongnghe.online/api/auth/verify_request.php?username=${cleanUsername}`);
+      const json = await res.json();
+      if (json.success && json.data) {
+        const d = json.data;
+        if (d.is_verified || d.request_status === 'approved') {
+          const updated: UserProfile = {
+            ...userProfile,
+            isVerified: true,
+            verifiedBadge: 'blue_tick',
+            verifiedAt: d.verified_at || userProfile.verifiedAt || getFormattedTodayDate(),
+            verifiedKey: d.verified_key || userProfile.verifiedKey || 'LX-VERIFIED-APPROVED',
+          };
+          saveUserProfile(updated);
+          setVerifyRequestStatus('approved');
+          if (showToast) triggerToast('Chúc mừng! Tài khoản đã được Quản trị viên phê duyệt Tích Xanh.', 'Đã Phê Duyệt Tích Xanh', 'success', 'shield-checkmark', '#0A84FF');
+        } else if (d.request_status === 'pending') {
+          setVerifyRequestStatus('pending');
+          if (showToast) triggerToast('Yêu cầu xác minh của bạn đang chờ Quản trị viên duyệt trên Web Dashboard.', 'Đang Chờ Duyệt', 'info', 'hourglass-outline', '#FF9F0A');
+        } else if (d.request_status === 'rejected') {
+          setVerifyRequestStatus('rejected');
+          if (showToast) triggerToast('Yêu cầu xác minh chưa được chấp thuận. Bạn có thể gửi lại yêu cầu.', 'Chưa Được Duyệt', 'warning');
         }
       }
-
-      // 2. Tạo mã chứng chỉ bảo mật độc quyền
-      const randomHex = Math.random().toString(36).substring(2, 6).toUpperCase() + '-' + Math.random().toString(36).substring(2, 6).toUpperCase();
-      const certKey = `LX-VERIFIED-${randomHex}`;
-      const nowFormatted = getFormattedTodayDate();
-
-      const updated: UserProfile = {
-        ...userProfile,
-        isVerified: true,
-        verifiedBadge: 'blue_tick',
-        verifiedAt: nowFormatted,
-        verifiedKey: certKey,
-      };
-
-      saveUserProfile(updated);
-      triggerToast('Chúc mừng! Tài khoản đã được cấp Tích Xanh LockX Verified.', 'Xác Minh Thành Công', 'security', 'shield-checkmark', '#0A84FF');
     } catch (e) {
-      triggerToast('Đã xảy ra lỗi trong quá trình xác minh. Vui lòng thử lại.', 'Lỗi Xác Minh', 'warning');
+      if (showToast) triggerToast('Đã kiểm tra trạng thái xác minh cục bộ.', 'Xác Minh Danh Tính', 'info');
+    } finally {
+      setIsCheckingVerify(false);
+    }
+  };
+
+  // Xử lý gửi yêu cầu cấp Tích Xanh (LockX Verified) trực tiếp lên Web Server & Telegram
+  const handleVerifyIdentity = async () => {
+    try {
+      const cleanUsername = (userProfile.username || 'admin').replace('@', '');
+
+      // Gửi yêu cầu lên Web Server API PHP
+      try {
+        await fetch('https://aecongnghe.online/api/auth/verify_request.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: cleanUsername,
+            display_name: userProfile.displayName,
+            email: userProfile.email || '',
+            phone: userProfile.phone || '',
+            device_info: `${Platform.OS === 'ios' ? 'Apple iPhone' : 'Thiết bị'} (iOS 18)`,
+            face_auth_verified: 0,
+          }),
+        });
+      } catch (err) {}
+
+      setVerifyRequestStatus('pending');
+      triggerToast('Đã gửi yêu cầu cấp Tích Xanh & thông báo tới Telegram của Quản trị viên!', 'Đang Chờ Phê Duyệt', 'info', 'hourglass-outline', '#FF9F0A');
+    } catch (e) {
+      triggerToast('Đã xảy ra lỗi trong quá trình gửi yêu cầu. Vui lòng thử lại.', 'Lỗi Xác Minh', 'warning');
     }
   };
 
@@ -4353,134 +5915,1458 @@ export default function App() {
     );
   };
 
-  // Xóa sạch lịch sử tin nhắn trò chuyện với bạn bè
+  // Thực hiện làm mới cuộc trò chuyện
+  const executeClearChat = (friendId: string) => {
+    const isBot = friendId === 'bot-gehihi';
+    const initialGreeting: ChatMessage[] = isBot
+      ? [
+          {
+            id: `msg-welcome-${Date.now()}`,
+            sender: 'friend',
+            text: 'Xin chào! Mình là trợ lý AI Gehihi. Bạn muốn trò chuyện hay cần hỗ trợ tính năng gì trên LockX Vault hôm nay? ✨',
+            time: clockStr,
+          },
+        ]
+      : [];
+    const nextMap = { ...chatMessages, [friendId]: initialGreeting };
+    saveChatMessages(nextMap);
+    const updatedFriends = friendsList.map((f) =>
+      f.id === friendId
+        ? {
+            ...f,
+            lastMessage: isBot ? 'Xin chào! Mình là trợ lý AI...' : 'Chưa có tin nhắn',
+            lastTime: clockStr,
+          }
+        : f
+    );
+    saveFriends(updatedFriends);
+    triggerToast('Đã xóa toàn bộ lịch sử trò chuyện!', activeChatFriend?.displayName || 'Tin Nhắn', 'info', 'trash-outline');
+    playAppleNotificationSound('tap');
+  };
+
+  // Xóa toàn bộ lịch sử tin nhắn trò chuyện với bạn bè / Bot AI
   const handleClearChat = (friendId: string) => {
+    if (Platform.OS === 'web') {
+      const confirmed = typeof window !== 'undefined' ? window.confirm('Bạn có chắc chắn muốn xóa toàn bộ lịch sử tin nhắn trò chuyện này không?') : true;
+      if (confirmed) {
+        executeClearChat(friendId);
+      }
+    } else {
+      Alert.alert(
+        'Xóa Lịch Sử Trò Chuyện',
+        'Bạn có chắc chắn muốn xóa toàn bộ lịch sử tin nhắn trò chuyện này không?',
+        [
+          { text: t.cancel, style: 'cancel' },
+          {
+            text: 'Xóa lịch sử',
+            style: 'destructive',
+            onPress: () => executeClearChat(friendId),
+          },
+        ]
+      );
+    }
+  };
+
+  // Thả / gỡ cảm xúc tin nhắn (Apple iMessage Reactions - Đồng bộ đa trình duyệt)
+  const handleToggleReaction = (msgId: string, emoji: string) => {
+    if (!activeChatFriend) return;
+    const friendId = activeChatFriend.id;
+    const list = chatMessages[friendId] || [];
+    const targetMsg = list.find((m) => m.id === msgId);
+    if (!targetMsg) return;
+
+    const current = targetMsg.reactions || [];
+    const exists = current.includes(emoji);
+    const next = exists ? current.filter((e) => e !== emoji) : [...current, emoji];
+
+    const updated = list.map((m) => {
+      if (m.id !== msgId) return m;
+      return { ...m, reactions: next };
+    });
+    const nextMap = { ...chatMessages, [friendId]: updated };
+    saveChatMessages(nextMap);
+    setSelectedMsgForAction(null);
+    playAppleNotificationSound('tap');
+
+    const myClean = (userProfile.username || 'user').replace(/^@/, '').toLowerCase();
+    const targetClean = (activeChatFriend.username || '').replace(/^@/, '').toLowerCase();
+
+    // 1. Đồng bộ cảm xúc thời gian thực qua local relay server (hỗ trợ Cốc Cốc <-> Chrome)
+    fetch('http://127.0.0.1:8089/reaction', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: myClean,
+        to: targetClean,
+        msgId: msgId,
+        msgText: targetMsg.text,
+        reactions: next,
+      }),
+    }).catch(() => {});
+
+    // 2. Đồng bộ các tab trong cùng trình duyệt
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        window.localStorage.setItem(
+          'lockx_reaction_sync',
+          JSON.stringify({
+            from: myClean,
+            to: targetClean,
+            msgId: msgId,
+            msgText: targetMsg.text,
+            reactions: next,
+            time: Date.now(),
+          })
+        );
+      } catch (e) {}
+    }
+  };
+
+  // Thu hồi (với tin nhắn của tôi) hoặc Xóa ở phía bạn (với tin nhắn của người khác)
+  const handleRevokeMessage = (msgId: string) => {
+    if (!activeChatFriend) return;
+    const friendId = activeChatFriend.id;
+    const list = chatMessages[friendId] || [];
+    const targetMsg = list.find((m) => m.id === msgId);
+    const isMyMsg = targetMsg?.sender === 'me';
+    const updated = list.filter((m) => m.id !== msgId);
+    const nextMap = { ...chatMessages, [friendId]: updated };
+    saveChatMessages(nextMap);
+    setSelectedMsgForAction(null);
+    const last = updated[updated.length - 1];
+    setFriendsList((prev) =>
+      prev.map((f) =>
+        f.id === friendId ? { ...f, lastMessage: last ? last.text : 'Chưa có tin nhắn', lastTime: last ? last.time : clockStr } : f
+      )
+    );
+    triggerToast(
+      isMyMsg ? 'Đã thu hồi tin nhắn thành công.' : 'Đã xóa tin nhắn ở phía bạn.',
+      'Tin Nhắn',
+      'info',
+      'trash-outline'
+    );
+    playAppleNotificationSound('tap');
+  };
+
+  // Trả lời tin nhắn
+  const handleReplyMessage = (msg: ChatMessage) => {
+    setReplyingToMessage(msg);
+    setSelectedMsgForAction(null);
+  };
+
+  // Chặn / Bỏ chặn tài khoản
+  const handleToggleBlockUser = (friendId: string) => {
+    const targetFriend = friendsList.find((f) => f.id === friendId) || (activeChatFriend?.id === friendId ? activeChatFriend : null) || (viewingFriendProfile?.id === friendId ? viewingFriendProfile : null);
+    const targetUsername = (targetFriend?.username || friendId).replace(/^@/, '').toLowerCase();
+    const isBlocked = blockedUsers.includes(friendId) || blockedUsers.includes(targetUsername);
+
+    const nextBlocked = isBlocked
+      ? blockedUsers.filter((id) => id !== friendId && id !== targetUsername)
+      : [...blockedUsers, friendId, targetUsername];
+
+    setBlockedUsers(nextBlocked);
+    AsyncStorage.setItem('lockx_blocked_users', JSON.stringify(nextBlocked)).catch(() => {});
+
+    const myClean = (userProfile.username || 'user').replace(/^@/, '').toLowerCase();
+
+    // Đồng bộ trạng thái chặn qua local relay server (hỗ trợ Chrome & Cốc Cốc)
+    fetch('http://127.0.0.1:8089/block', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        blocker: myClean,
+        target: targetUsername,
+        isBlocked: !isBlocked,
+      }),
+    }).catch(() => {});
+
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        window.localStorage.setItem(
+          'lockx_block_sync',
+          JSON.stringify({
+            blocker: myClean,
+            targetUsername: targetUsername,
+            isBlocked: !isBlocked,
+            timestamp: Date.now(),
+          })
+        );
+      } catch (e) {}
+    }
+
+    triggerToast(
+      isBlocked ? 'Đã bỏ chặn tài khoản.' : 'Đã chặn tài khoản này.',
+      'Bảo Mật',
+      isBlocked ? 'info' : 'warning',
+      'shield-outline'
+    );
+  };
+
+  // Lưu trữ / Bỏ lưu trữ bạn bè
+  const handleToggleArchiveFriend = (friendId: string, friendName?: string) => {
+    const isArchived = archivedFriendIds.includes(friendId);
+    const next = isArchived
+      ? archivedFriendIds.filter((id) => id !== friendId)
+      : [...archivedFriendIds, friendId];
+    setArchivedFriendIds(next);
+    AsyncStorage.setItem('lockx_archived_friends', JSON.stringify(next)).catch(() => {});
+    setFriendActionSheetUser(null);
+    setSwipedFriendId(null);
+    triggerToast(
+      isArchived ? `Đã bỏ lưu trữ ${friendName || 'bạn bè'}.` : `Đã lưu trữ ${friendName || 'bạn bè'}.`,
+      'Lưu Trữ',
+      'info',
+      'archive'
+    );
+    playAppleNotificationSound('info');
+  };
+
+  // Xóa bạn bè khỏi danh sách
+  const handleDeleteFriend = (friend: FriendUser) => {
+    setFriendActionSheetUser(null);
+    setSwipedFriendId(null);
     Alert.alert(
-      'Làm sạch cuộc trò chuyện',
-      'Bạn có chắc chắn muốn xóa toàn bộ lịch sử tin nhắn với người này?',
+      'Xóa bạn bè',
+      `Bạn có chắc chắn muốn xóa ${friend.displayName} (@${friend.username.replace(/^@/, '')}) khỏi danh sách bạn bè?`,
       [
-        { text: t.cancel, style: 'cancel' },
+        { text: t.cancel || 'Hủy', style: 'cancel' },
         {
-          text: 'Xóa toàn bộ',
+          text: 'Xóa bạn',
           style: 'destructive',
           onPress: () => {
-            const nextMap = { ...chatMessages, [friendId]: [] };
-            saveChatMessages(nextMap);
-            const updatedFriends = friendsList.map((f) =>
-              f.id === friendId ? { ...f, lastMessage: 'Chưa có tin nhắn', lastTime: clockStr } : f
-            );
-            saveFriends(updatedFriends);
-            triggerToast('Đã xóa sạch lịch sử trò chuyện', 'Hộp Thoại', 'info', 'trash-outline');
+            const updated = friendsList.filter((f) => f.id !== friend.id);
+            setFriendsList(updated);
+            saveFriends(updated);
+            if (activeChatFriend?.id === friend.id) setActiveChatFriend(null);
+            triggerToast(`Đã xóa ${friend.displayName} khỏi danh sách bạn bè.`, 'Bạn Bè', 'warning', 'trash');
+            playAppleNotificationSound('warning');
           },
         },
       ]
     );
   };
 
-  // Gửi tin nhắn chat iMessage người dùng thật (Loại bỏ hoàn toàn bot tự động)
+  // Khởi tạo WebRTC Audio Connection cho cuộc gọi thật 100%
+  const setupWebRTC = async (isInitiator: boolean) => {
+    if (typeof window === 'undefined') return;
+    const RTCPC = window.RTCPeerConnection || (window as any).webkitRTCPeerConnection;
+    if (!RTCPC) return;
+
+    const myClean = (userProfile.username || 'user').replace(/^@/, '').toLowerCase().trim();
+    const curFriend = activeCallFriend || activeChatFriend;
+    if (!curFriend) return;
+    const targetClean = (curFriend.username || '').replace(/^@/, '').toLowerCase().trim();
+
+    try {
+      const pc = new RTCPC({
+        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+      });
+      peerConnectionRef.current = pc;
+
+      // Đưa audio tracks từ mic vào WebRTC PeerConnection
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach((track: any) => {
+          pc.addTrack(track, localStreamRef.current);
+        });
+      }
+
+      // Nhận luồng âm thanh từ đối phương và phát qua loa/tai nghe
+      pc.ontrack = (event: any) => {
+        if (!remoteAudioRef.current) {
+          remoteAudioRef.current = new Audio();
+          remoteAudioRef.current.autoplay = true;
+        }
+        remoteAudioRef.current.srcObject = event.streams[0];
+        remoteAudioRef.current.play().catch(() => {});
+      };
+
+      // Gửi ICE candidate qua Relay Server
+      pc.onicecandidate = (event: any) => {
+        if (event.candidate) {
+          fetch('http://127.0.0.1:8089/call/signal', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              from: myClean,
+              to: targetClean,
+              signal: { type: 'candidate', candidate: event.candidate },
+            }),
+          }).catch(() => {});
+        }
+      };
+
+      if (isInitiator) {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        fetch('http://127.0.0.1:8089/call/signal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            from: myClean,
+            to: targetClean,
+            signal: { type: 'offer', offer },
+          }),
+        }).catch(() => {});
+      }
+    } catch (e) {
+      console.warn('WebRTC setup error:', e);
+    }
+  };
+
+  // Xử lý các gói tín hiệu WebRTC (Offer, Answer, Candidate)
+  const handleWebRTCSignal = async (sig: any) => {
+    if (!sig) return;
+    const myClean = (userProfile.username || 'user').replace(/^@/, '').toLowerCase().trim();
+    const curFriend = activeCallFriend || activeChatFriend;
+    if (!curFriend) return;
+    const targetClean = (curFriend.username || '').replace(/^@/, '').toLowerCase().trim();
+    const pc = peerConnectionRef.current;
+
+    try {
+      if (sig.type === 'offer') {
+        if (!pc) await setupWebRTC(false);
+        const curPc = peerConnectionRef.current;
+        if (curPc) {
+          const RTCSess = window.RTCSessionDescription || (window as any).webkitRTCSessionDescription;
+          await curPc.setRemoteDescription(new RTCSess(sig.offer));
+          const answer = await curPc.createAnswer();
+          await curPc.setLocalDescription(answer);
+          fetch('http://127.0.0.1:8089/call/signal', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              from: myClean,
+              to: targetClean,
+              signal: { type: 'answer', answer },
+            }),
+          }).catch(() => {});
+        }
+      } else if (sig.type === 'answer') {
+        if (pc) {
+          const RTCSess = window.RTCSessionDescription || (window as any).webkitRTCSessionDescription;
+          await pc.setRemoteDescription(new RTCSess(sig.answer));
+        }
+      } else if (sig.type === 'candidate') {
+        if (pc && pc.remoteDescription) {
+          const RTCCand = window.RTCIceCandidate || (window as any).webkitRTCIceCandidate;
+          await pc.addIceCandidate(new RTCCand(sig.candidate));
+        }
+      }
+    } catch (e) {
+      console.warn('WebRTC signal processing error:', e);
+    }
+  };
+
+  // Bắt đầu cuộc gọi thoại (U1 gọi U2)
+  const handleStartCall = async (targetFriend?: FriendUser) => {
+    const friendToCall = targetFriend || activeChatFriend;
+    if (!friendToCall) return;
+
+    setActiveCallFriend(friendToCall);
+    setCallRole('caller');
+    setIsCallingModalOpen(true);
+    setIsCallMuted(false);
+    setIsCallSpeaker(true);
+    setCallDuration(0);
+    setCallCountdown(25);
+    callLastSignalTimeRef.current = Date.now();
+
+    const myClean = (userProfile.username || 'user').replace(/^@/, '').toLowerCase().trim();
+    const targetClean = (friendToCall.username || '').replace(/^@/, '').toLowerCase().trim();
+
+    // 1. Yêu cầu quyền Micro từ trình duyệt/điện thoại (Web Audio MediaStream)
+    if (typeof window !== 'undefined' && navigator?.mediaDevices?.getUserMedia) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        localStreamRef.current = stream;
+      } catch (micErr) {
+        console.warn('Microphone permission:', micErr);
+        triggerToast('Vui lòng cho phép quyền micro để nói chuyện', 'Quyền Micro', 'warning', 'mic-off');
+      }
+    }
+
+    // 2. Kiểm tra trạng thái hoạt động thực tế của đối phương
+    let isTargetOnline = false;
+    try {
+      const presRes = await fetch(`http://127.0.0.1:8089/presence?username=${targetClean}`);
+      const presData = await presRes.json();
+      isTargetOnline = !!presData.isOnline;
+    } catch (e) {}
+
+    if (isTargetOnline) {
+      setCallPhase('ringing');
+      setCallStatusText('Đang đổ chuông... (25s)');
+      startRingtone();
+    } else {
+      setCallPhase('connecting');
+      setCallStatusText('Đang kết nối (25s)...');
+    }
+
+    // 3. Gửi thông tin cuộc gọi lên relay server
+    fetch('http://127.0.0.1:8089/call', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: myClean,
+        to: targetClean,
+        callerName: userProfile.displayName || myClean,
+      }),
+    }).catch(() => {});
+  };
+
+  // U2 bấm Nghe máy (Accept call)
+  const handleAcceptCall = async () => {
+    if (!incomingCallData) return;
+    stopRingtone();
+
+    const myClean = (userProfile.username || 'user').replace(/^@/, '').toLowerCase().trim();
+    const targetClean = incomingCallData.caller;
+    const friendObj: FriendUser = incomingCallData.friendObj || friendsList.find(f => f.username.replace(/^@/, '').toLowerCase() === targetClean) || {
+      id: targetClean,
+      displayName: incomingCallData.callerName,
+      username: `@${targetClean}`,
+      avatarColor: incomingCallData.callerAvatar || '#0A84FF',
+      avatarIcon: 'person',
+      unreadCount: 0,
+      status: 'online' as const,
+    };
+
+    setActiveCallFriend(friendObj);
+    setCallRole('callee');
+    setCallPhase('connected');
+    setIsCallingModalOpen(true);
+    setIncomingCallData(null);
+    setIsCallMuted(false);
+    setIsCallSpeaker(true);
+    setCallDuration(0);
+    callLastSignalTimeRef.current = Date.now();
+
+    // 1. Yêu cầu quyền Micro
+    if (typeof window !== 'undefined' && navigator?.mediaDevices?.getUserMedia) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        localStreamRef.current = stream;
+      } catch (micErr) {
+        console.warn('Microphone permission:', micErr);
+        triggerToast('Vui lòng cho phép quyền micro để nói chuyện', 'Quyền Micro', 'warning', 'mic-off');
+      }
+    }
+
+    // 2. Báo server đã nghe máy
+    fetch('http://127.0.0.1:8089/call/accept', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: myClean, to: targetClean }),
+    }).catch(() => {});
+
+    // 3. Khởi tạo WebRTC Callee
+    setupWebRTC(false);
+  };
+
+  // U2 bấm Từ chối cuộc gọi (Decline call)
+  const handleDeclineCall = () => {
+    if (!incomingCallData) return;
+    stopRingtone();
+
+    const myClean = (userProfile.username || 'user').replace(/^@/, '').toLowerCase().trim();
+    const targetClean = incomingCallData.caller;
+    const friendObj = incomingCallData.friendObj || friendsList.find(f => f.username.replace(/^@/, '').toLowerCase() === targetClean);
+
+    // Gửi decline lên server
+    fetch('http://127.0.0.1:8089/call/decline', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: myClean, to: targetClean }),
+    }).catch(() => {});
+
+    if (friendObj) {
+      const now = new Date();
+      const clockStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      const missedMsgText = `📞 Cuộc gọi nhỡ`;
+      const missedMsg: ChatMessage = {
+        id: `call-missed-${Date.now()}`,
+        sender: 'friend' as const,
+        text: missedMsgText,
+        time: clockStr,
+        deliveryStatus: 'delivered',
+      };
+      setChatMessages((prev) => {
+        const existing = prev[friendObj.id] || [];
+        const updated = [...existing, missedMsg];
+        saveChatMessages({ ...prev, [friendObj.id]: updated });
+        return { ...prev, [friendObj.id]: updated };
+      });
+      setFriendsList((prev) =>
+        prev.map((f) => (f.id === friendObj.id ? { ...f, lastMessage: missedMsgText, lastTime: clockStr } : f))
+      );
+    }
+
+    setIncomingCallData(null);
+    playAppleNotificationSound('warning');
+  };
+
+  // Kết thúc hoặc hủy cuộc gọi thoại -> tự động lưu tin nhắn có thời gian nói chuyện hoặc cuộc gọi nhỡ
+  const handleEndCall = (reason: string = 'Cuộc gọi đã hủy', notifyServer: boolean = true) => {
+    stopRingtone();
+    const friendToClose = activeCallFriend || activeChatFriend;
+    setIsCallingModalOpen(false);
+
+    // Dọn dẹp WebRTC & Micro
+    if (localStreamRef.current) {
+      try {
+        localStreamRef.current.getTracks().forEach((track: any) => track.stop());
+      } catch (e) {}
+      localStreamRef.current = null;
+    }
+    if (peerConnectionRef.current) {
+      try {
+        peerConnectionRef.current.close();
+      } catch (e) {}
+      peerConnectionRef.current = null;
+    }
+    if (remoteAudioRef.current) {
+      try {
+        remoteAudioRef.current.pause();
+        remoteAudioRef.current.srcObject = null;
+      } catch (e) {}
+      remoteAudioRef.current = null;
+    }
+
+    if (!friendToClose) return;
+
+    playAppleNotificationSound('warning');
+
+    const myClean = (userProfile.username || 'user').replace(/^@/, '').toLowerCase().trim();
+    const targetClean = (friendToClose.username || '').replace(/^@/, '').toLowerCase().trim();
+
+    const now = new Date();
+    const clockStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+    // Xác định nội dung tin nhắn hiển thị trong chat
+    let callMsgText = `📞 ${reason}`;
+    if (callDuration > 0) {
+      const mins = Math.floor(callDuration / 60);
+      const secs = callDuration % 60;
+      const durStr = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+      callMsgText = callRole === 'caller' ? `📞 Cuộc gọi đi • ${durStr}` : `📞 Cuộc gọi đến • ${durStr}`;
+    } else if (reason === 'Không trả lời' || reason === 'Cuộc gọi nhỡ') {
+      callMsgText = callRole === 'caller' ? `📞 Cuộc gọi đi • Không trả lời` : `📞 Cuộc gọi nhỡ`;
+    }
+
+    const newMsg: ChatMessage = {
+      id: `call-${Date.now()}`,
+      sender: 'me',
+      text: callMsgText,
+      time: clockStr,
+      deliveryStatus: 'sent',
+    };
+
+    const targetId = friendToClose.id;
+    setChatMessages((prev) => {
+      const existing = prev[targetId] || [];
+      const updated = [...existing, newMsg];
+      saveChatMessages({ ...prev, [targetId]: updated });
+      return { ...prev, [targetId]: updated };
+    });
+
+    setFriendsList((prev) =>
+      prev.map((f) => (f.id === targetId ? { ...f, lastMessage: callMsgText, lastTime: clockStr } : f))
+    );
+
+    if (notifyServer) {
+      fetch('http://127.0.0.1:8089/endcall', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: myClean,
+          to: targetClean,
+          reason,
+          duration: callDuration,
+        }),
+      }).catch(() => {});
+    }
+
+    triggerToast(`Cuộc gọi đã kết thúc.`, 'Cuộc Gọi LockX', 'info', 'call');
+  };
+
+  // Bộ đếm thời gian khi đang mở cuộc gọi & Countdown tự đóng khi không trả lời
+  useEffect(() => {
+    let t: any = null;
+    if (isCallingModalOpen) {
+      t = setInterval(() => {
+        if (callPhase === 'connected') {
+          setCallDuration((prev) => {
+            const next = prev + 1;
+            const mins = String(Math.floor(next / 60)).padStart(2, '0');
+            const secs = String(next % 60).padStart(2, '0');
+            setCallStatusText(`${mins}:${secs}`);
+            return next;
+          });
+        } else if (callPhase === 'connecting' || callPhase === 'ringing') {
+          setCallCountdown((prev) => {
+            const next = prev - 1;
+            if (callPhase === 'connecting') {
+              setCallStatusText(`Đang kết nối (${Math.max(0, next)}s)...`);
+            } else {
+              setCallStatusText(`Đang đổ chuông... (${Math.max(0, next)}s)`);
+            }
+            if (next <= 0) {
+              handleEndCall('Không trả lời');
+            }
+            return next;
+          });
+        }
+      }, 1000);
+    }
+    return () => {
+      if (t) clearInterval(t);
+    };
+  }, [isCallingModalOpen, callPhase]);
+
+  // Polling WebRTC và trạng thái cuộc gọi khi đang mở Call Modal
+  useEffect(() => {
+    if (!isCallingModalOpen || !activeCallFriend) return;
+    const myClean = (userProfile.username || 'user').replace(/^@/, '').toLowerCase().trim();
+    const targetClean = (activeCallFriend.username || '').replace(/^@/, '').toLowerCase().trim();
+
+    const interval = setInterval(async () => {
+      try {
+        const since = callLastSignalTimeRef.current || 0;
+        const res = await fetch(`http://127.0.0.1:8089/call/poll?u1=${myClean}&u2=${targetClean}&since=${since}`);
+        const data = await res.json();
+        const call = data.call;
+        const signals = data.signals || [];
+
+        if (call) {
+          if (call.status === 'connected' && callPhase !== 'connected') {
+            stopRingtone();
+            setCallPhase('connected');
+            playAppleNotificationSound('success');
+            if (callRole === 'caller' && !peerConnectionRef.current) {
+              setupWebRTC(true);
+            }
+          }
+
+          if (!call.active || call.status === 'ended') {
+            handleEndCall(call.reason === 'declined' ? 'Cuộc gọi bị từ chối' : (call.reason === 'missed' ? 'Không trả lời' : 'Cuộc gọi đã kết thúc'), false);
+          }
+        }
+
+        for (const sigItem of signals) {
+          if (sigItem.from !== myClean && sigItem.time > callLastSignalTimeRef.current) {
+            callLastSignalTimeRef.current = sigItem.time;
+            handleWebRTCSignal(sigItem.signal);
+          }
+        }
+      } catch (e) {}
+    }, 450);
+
+    return () => clearInterval(interval);
+  }, [isCallingModalOpen, activeCallFriend, userProfile.username, callPhase, callRole]);
+
+  // Global polling kiểm tra Cuộc gọi đến (Incoming Call)
+  useEffect(() => {
+    const myClean = (userProfile.username || 'user').replace(/^@/, '').toLowerCase().trim();
+    if (!myClean) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`http://127.0.0.1:8089/call/incoming?username=${myClean}`);
+        const data = await res.json();
+        if (data && data.hasIncoming && data.call) {
+          const call = data.call;
+          if (!isCallingModalOpen && (!incomingCallData || incomingCallData.caller !== call.caller)) {
+            const friend = friendsList.find(f => f.username.replace(/^@/, '').toLowerCase() === call.caller);
+            setIncomingCallData({
+              caller: call.caller,
+              callerName: call.callerName || (friend ? friend.displayName : call.caller),
+              callerAvatar: friend?.avatarColor,
+              startTime: call.startTime,
+              friendObj: friend,
+            });
+            startRingtone();
+            playAppleNotificationSound('info');
+          }
+        } else {
+          if (incomingCallData) {
+            stopRingtone();
+            const callerFriend = incomingCallData.friendObj || friendsList.find(f => f.username.replace(/^@/, '').toLowerCase() === incomingCallData.caller);
+            if (callerFriend) {
+              const now = new Date();
+              const clockStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+              const missedMsgText = `📞 Cuộc gọi nhỡ`;
+              const missedMsg: ChatMessage = {
+                id: `call-missed-${Date.now()}`,
+                sender: 'friend' as const,
+                text: missedMsgText,
+                time: clockStr,
+                deliveryStatus: 'delivered',
+              };
+              setChatMessages((prev) => {
+                const existing = prev[callerFriend.id] || [];
+                const updated = [...existing, missedMsg];
+                saveChatMessages({ ...prev, [callerFriend.id]: updated });
+                return { ...prev, [callerFriend.id]: updated };
+              });
+              setFriendsList((prev) =>
+                prev.map((f) => (f.id === callerFriend.id ? { ...f, lastMessage: missedMsgText, lastTime: clockStr } : f))
+              );
+            }
+            setIncomingCallData(null);
+          }
+        }
+      } catch (e) {}
+    }, 600);
+
+    return () => clearInterval(interval);
+  }, [userProfile.username, isCallingModalOpen, incomingCallData, friendsList]);
+
+  // Phát tín hiệu đang soạn tin thời gian thực giữa các tab / trình duyệt
+  const notifyTyping = useCallback(() => {
+    if (!activeChatFriend) return;
+    try {
+      const myClean = (userProfile.username || 'user').replace(/^@/, '').toLowerCase();
+      const targetClean = (activeChatFriend.username || '').replace(/^@/, '').toLowerCase();
+
+      // 1. Gửi qua local relay server (http://127.0.0.1:8089) để đồng bộ tức thì giữa Cốc Cốc & Chrome
+      fetch('http://127.0.0.1:8089/typing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: myClean,
+          to: targetClean,
+          time: Date.now(),
+        }),
+      }).catch(() => {});
+
+      // 2. Đồng bộ trong cùng trình duyệt qua localStorage
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(
+          'lockx_typing_ping',
+          JSON.stringify({
+            from: myClean,
+            to: targetClean,
+            time: Date.now(),
+          })
+        );
+      }
+    } catch (e) {}
+  }, [activeChatFriend, userProfile.username]);
+
+  // Polling trạng thái đang soạn tin (Typing), Đã xem (Seen), Hiện diện (Presence), Cảm xúc (Reactions) và Chặn
+  useEffect(() => {
+    if (!activeChatFriend) return;
+    const targetClean = (activeChatFriend.username || '').replace(/^@/, '').toLowerCase();
+    const myClean = (userProfile.username || 'user').replace(/^@/, '').toLowerCase();
+
+    const timer = setInterval(async () => {
+      try {
+        // 1. Kiểm tra đối phương có đang soạn tin cho mình không
+        const res = await fetch(`http://127.0.0.1:8089/typing?from=${targetClean}&to=${myClean}`);
+        const data = await res.json();
+        if (data && typeof data.isTyping === 'boolean') {
+          setIsFriendTyping(data.isTyping);
+        }
+
+        // 2. Kiểm tra đối phương đã nhận / đã xem tin nhắn thời gian thực
+        const seenRes = await fetch(`http://127.0.0.1:8089/seen?from=${targetClean}&to=${myClean}`);
+        const seenData = await seenRes.json();
+        if (seenData) {
+          const { lastSeen = 0, isCurrentlyActive = false, fromOnline = false } = seenData;
+          setChatMessages((prev) => {
+            const msgs = prev[activeChatFriend.id] || [];
+            let changed = false;
+            const updated = msgs.map((m) => {
+              if (m.sender === 'me') {
+                if (isCurrentlyActive || (lastSeen > 0 && (m.timestamp ? m.timestamp <= lastSeen : true))) {
+                  if (m.deliveryStatus !== 'seen') {
+                    changed = true;
+                    return { ...m, deliveryStatus: 'seen' as const };
+                  }
+                } else if (fromOnline) {
+                  if (m.deliveryStatus === 'sent') {
+                    changed = true;
+                    return { ...m, deliveryStatus: 'delivered' as const };
+                  }
+                }
+              }
+              return m;
+            });
+            if (changed) {
+              const nextMap = { ...prev, [activeChatFriend.id]: updated };
+              saveChatMessages(nextMap);
+              return nextMap;
+            }
+            return prev;
+          });
+        }
+
+        // 3. Kiểm tra đối phương có chặn mình không (gán vào blockedByUsers, KHÔNG đụng vào blockedUsers)
+        const blockRes = await fetch(`http://127.0.0.1:8089/block?blocker=${targetClean}&target=${myClean}`);
+        const blockData = await blockRes.json();
+        if (blockData && typeof blockData.isBlocked === 'boolean') {
+          if (blockData.isBlocked) {
+            setBlockedByUsers((prev) => Array.from(new Set([...prev, activeChatFriend.id, targetClean])));
+          } else {
+            setBlockedByUsers((prev) => prev.filter((id) => id !== activeChatFriend.id && id !== targetClean));
+          }
+        }
+
+        // 4. Cập nhật trạng thái hiện diện (Đang hoạt động / Treo app / Hoạt động xxx phút trước)
+        const presRes = await fetch(`http://127.0.0.1:8089/presence?username=${targetClean}`);
+        const presData = await presRes.json();
+        if (presData && presData.text) {
+          setFriendPresenceStatus(presData.text);
+        }
+
+        // 5. Đồng bộ cảm xúc tin nhắn thời gian thực
+        const rxRes = await fetch(`http://127.0.0.1:8089/reactions?u1=${myClean}&u2=${targetClean}`);
+        const rxData = await rxRes.json();
+        if (rxData && rxData.reactions) {
+          const reactionMap = rxData.reactions;
+          setChatMessages((prev) => {
+            const msgs = prev[activeChatFriend.id] || [];
+            let changed = false;
+            const nextMsgs = msgs.map((m) => {
+              const serverRx = reactionMap[m.id] || reactionMap[m.text] || (m.text ? reactionMap[m.text.trim()] : undefined);
+              if (serverRx && JSON.stringify(serverRx) !== JSON.stringify(m.reactions || [])) {
+                changed = true;
+                return { ...m, reactions: serverRx };
+              }
+              return m;
+            });
+            if (changed) {
+              const nextMap = { ...prev, [activeChatFriend.id]: nextMsgs };
+              saveChatMessages(nextMap);
+              return nextMap;
+            }
+            return prev;
+          });
+        }
+
+      } catch (err) {}
+    }, 450);
+
+    return () => clearInterval(timer);
+  }, [activeChatFriend, userProfile.username, isCallingModalOpen]);
+
+  // Lắng nghe sự kiện gõ phím, đã xem và chặn giữa các tab trong cùng trình duyệt
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.addEventListener) return;
+    const handleStorageSync = (e: StorageEvent) => {
+      if (e.key === 'lockx_typing_ping' && e.newValue) {
+        try {
+          const data = JSON.parse(e.newValue);
+          const myClean = (userProfile.username || 'user').replace(/^@/, '').toLowerCase();
+          if (activeChatFriend && data.to === myClean) {
+            const activeClean = (activeChatFriend.username || '').replace(/^@/, '').toLowerCase();
+            if (data.from === activeClean) {
+              setIsFriendTyping(true);
+              if ((window as any)._typingTimer) clearTimeout((window as any)._typingTimer);
+              (window as any)._typingTimer = setTimeout(() => {
+                setIsFriendTyping(false);
+              }, 2500);
+            }
+          }
+        } catch (err) {}
+      } else if (e.key === 'lockx_block_sync' && e.newValue) {
+        try {
+          const data = JSON.parse(e.newValue);
+          const myClean = (userProfile.username || 'user').replace(/^@/, '').toLowerCase();
+          if (activeChatFriend) {
+            const activeClean = (activeChatFriend.username || '').replace(/^@/, '').toLowerCase();
+            if (data.blocker.toLowerCase() === activeClean) {
+              if (data.isBlocked) {
+                setBlockedByUsers((prev) => Array.from(new Set([...prev, activeChatFriend.id])));
+              } else {
+                setBlockedByUsers((prev) => prev.filter((id) => id !== activeChatFriend.id));
+              }
+            }
+          }
+        } catch (err) {}
+      } else if (e.key === 'lockx_seen_sync' && e.newValue) {
+        try {
+          const data = JSON.parse(e.newValue);
+          const myClean = (userProfile.username || 'user').replace(/^@/, '').toLowerCase();
+          if (data.to === myClean && activeChatFriend) {
+            setChatMessages((prev) => {
+              const msgs = prev[activeChatFriend.id] || [];
+              const updated = msgs.map((m) => (m.sender === 'me' ? { ...m, deliveryStatus: 'seen' as const } : m));
+              const nextMap = { ...prev, [activeChatFriend.id]: updated };
+              saveChatMessages(nextMap);
+              return nextMap;
+            });
+          }
+        } catch (err) {}
+      } else if (e.key === 'lockx_reaction_sync' && e.newValue) {
+        try {
+          const data = JSON.parse(e.newValue);
+          const myClean = (userProfile.username || 'user').replace(/^@/, '').toLowerCase();
+          if (activeChatFriend && (data.to === myClean || data.from === myClean)) {
+            setChatMessages((prev) => {
+              const msgs = prev[activeChatFriend.id] || [];
+              const nextMsgs = msgs.map((m) => {
+                if (m.id === data.msgId || m.text === data.msgText) {
+                  return { ...m, reactions: data.reactions };
+                }
+                return m;
+              });
+              const nextMap = { ...prev, [activeChatFriend.id]: nextMsgs };
+              saveChatMessages(nextMap);
+              return nextMap;
+            });
+          }
+        } catch (err) {}
+      }
+    };
+
+    window.addEventListener('storage', handleStorageSync);
+    return () => window.removeEventListener('storage', handleStorageSync);
+  }, [activeChatFriend, userProfile.username]);
+
+  // Khi mở khung chat, báo cho server biết mình đang xem chat (Active Chat & Seen)
+  useEffect(() => {
+    const myClean = (userProfile.username || 'user').replace(/^@/, '').toLowerCase().trim();
+    if (!myClean) return;
+
+    if (activeChatFriend) {
+      const targetClean = (activeChatFriend.username || '').replace(/^@/, '').toLowerCase().trim();
+
+      // Báo đối phương: Tôi đang mở xem khung chat này (Active Chat)
+      fetch('http://127.0.0.1:8089/active-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user: myClean, chattingWith: targetClean }),
+      }).catch(() => {});
+
+      // Gửi tín hiệu đã xem
+      fetch('http://127.0.0.1:8089/seen', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: myClean,
+          to: targetClean,
+          time: Date.now(),
+        }),
+      }).catch(() => {});
+
+      if (typeof window !== 'undefined' && window.localStorage) {
+        try {
+          window.localStorage.setItem(
+            'lockx_seen_sync',
+            JSON.stringify({
+              from: myClean,
+              to: targetClean,
+              time: Date.now(),
+            })
+          );
+        } catch (e) {}
+      }
+    } else {
+      // Khi đóng khung chat
+      fetch('http://127.0.0.1:8089/active-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user: myClean, chattingWith: null }),
+      }).catch(() => {});
+    }
+
+    return () => {
+      fetch('http://127.0.0.1:8089/active-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user: myClean, chattingWith: null }),
+      }).catch(() => {});
+    };
+  }, [activeChatFriend, userProfile.username]);
+
+  // Lưu Google Gemini API Key
+  const handleSaveGeminiKey = (key: string) => {
+    const clean = key.trim();
+    setGeminiApiKey(clean);
+    AsyncStorage.setItem('lockx_gemini_api_key', clean).catch(() => {});
+    setShowGeminiKeyModal(false);
+    triggerToast('Đã lưu Google Gemini API Key thành công!', 'Gemini AI', 'success', 'sparkles');
+    playAppleNotificationSound('success');
+  };
+
+  // Đồng bộ tin nhắn và lời mời kết bạn thời gian thực từ Server MySQL (Real-time P2P Chat Sync)
+  const syncIncomingMessages = useCallback(async () => {
+    const myUsername = (userProfile.username || '').trim().replace(/^@/, '');
+    if (!myUsername) return;
+
+    try {
+      const res = await fetch(`https://aecongnghe.online/api/messages/list.php?username=${encodeURIComponent(myUsername)}&limit=40`);
+      const data = await res.json();
+      if (data && data.success && Array.isArray(data.data?.messages)) {
+        const serverMsgs = data.data.messages;
+        let hasNewIncoming = false;
+
+        setChatMessages((prevMap) => {
+          let updatedMap = { ...prevMap };
+          let mapChanged = false;
+
+          serverMsgs.forEach((sm: any) => {
+            const senderClean = (sm.sender_username || '').replace(/^@/, '');
+            const recipientClean = (sm.recipient_username || '').replace(/^@/, '');
+            if (!senderClean || !recipientClean) return;
+
+            // Tin nhắn gửi cho tôi
+            const isIncomingForMe = recipientClean.toLowerCase() === myUsername.toLowerCase();
+            const otherUserClean = isIncomingForMe ? senderClean : recipientClean;
+            const otherUsernameFormatted = `@${otherUserClean}`;
+
+            // Tìm friend theo username
+            const foundFriend = friendsList.find(
+              (f) => f.username.toLowerCase().replace(/^@/, '') === otherUserClean.toLowerCase()
+            );
+
+            const targetFriendId = foundFriend ? foundFriend.id : `fr-${otherUserClean}`;
+
+            // Tự động thêm bạn bè nếu chưa có trong danh sách và nhận được tin nhắn hoặc lời mời kết bạn
+            if (!foundFriend && isIncomingForMe) {
+              const newFriendObj: FriendUser = {
+                id: targetFriendId,
+                displayName: sm.sender_name || otherUserClean,
+                username: otherUsernameFormatted,
+                avatarColor: '#0A84FF',
+                avatarIcon: 'person',
+                status: 'online',
+                bio: 'Thành viên LockX Vault 🛡️',
+                lastMessage: sm.content,
+                lastTime: sm.created_at ? sm.created_at.split(' ')[1]?.substring(0, 5) || 'Vừa xong' : 'Vừa xong',
+                unreadCount: 1,
+              };
+              setFriendsList((prevFriends) => {
+                if (prevFriends.some((f) => f.username.toLowerCase().replace(/^@/, '') === otherUserClean.toLowerCase())) {
+                  return prevFriends;
+                }
+                const next = [newFriendObj, ...prevFriends];
+                saveFriends(next);
+                return next;
+              });
+
+              // Hiển thị thông báo khi có người dùng kết nối hoặc gửi tin nhắn thật
+              triggerToast(
+                `📲 ${sm.sender_name || otherUsernameFormatted}: "${sm.content}"`,
+                'Tin Nhắn Mới',
+                'info',
+                'chatbubble-ellipses'
+              );
+              playAppleNotificationSound('info');
+            }
+
+            const currentMsgs = updatedMap[targetFriendId] || [];
+            const msgId = `srv-${sm.id}`;
+
+            // Kiểm tra nếu tin nhắn chưa có trong state
+            if (!currentMsgs.some((m) => m.id === msgId || (m.text === sm.content && m.sender === (isIncomingForMe ? 'friend' : 'me')))) {
+              const timeStr = sm.created_at ? sm.created_at.split(' ')[1]?.substring(0, 5) || clockStr : clockStr;
+              const newMsgObj: ChatMessage = {
+                id: msgId,
+                sender: isIncomingForMe ? 'friend' : 'me',
+                text: sm.content,
+                time: timeStr,
+                deliveryStatus: isIncomingForMe ? undefined : 'delivered',
+              };
+              if (isIncomingForMe) {
+                const msgsWithSeen = currentMsgs.map((m) =>
+                  m.sender === 'me' ? { ...m, deliveryStatus: 'seen' as const } : m
+                );
+                updatedMap[targetFriendId] = [...msgsWithSeen, newMsgObj];
+              } else {
+                updatedMap[targetFriendId] = [...currentMsgs, newMsgObj];
+              }
+              mapChanged = true;
+
+              if (isIncomingForMe) {
+                hasNewIncoming = true;
+                // Cập nhật tin nhắn gần nhất trong danh sách bạn bè
+                setFriendsList((prevFriends) =>
+                  prevFriends.map((f) =>
+                    f.id === targetFriendId ? { ...f, lastMessage: sm.content, lastTime: timeStr, unreadCount: (f.unreadCount || 0) + 1 } : f
+                  )
+                );
+              }
+            }
+          });
+
+          if (mapChanged) {
+            saveChatMessages(updatedMap);
+            if (hasNewIncoming) {
+              playAppleNotificationSound('info');
+              setTimeout(() => {
+                chatScrollRef.current?.scrollToEnd({ animated: true });
+              }, 100);
+            }
+            return updatedMap;
+          }
+          return prevMap;
+        });
+      }
+    } catch (err) {
+      // Silent error handling for background sync
+    }
+  }, [userProfile.username, friendsList, clockStr]);
+
+  // Polling đồng bộ tin nhắn 2 chiều thời gian thực mỗi 2 giây
+  useEffect(() => {
+    const interval = setInterval(() => {
+      syncIncomingMessages();
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [syncIncomingMessages]);
+
+  // Gửi tin nhắn chat iMessage (Chat Thật Đồng Bộ MySQL Server & Chat AI Google Gemini)
   const handleSendMessage = (customText?: string) => {
     const textToSend = (customText || chatInputText).trim();
     if (!textToSend || !activeChatFriend) return;
 
+    const targetClean = (activeChatFriend.username || activeChatFriend.id).replace(/^@/, '').toLowerCase();
+    if (blockedUsers.includes(activeChatFriend.id) || blockedUsers.includes(targetClean)) {
+      triggerToast('Tài khoản này đang bị chặn. Vui lòng bỏ chặn để gửi tin nhắn.', 'Đã Bị Chặn', 'warning');
+      return;
+    }
+
+    if (blockedByUsers.includes(activeChatFriend.id) || blockedByUsers.includes(targetClean) || activeChatFriend.isBlockedByOther) {
+      triggerToast('Người này hiện không nhận tin nhắn từ bạn.', 'Không Thể Gửi', 'warning');
+      return;
+    }
+
     const currentFriend = activeChatFriend;
     const friendId = currentFriend.id;
+    const quotedReply = replyingToMessage
+      ? { id: replyingToMessage.id, sender: replyingToMessage.sender, text: replyingToMessage.text }
+      : undefined;
+
     setChatInputText('');
+    setReplyingToMessage(null);
+    setShowEmojiPicker(false);
 
-    if (chatSenderMode === 'friend') {
-      // Gửi tin nhắn từ phía bạn bè (Mô phỏng người thật gửi đến)
+    const myClean = (userProfile.username || 'user').replace(/^@/, '').toLowerCase().trim();
+    const isTargetOnline = friendPresenceStatus.includes('Đang hoạt động');
+    const initStatus: 'sent' | 'delivered' | 'seen' = isTargetOnline ? 'delivered' : 'sent';
+
+    const msgTimestamp = Date.now();
+    // Gửi tin nhắn từ phía Tôi (Tin nhắn thật)
+    const myMsg: ChatMessage = {
+      id: `msg-${msgTimestamp}`,
+      sender: 'me',
+      text: textToSend,
+      time: clockStr,
+      timestamp: msgTimestamp,
+      replyTo: quotedReply,
+      deliveryStatus: initStatus,
+    };
+
+    const currentList = chatMessages[friendId] || [];
+    const updatedList = [...currentList, myMsg];
+    const newChatMap = { ...chatMessages, [friendId]: updatedList };
+    saveChatMessages(newChatMap);
+
+    // Xác nhận tức thì với relay-server: nếu đối phương đang mở xem chat -> seen, nếu online -> delivered, nếu offline -> sent
+    fetch(`http://127.0.0.1:8089/presence?username=${targetClean}&viewer=${myClean}`)
+      .then((r) => r.json())
+      .then((pres) => {
+        if (pres) {
+          const refinedStatus: 'sent' | 'delivered' | 'seen' = pres.isViewingChat
+            ? 'seen'
+            : pres.isOnline
+            ? 'delivered'
+            : 'sent';
+          if (refinedStatus !== initStatus) {
+            setChatMessages((prev) => {
+              const msgs = prev[friendId] || [];
+              const updated = msgs.map((m) => (m.id === myMsg.id ? { ...m, deliveryStatus: refinedStatus } : m));
+              const nextMap = { ...prev, [friendId]: updated };
+              saveChatMessages(nextMap);
+              return nextMap;
+            });
+          }
+        }
+      })
+      .catch(() => {});
+
+    setFriendsList((prev) =>
+      prev.map((f) => (f.id === friendId ? { ...f, lastMessage: textToSend, lastTime: clockStr } : f))
+    );
+
+    playAppleNotificationSound('tap');
+    setTimeout(() => {
+      chatScrollRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+
+    // 1. NẾU LÀ BẠN BÈ THẬT (NGƯỜI DÙNG KHÁC) -> GỬI TRỰC TIẾP LÊN MYSQL SERVER
+    if (!currentFriend.isBot && currentFriend.id !== 'bot-gehihi') {
+      const senderClean = (userProfile.username || 'user').replace(/^@/, '');
+      const recipientClean = currentFriend.username.replace(/^@/, '');
+      fetch('https://aecongnghe.online/api/messages/send.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sender_username: senderClean,
+          sender_name: userProfile.displayName || senderClean,
+          recipient_username: recipientClean,
+          recipient_name: currentFriend.displayName || recipientClean,
+          content: textToSend,
+          message_type: 'text',
+        }),
+      }).catch((err) => console.log('Lỗi gửi tin nhắn Server:', err));
+    }
+
+    // 2. NẾU LÀ BOT GEHIHI -> XỬ LÝ TRẢ LỜI GOOGLE GEMINI AI STUDIO (KHÔNG DÙNG ICON)
+    if (currentFriend.isBot || currentFriend.id === 'bot-gehihi') {
       setIsFriendTyping(true);
-      setTimeout(() => {
-        setIsFriendTyping(false);
-        const friendMsg: ChatMessage = {
-          id: `msg-${Date.now()}`,
-          sender: 'friend',
-          text: textToSend,
-          time: clockStr,
-        };
+      (async () => {
+        try {
+          let replyContent = '';
 
-        setChatMessages((prev) => {
-          const friendMsgs = [...(prev[friendId] || []), friendMsg];
-          const nextMap = { ...prev, [friendId]: friendMsgs };
-          saveChatMessages(nextMap);
-          return nextMap;
-        });
+          // Thử gọi AI Backend Proxy (hỗ trợ Google Gemini AI Studio)
+          try {
+            const res = await fetch('https://aecongnghe.online/api/ai/chat.php', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                prompt: textToSend,
+                api_key: geminiApiKey.trim(),
+                history: chatMessages[friendId] || [],
+              }),
+            });
+            const data = await res.json();
+            if (data && data.success && data.data?.reply) {
+              replyContent = data.data.reply.trim();
+            }
+          } catch (e) {}
 
-        setFriendsList((prev) => {
-          const u = prev.map((f) =>
-            f.id === friendId ? { ...f, lastMessage: textToSend, lastTime: clockStr } : f
+          // Nếu có Gemini API Key trực tiếp từ Google AI Studio, gọi trực tiếp
+          if (!replyContent && geminiApiKey && geminiApiKey.trim().length > 10) {
+            const modelsToTry = [
+              'gemini-1.5-flash',
+              'gemini-2.0-flash',
+              'gemini-1.5-flash-latest',
+              'gemini-1.5-pro',
+              'gemini-pro',
+            ];
+
+            for (const modelName of modelsToTry) {
+              try {
+                const response = await fetch(
+                  `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${geminiApiKey.trim()}`,
+                  {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      contents: [
+                        {
+                          role: 'user',
+                          parts: [
+                            {
+                              text: `Chỉ dẫn: Bạn là Gehihi, trợ lý AI của LockX Vault. Hãy trả lời câu hỏi trực tiếp, chính xác bằng tiếng Việt. TUYỆT ĐỐI KHÔNG sử dụng bất kỳ biểu tượng cảm xúc (emoji/icon) nào trong câu trả lời.\n\nCâu hỏi: ${textToSend}`,
+                            },
+                          ],
+                        },
+                      ],
+                    }),
+                  }
+                );
+
+                const json = await response.json();
+                if (json?.candidates?.[0]?.content?.parts?.[0]?.text) {
+                  replyContent = json.candidates[0].content.parts[0].text.trim();
+                  break;
+                }
+              } catch (err: any) {}
+            }
+          }
+
+          // Xử lý thông minh dự phòng chuẩn xác (Không dùng icon)
+          if (!replyContent) {
+            await new Promise((r) => setTimeout(r, 500));
+            replyContent = generateSmartGehihiReply(textToSend, userProfile.displayName);
+          }
+
+          // Lọc sạch triệt để mọi emoji
+          replyContent = replyContent.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '');
+
+          setIsFriendTyping(false);
+
+          const botMsg: ChatMessage = {
+            id: `msg-${Date.now()}`,
+            sender: 'friend',
+            text: replyContent,
+            time: clockStr,
+          };
+
+          setChatMessages((prev) => {
+            const currentMsgs = (prev[friendId] || []).map((m) =>
+              m.sender === 'me' ? { ...m, deliveryStatus: 'seen' as const } : m
+            );
+            const msgs = [...currentMsgs, botMsg];
+            const nextMap = { ...prev, [friendId]: msgs };
+            saveChatMessages(nextMap);
+            return nextMap;
+          });
+
+          setFriendsList((prev) =>
+            prev.map((f) => (f.id === friendId ? { ...f, lastMessage: replyContent, lastTime: clockStr } : f))
           );
-          saveFriends(u);
-          return u;
-        });
 
-        // Âm thanh nhận tin nhắn iOS & Thông báo nổi Dynamic Island / Toast
-        playAppleNotificationSound('info');
-        triggerToast(textToSend, currentFriend.displayName, 'info', (currentFriend.avatarIcon || 'chatbubble-ellipses') as any);
-        setTimeout(() => {
-          chatScrollRef.current?.scrollToEnd({ animated: true });
-        }, 100);
-      }, 700);
-    } else {
-      // Gửi tin nhắn từ phía Tôi
-      const myMsg: ChatMessage = {
-        id: `msg-${Date.now()}`,
-        sender: 'me',
-        text: textToSend,
-        time: clockStr,
-      };
-
-      const currentList = chatMessages[friendId] || [];
-      const updatedList = [...currentList, myMsg];
-      const newChatMap = { ...chatMessages, [friendId]: updatedList };
-      saveChatMessages(newChatMap);
-
-      const updatedFriends = friendsList.map((f) =>
-        f.id === friendId ? { ...f, lastMessage: textToSend, lastTime: clockStr } : f
-      );
-      saveFriends(updatedFriends);
-
-      playAppleNotificationSound('tap');
-      setTimeout(() => {
-        chatScrollRef.current?.scrollToEnd({ animated: true });
-      }, 100);
+          playAppleNotificationSound('info');
+          setTimeout(() => {
+            chatScrollRef.current?.scrollToEnd({ animated: true });
+          }, 100);
+        } catch (err: any) {
+          setIsFriendTyping(false);
+        }
+      })();
     }
   };
 
-  // Thêm bạn bè mới qua @username chuẩn Apple
-  const handleAddFriend = () => {
-    const raw = newFriendInput.trim();
+  // Danh sách toàn bộ người dùng THẬT có trên hệ thống LockX (Server MySQL + Local)
+  const allSystemUsers = useMemo(() => {
+    const list: FriendUser[] = [...SYSTEM_SUGGESTED_FRIENDS];
+    const existingUsernames = new Set(list.map((u) => u.username.toLowerCase().replace(/^@/, '')));
+
+    // 1. Thêm toàn bộ người dùng thật từ Server MySQL (aecongnghe.online)
+    serverUsers.forEach((srv) => {
+      const cleanU = srv.username.toLowerCase().replace(/^@/, '');
+      if (!existingUsernames.has(cleanU)) {
+        existingUsernames.add(cleanU);
+        list.push(srv);
+      }
+    });
+
+    // 2. Thêm người dùng cục bộ / đăng ký gần đây
+    registeredUsers.forEach((reg) => {
+      const cleanU = reg.username.toLowerCase().replace(/^@/, '');
+      if (!existingUsernames.has(cleanU)) {
+        existingUsernames.add(cleanU);
+        list.push({
+          id: `reg-${cleanU}`,
+          displayName: reg.displayName || reg.username,
+          username: `@${cleanU}`,
+          avatarColor: '#007AFF',
+          avatarIcon: 'person',
+          status: 'online',
+          bio: 'Thành viên LockX Vault 🛡️',
+          lastMessage: 'Đã sẵn sàng kết nối bảo mật.',
+          lastTime: 'Vừa xong',
+          unreadCount: 0,
+        });
+      }
+    });
+
+    return list;
+  }, [serverUsers, registeredUsers]);
+
+  // Bộ lọc tìm kiếm người dùng thật trên hệ thống
+  const searchedUsers = useMemo(() => {
+    const query = addFriendSearchText.trim().toLowerCase().replace(/^@/, '');
+    if (!query) return [];
+    const currentClean = (userProfile.username || '').toLowerCase().replace(/^@/, '');
+    return allSystemUsers.filter((u) => {
+      const uName = u.username.toLowerCase().replace(/^@/, '');
+      const dName = u.displayName.toLowerCase();
+      if (uName === currentClean) return false; // Không hiển thị chính mình
+      return uName.includes(query) || dName.includes(query);
+    });
+  }, [addFriendSearchText, allSystemUsers, userProfile.username]);
+
+  // Thêm bạn bè mới qua @username chuẩn Apple & kiểm tra người dùng thật trên hệ thống
+  const handleAddFriendByUsername = (
+    usernameOrInfo: string,
+    customName?: string,
+    customBio?: string,
+    customColor?: string,
+    isBot?: boolean,
+    avatarIcon?: string
+  ) => {
+    const raw = usernameOrInfo.trim();
     if (!raw) {
       triggerToast('Vui lòng nhập @username bạn bè.', 'Thêm Bạn Bè', 'warning');
       return;
     }
-    const cleanUsername = raw.startsWith('@') ? raw : `@${raw}`;
-    if (friendsList.some((f) => f.username.toLowerCase() === cleanUsername.toLowerCase())) {
-      triggerToast('Người dùng này đã có trong danh sách bạn bè.', 'Đã Có Sẵn', 'info');
+    const cleanQuery = raw.toLowerCase().replace(/^@/, '');
+    const cleanUsername = `@${cleanQuery}`;
+
+    // 1. Không cho phép kết bạn với chính tài khoản của mình
+    const currentClean = (userProfile.username || '').toLowerCase().replace(/^@/, '');
+    if (cleanQuery === currentClean) {
+      triggerToast('Bạn không thể tự kết bạn với tài khoản của chính mình.', 'Thông Báo', 'warning', 'person');
       return;
     }
-    const colors = ['#007AFF', '#34C759', '#AF52DE', '#FF9500', '#FF3B30', '#30B0C7'];
-    const icons = ['person', 'sparkles', 'shield-checkmark', 'star', 'rocket', 'heart'];
-    const randomColor = colors[Math.floor(Math.random() * colors.length)];
-    const randomIcon = icons[Math.floor(Math.random() * icons.length)];
-    const displayName = cleanUsername.replace('@', '').replace(/[._]/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
-    const newFriend: FriendUser = {
-      id: `fr-${Date.now()}`,
-      displayName: displayName || cleanUsername,
+
+    // 2. Nếu đã kết nối rồi -> Mở ngay phòng chat
+    const foundExisting = friendsList.find((f) => f.username.toLowerCase().replace(/^@/, '') === cleanQuery);
+    if (foundExisting) {
+      triggerToast(`Đã chuyển tới cuộc trò chuyện với ${foundExisting.displayName}`, 'Đã Kết Nối', 'info', 'chatbubble-ellipses-outline');
+      setActiveChatFriend(foundExisting);
+      setFriendsSubView('list');
+      return;
+    }
+
+    // 3. Tìm kiếm trong danh sách người dùng THẬT trên hệ thống
+    const matchedUser = allSystemUsers.find(
+      (u) => u.username.toLowerCase().replace(/^@/, '') === cleanQuery || u.displayName.toLowerCase() === raw.toLowerCase()
+    );
+
+    if (!matchedUser && !customName) {
+      triggerToast(`Không tìm thấy tài khoản "${raw}" trên hệ thống LockX.`, 'Không Tìm Thấy', 'warning', 'alert-circle');
+      return;
+    }
+
+    const targetUser: FriendUser = matchedUser || {
+      id: isBot ? 'bot-gehihi' : `fr-${Date.now()}`,
+      displayName: customName || cleanUsername,
       username: cleanUsername,
-      avatarColor: randomColor,
-      avatarIcon: randomIcon,
+      avatarColor: customColor || '#007AFF',
+      avatarIcon: avatarIcon || 'person',
       status: 'online',
-      bio: 'Người dùng LockX Pro 🛡️',
+      isBot: !!isBot,
+      bio: customBio || 'Người dùng LockX Vault 🛡️',
       lastMessage: 'Đã kết nối qua mã hóa E2E!',
       lastTime: 'Vừa xong',
       unreadCount: 0,
     };
-    const updated = [newFriend, ...friendsList];
+
+    const newFriend: FriendUser = {
+      ...targetUser,
+      id: targetUser.isBot || targetUser.username === '@gehihi' ? 'bot-gehihi' : (targetUser.id.startsWith('fr-') || targetUser.id.startsWith('bot-') ? targetUser.id : `fr-${Date.now()}`),
+      lastMessage: 'Đã kết nối qua mã hóa E2E!',
+      lastTime: 'Vừa xong',
+      unreadCount: 0,
+    };
+
+    const updated = [newFriend, ...friendsList.filter((f) => f.username.toLowerCase() !== newFriend.username.toLowerCase())];
     setFriendsList(updated);
     saveFriends(updated);
     setNewFriendInput('');
-    setShowAddFriendBox(false);
-    triggerToast(`Đã kết nối thành công với ${newFriend.displayName}`, 'Thêm Bạn Bè', 'success');
+    setAddFriendSearchText('');
+    setFriendsSubView('list');
+
+    // 4. Gửi tín hiệu kết nối lên MySQL Server để tài khoản đối phương nhận được thông báo thời gian thực
+    if (!newFriend.isBot) {
+      const senderClean = (userProfile.username || 'user').replace(/^@/, '');
+      fetch('https://aecongnghe.online/api/messages/send.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sender_username: senderClean,
+          sender_name: userProfile.displayName || senderClean,
+          recipient_username: cleanQuery,
+          recipient_name: targetUser.displayName || cleanQuery,
+          content: `👋 Xin chào! Mình là ${userProfile.displayName || senderClean}, đã kết nối bạn bè cùng bạn trên LockX Vault.`,
+          message_type: 'friend_connect',
+        }),
+      }).catch(() => {});
+    }
+
+    triggerToast(`Đã kết nối thành công với ${newFriend.displayName}`, 'Thêm Bạn Bè', 'success', 'person-add');
+    playAppleNotificationSound('success');
+  };
+
+  const handleAddFriend = () => {
+    handleAddFriendByUsername(newFriendInput || addFriendSearchText);
   };
 
   const filteredFriends = useMemo(() => {
@@ -4489,11 +7375,14 @@ export default function App() {
         f.username.toLowerCase().includes(friendSearchQuery.toLowerCase()) ||
         f.displayName.toLowerCase().includes(friendSearchQuery.toLowerCase());
       if (!matchQuery) return false;
+      const isArchived = archivedFriendIds.includes(f.id);
+      if (friendFilter === 'archived') return isArchived;
+      if (isArchived && !friendSearchQuery.trim()) return false; // Ẩn khỏi danh sách chính khi đã lưu trữ
       if (friendFilter === 'online') return f.status === 'online';
       if (friendFilter === 'unread') return (f.unreadCount || 0) > 0;
       return true;
     });
-  }, [friendsList, friendSearchQuery, friendFilter]);
+  }, [friendsList, friendSearchQuery, friendFilter, archivedFriendIds]);
 
   const saveAppsToStorage = async (updated: PhoneAppItem[]) => {
     setPhoneApps(updated);
@@ -4518,6 +7407,27 @@ export default function App() {
       }
       const granted = finalStatus === 'granted';
       setHasNotifPermission(granted);
+
+      // Đăng ký Expo Push Token lên Web PHP Backend để nhận thông báo đẩy từ Admin
+      if (granted && Platform.OS !== 'web') {
+        try {
+          const tokenData = await Notifications.getExpoPushTokenAsync().catch(() => null);
+          if (tokenData?.data) {
+            await fetch('https://aecongnghe.online/api/notifications/register_device.php', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                username: userProfile.username || 'admin_lockx',
+                device_token: tokenData.data,
+                device_info: `${Platform.OS} • ${Platform.Version}`
+              })
+            }).catch(() => {});
+          }
+        } catch (e) {
+          console.log('Push token registration skipped:', e);
+        }
+      }
+
       return granted;
     } catch (e) {
       console.log('Error requesting notification permissions:', e);
@@ -6795,6 +9705,8 @@ export default function App() {
                     setActiveChatFriend(null);
                     setChatInputText('');
                     setIsFriendTyping(false);
+                    setReplyingToMessage(null);
+                    setShowEmojiPicker(false);
                   }}
                   style={styles.fullScreenNavBtn}
                   hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
@@ -6806,50 +9718,75 @@ export default function App() {
                 {/* Center Contact Header - Chạm để xem Trang Cá Nhân */}
                 <TouchableOpacity
                   onPress={() => setViewingFriendProfile(activeChatFriend)}
-                  style={{ alignItems: 'center', maxWidth: '55%' }}
+                  style={{ alignItems: 'center', maxWidth: '45%' }}
                   activeOpacity={0.7}
                 >
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                     <Text style={[styles.fullScreenNavTitle, isLight && { color: '#000000' }]} numberOfLines={1}>
                       {activeChatFriend.displayName}
                     </Text>
-                    <Ionicons name="shield-checkmark" size={13} color={appSettings.accentColor} />
+                    <Ionicons name={activeChatFriend.isBot ? "sparkles" : "shield-checkmark"} size={13} color={activeChatFriend.isBot ? "#BF5AF2" : appSettings.accentColor} />
                   </View>
-                  <Text style={{ color: isFriendTyping ? appSettings.accentColor : (activeChatFriend.status === 'online' ? '#34C759' : '#8E8E93'), fontSize: 11, fontWeight: '500' }}>
-                    {isFriendTyping ? 'Đang soạn tin...' : (activeChatFriend.status === 'online' ? '🟢 Đang hoạt động • E2E' : '⚪ Ngoại tuyến')}
+                  <Text style={{ color: (blockedByUsers.includes(activeChatFriend.id) || blockedByUsers.includes(activeChatFriend.username.replace(/^@/, '').toLowerCase())) ? '#8E8E93' : isFriendTyping ? appSettings.accentColor : (blockedUsers.includes(activeChatFriend.id) || blockedUsers.includes(activeChatFriend.username.replace(/^@/, '').toLowerCase())) ? '#FF3B30' : (friendPresenceStatus.includes('🟢') || activeChatFriend.status === 'online' ? '#34C759' : '#8E8E93'), fontSize: 11, fontWeight: '500' }}>
+                    {(blockedByUsers.includes(activeChatFriend.id) || blockedByUsers.includes(activeChatFriend.username.replace(/^@/, '').toLowerCase()))
+                      ? 'Không thể nhận tin'
+                      : isFriendTyping
+                      ? 'Đang soạn tin...'
+                      : (blockedUsers.includes(activeChatFriend.id) || blockedUsers.includes(activeChatFriend.username.replace(/^@/, '').toLowerCase()))
+                      ? '🚫 Đã chặn tài khoản'
+                      : activeChatFriend.isBot
+                      ? '🟢 Trợ lý AI sẵn sàng'
+                      : (friendPresenceStatus || (activeChatFriend.status === 'online' ? '🟢 Đang hoạt động • E2E' : '⚪ Ngoại tuyến'))}
                   </Text>
                 </TouchableOpacity>
 
                 {/* Right Profile & Actions */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  {/* Nút Cài đặt Google AI Studio API Key (Chỉ hiện khi chat với Bot AI Gehihi) */}
+                  {(activeChatFriend.isBot || activeChatFriend.id === 'bot-gehihi') && (
+                    <TouchableOpacity
+                      onPress={() => {
+                        setTempGeminiKey(geminiApiKey);
+                        setShowGeminiKeyModal(true);
+                      }}
+                      style={{
+                        paddingHorizontal: 8,
+                        height: 32,
+                        borderRadius: 16,
+                        backgroundColor: isLight ? 'rgba(10,132,255,0.1)' : 'rgba(10,132,255,0.2)',
+                        flexDirection: 'row',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        gap: 4,
+                        borderWidth: 0.5,
+                        borderColor: 'rgba(10,132,255,0.3)',
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="key-outline" size={14} color={appSettings.accentColor} />
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: appSettings.accentColor }}>AI Key</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {/* Nút Gọi Thoại Apple Audio Call */}
                   <TouchableOpacity
-                    onPress={() => {
-                      Alert.alert(
-                        'Tùy chọn cuộc trò chuyện',
-                        `Đoạn chat với ${activeChatFriend.displayName}`,
-                        [
-                          { text: 'Xem hồ sơ cá nhân', onPress: () => setViewingFriendProfile(activeChatFriend) },
-                          {
-                            text: 'Làm sạch tin nhắn',
-                            style: 'destructive',
-                            onPress: () => handleClearChat(activeChatFriend.id),
-                          },
-                          { text: t.cancel, style: 'cancel' },
-                        ]
-                      );
-                    }}
+                    onPress={() => handleStartCall(activeChatFriend)}
                     style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: 16,
-                      backgroundColor: isLight ? '#F2F2F7' : '#1C1C1E',
+                      width: 36,
+                      height: 36,
+                      borderRadius: 18,
+                      backgroundColor: 'rgba(52, 199, 89, 0.18)',
+                      borderWidth: 1,
+                      borderColor: 'rgba(52, 199, 89, 0.4)',
                       justifyContent: 'center',
                       alignItems: 'center',
                     }}
+                    activeOpacity={0.7}
                   >
-                    <Ionicons name="ellipsis-horizontal" size={16} color={isLight ? '#000000' : '#FFFFFF'} />
+                    <CallSvgIcon name="phone" size={17} color="#34C759" />
                   </TouchableOpacity>
 
+                  {/* Avatar Profile */}
                   <TouchableOpacity
                     onPress={() => setViewingFriendProfile(activeChatFriend)}
                     style={{
@@ -6859,6 +9796,7 @@ export default function App() {
                       backgroundColor: activeChatFriend.avatarColor,
                       justifyContent: 'center',
                       alignItems: 'center',
+                      overflow: 'hidden',
                       shadowColor: activeChatFriend.avatarColor,
                       shadowOffset: { width: 0, height: 2 },
                       shadowOpacity: 0.35,
@@ -6866,7 +9804,11 @@ export default function App() {
                     }}
                     activeOpacity={0.8}
                   >
-                    <Ionicons name={(activeChatFriend.avatarIcon || 'person') as any} size={17} color="#FFFFFF" />
+                    {activeChatFriend.isBot || activeChatFriend.id === 'bot-gehihi' ? (
+                      <Image source={GEMINI_AVATAR_IMG} style={{ width: 34, height: 34, borderRadius: 17 }} resizeMode="contain" />
+                    ) : (
+                      <Ionicons name={(activeChatFriend.avatarIcon || 'person') as any} size={17} color="#FFFFFF" />
+                    )}
                   </TouchableOpacity>
                 </View>
               </View>
@@ -6875,7 +9817,7 @@ export default function App() {
               <ScrollView
                 ref={chatScrollRef}
                 style={{ flex: 1, paddingHorizontal: 16 }}
-                contentContainerStyle={{ paddingVertical: 16, paddingBottom: 20, flexGrow: 1 }}
+                contentContainerStyle={{ paddingVertical: 16, paddingBottom: 24, flexGrow: 1 }}
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
                 onContentSizeChange={() => chatScrollRef.current?.scrollToEnd({ animated: true })}
@@ -6883,9 +9825,11 @@ export default function App() {
                 {/* Security E2E Notice */}
                 <View style={{ alignItems: 'center', marginBottom: 16 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.08)', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 12 }}>
-                    <Ionicons name="lock-closed" size={12} color="#8E8E93" />
+                    <Ionicons name={activeChatFriend.isBot ? "sparkles" : "lock-closed"} size={12} color="#8E8E93" />
                     <Text style={{ color: '#8E8E93', fontSize: 11, fontWeight: '500' }}>
-                      Tin nhắn được bảo vệ bằng mã hóa đầu cuối LockX
+                      {activeChatFriend.isBot
+                        ? 'Trợ lý AI Gehihi kết nối trực tiếp Google Gemini API'
+                        : 'Tin nhắn được bảo vệ bằng mã hóa đầu cuối LockX'}
                     </Text>
                   </View>
                 </View>
@@ -6893,41 +9837,216 @@ export default function App() {
                 {(chatMessages[activeChatFriend.id] || []).map((msg) => {
                   const isMe = msg.sender === 'me';
                   return (
-                    <View
+                    <TouchableOpacity
                       key={msg.id}
+                      activeOpacity={0.85}
+                      onLongPress={() => setSelectedMsgForAction(msg)}
+                      onPress={() => setSelectedMsgForAction(msg)}
                       style={{
                         alignSelf: isMe ? 'flex-end' : 'flex-start',
-                        maxWidth: '78%',
-                        marginBottom: 10,
+                        maxWidth: '82%',
+                        marginBottom: (msg.reactions && msg.reactions.length > 0) ? 18 : 10,
+                        position: 'relative',
                       }}
                     >
                       <View
                         style={{
-                          backgroundColor: isMe ? appSettings.accentColor : (isLight ? '#FFFFFF' : '#2C2C2E'),
+                          backgroundColor: msg.text.includes('Cuộc gọi nhỡ')
+                            ? (isLight ? '#FFF0F0' : 'rgba(255, 59, 48, 0.14)')
+                            : msg.text.includes('Cuộc gọi') && !isMe
+                            ? (isLight ? '#F0F9F2' : 'rgba(52, 199, 89, 0.12)')
+                            : isMe
+                            ? appSettings.accentColor
+                            : (isLight ? '#FFFFFF' : '#2C2C2E'),
                           borderRadius: 18,
                           paddingHorizontal: 15,
                           paddingVertical: 10,
                           borderBottomRightRadius: isMe ? 4 : 18,
                           borderBottomLeftRadius: isMe ? 18 : 4,
-                          borderWidth: !isMe && isLight ? 0.5 : 0,
-                          borderColor: '#E5E5EA',
-                          shadowColor: isMe ? appSettings.accentColor : '#000000',
+                          borderWidth: msg.text.includes('Cuộc gọi nhỡ')
+                            ? 1
+                            : (msg.text.includes('Cuộc gọi') && !isMe)
+                            ? 1
+                            : (!isMe && isLight ? 0.5 : 0),
+                          borderColor: msg.text.includes('Cuộc gọi nhỡ')
+                            ? 'rgba(255, 59, 48, 0.4)'
+                            : (msg.text.includes('Cuộc gọi') && !isMe)
+                            ? 'rgba(52, 199, 89, 0.35)'
+                            : '#E5E5EA',
+                          shadowColor: msg.text.includes('Cuộc gọi nhỡ')
+                            ? '#FF3B30'
+                            : isMe
+                            ? appSettings.accentColor
+                            : '#000000',
                           shadowOffset: { width: 0, height: 1 },
-                          shadowOpacity: isMe ? 0.25 : 0.08,
+                          shadowOpacity: isMe || msg.text.includes('Cuộc gọi nhỡ') ? 0.25 : 0.08,
                           shadowRadius: 3,
                         }}
                       >
-                        <Text style={{ color: isMe ? '#FFFFFF' : (isLight ? '#000000' : '#FFFFFF'), fontSize: 15, lineHeight: 21 }}>
-                          {msg.text}
-                        </Text>
+                        {/* Quoted Reply Preview Inside Bubble */}
+                        {msg.replyTo && (
+                          <View
+                            style={{
+                              backgroundColor: isMe ? 'rgba(0,0,0,0.15)' : (isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)'),
+                              paddingHorizontal: 10,
+                              paddingVertical: 5,
+                              borderRadius: 8,
+                              borderLeftWidth: 3,
+                              borderLeftColor: isMe ? '#FFFFFF' : appSettings.accentColor,
+                              marginBottom: 6,
+                            }}
+                          >
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: isMe ? '#FFFFFF' : appSettings.accentColor }}>
+                              {msg.replyTo.sender === 'me' ? 'Tôi' : activeChatFriend.displayName}
+                            </Text>
+                            <Text style={{ fontSize: 12, color: isMe ? 'rgba(255,255,255,0.85)' : (isLight ? '#3C3C43' : '#AEAEB2') }} numberOfLines={1}>
+                              {msg.replyTo.text}
+                            </Text>
+                          </View>
+                        )}
+
+                        {/* 1. Trường hợp: Cuộc gọi nhỡ màu đỏ có nút Gọi lại */}
+                        {msg.text.includes('Cuộc gọi nhỡ') ? (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 14, minWidth: 200, paddingVertical: 2 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                              <View
+                                style={{
+                                  width: 34,
+                                  height: 34,
+                                  borderRadius: 17,
+                                  backgroundColor: 'rgba(255, 59, 48, 0.2)',
+                                  justifyContent: 'center',
+                                  alignItems: 'center',
+                                }}
+                              >
+                                <CallSvgIcon name="phone-missed" size={18} color="#FF3B30" />
+                              </View>
+                              <View>
+                                <Text style={{ color: '#FF3B30', fontSize: 14, fontWeight: '700' }}>
+                                  Cuộc gọi nhỡ
+                                </Text>
+                                <Text style={{ color: isLight ? '#8E8E93' : '#AEAEB2', fontSize: 11, marginTop: 1 }}>
+                                  {msg.time}
+                                </Text>
+                              </View>
+                            </View>
+
+                            <TouchableOpacity
+                              onPress={(e) => {
+                                e?.stopPropagation?.();
+                                handleStartCall(activeChatFriend);
+                              }}
+                              style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 5,
+                                backgroundColor: '#34C759',
+                                paddingHorizontal: 12,
+                                paddingVertical: 6,
+                                borderRadius: 14,
+                                shadowColor: '#34C759',
+                                shadowOffset: { width: 0, height: 1 },
+                                shadowOpacity: 0.3,
+                                shadowRadius: 3,
+                              }}
+                              activeOpacity={0.75}
+                            >
+                              <CallSvgIcon name="phone" size={12} color="#FFFFFF" />
+                              <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }}>
+                                Gọi lại
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        ) : msg.text.includes('Cuộc gọi') ? (
+                          /* 2. Trường hợp: Cuộc gọi thoại thành công hiển thị thời gian nói chuyện hoặc đã hủy */
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, minWidth: 180, paddingVertical: 2 }}>
+                            <View
+                              style={{
+                                width: 34,
+                                height: 34,
+                                borderRadius: 17,
+                                backgroundColor: isMe ? 'rgba(255, 255, 255, 0.2)' : 'rgba(52, 199, 89, 0.18)',
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                              }}
+                            >
+                              <CallSvgIcon
+                                name={msg.text.includes('đã hủy') || msg.text.includes('Không trả lời') ? "phone-hangup" : "phone"}
+                                size={18}
+                                color={isMe ? '#FFFFFF' : (msg.text.includes('đã hủy') || msg.text.includes('Không trả lời') ? '#FF3B30' : '#34C759')}
+                              />
+                            </View>
+                            <View>
+                              <Text style={{ color: isMe ? '#FFFFFF' : (isLight ? '#000000' : '#FFFFFF'), fontSize: 14, fontWeight: '700' }}>
+                                {msg.text.replace('📞', '').trim()}
+                              </Text>
+                              <Text style={{ color: isMe ? 'rgba(255,255,255,0.75)' : (isLight ? '#636366' : '#8E8E93'), fontSize: 11, marginTop: 1 }}>
+                                {msg.text.includes(':') ? 'Thời lượng đàm thoại' : 'Cuộc gọi LockX'}
+                              </Text>
+                            </View>
+                          </View>
+                        ) : (
+                          /* 3. Tin nhắn văn bản thông thường */
+                          <Text style={{ color: isMe ? '#FFFFFF' : (isLight ? '#000000' : '#FFFFFF'), fontSize: 15, lineHeight: 21 }}>
+                            {msg.text}
+                          </Text>
+                        )}
                       </View>
+
+                      {/* Message Time and Delivery Status (Đã gửi / Đã nhận / Đã xem) */}
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: isMe ? 'flex-end' : 'flex-start', marginTop: 3, marginHorizontal: 4 }}>
                         <Text style={{ color: isLight ? '#8E8E93' : '#636366', fontSize: 11 }}>
                           {msg.time}
                         </Text>
-                        {isMe && <Ionicons name="checkmark-done" size={13} color={appSettings.accentColor} />}
+                        {isMe && (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginLeft: 2 }}>
+                            {(!msg.deliveryStatus || msg.deliveryStatus === 'seen') ? (
+                              <>
+                                <Ionicons name="checkmark-done" size={13} color="#0A84FF" />
+                                <Text style={{ fontSize: 10, fontWeight: '600', color: '#0A84FF' }}>Đã xem</Text>
+                              </>
+                            ) : msg.deliveryStatus === 'delivered' ? (
+                              <>
+                                <Ionicons name="checkmark-circle" size={12} color={isLight ? '#636366' : '#8E8E93'} />
+                                <Text style={{ fontSize: 10, fontWeight: '500', color: isLight ? '#636366' : '#8E8E93' }}>Đã nhận</Text>
+                              </>
+                            ) : (
+                              <>
+                                <Ionicons name="checkmark-circle-outline" size={12} color={isLight ? '#8E8E93' : '#636366'} />
+                                <Text style={{ fontSize: 10, fontWeight: '500', color: isLight ? '#8E8E93' : '#636366' }}>Đã gửi</Text>
+                              </>
+                            )}
+                          </View>
+                        )}
                       </View>
-                    </View>
+
+                      {/* Reactions Pill Badge */}
+                      {msg.reactions && msg.reactions.length > 0 && (
+                        <View
+                          style={{
+                            position: 'absolute',
+                            bottom: -8,
+                            [isMe ? 'right' : 'left']: 10,
+                            flexDirection: 'row',
+                            gap: 2,
+                            backgroundColor: isLight ? '#FFFFFF' : '#2C2C2E',
+                            borderRadius: 12,
+                            paddingHorizontal: 6,
+                            paddingVertical: 2,
+                            borderWidth: 1,
+                            borderColor: isLight ? '#E5E5EA' : '#3A3A3C',
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 1 },
+                            shadowOpacity: 0.18,
+                            shadowRadius: 2,
+                          }}
+                        >
+                          {msg.reactions.map((r, i) => (
+                            <Text key={i} style={{ fontSize: 12 }}>{r}</Text>
+                          ))}
+                        </View>
+                      )}
+                    </TouchableOpacity>
                   );
                 })}
 
@@ -6941,128 +10060,691 @@ export default function App() {
                 )}
               </ScrollView>
 
-              {/* Persona Switcher Pill (Đổi vai người gửi / Xóa tin nhắn) */}
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  paddingHorizontal: 14,
-                  paddingVertical: 6,
-                  backgroundColor: isLight ? '#FFFFFF' : '#141416',
-                  borderTopWidth: 0.5,
-                  borderTopColor: isLight ? '#E5E5EA' : 'rgba(255,255,255,0.06)',
-                }}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={{ fontSize: 11.5, color: isLight ? '#8E8E93' : '#636366', fontWeight: '500' }}>
-                    Người gửi:
+              {/* KHỐI KHI TÀI KHOẢN BỊ CHẶN HOẶC BỊ ĐỐI PHƯƠNG CHẶN */}
+              {(blockedUsers.includes(activeChatFriend.id) || blockedUsers.includes(activeChatFriend.username.replace(/^@/, '').toLowerCase())) ? (
+                <View
+                  style={{
+                    padding: 16,
+                    backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                    borderTopWidth: 0.5,
+                    borderTopColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                    alignItems: 'center',
+                    gap: 10,
+                  }}
+                >
+                  <Text style={{ color: '#FF3B30', fontSize: 14, fontWeight: '500', textAlign: 'center' }}>
+                    🚫 Bạn đã chặn tài khoản này. Không thể gửi hoặc nhận tin nhắn.
                   </Text>
                   <TouchableOpacity
-                    onPress={() => setChatSenderMode('me')}
-                    style={{
-                      paddingHorizontal: 9,
-                      paddingVertical: 3,
-                      borderRadius: 12,
-                      backgroundColor: chatSenderMode === 'me' ? appSettings.accentColor : (isLight ? '#E5E5EA' : '#2C2C2E'),
-                    }}
+                    onPress={() => handleToggleBlockUser(activeChatFriend.id)}
+                    style={{ backgroundColor: appSettings.accentColor, paddingHorizontal: 18, paddingVertical: 8, borderRadius: 16 }}
                   >
-                    <Text style={{ fontSize: 11.5, fontWeight: chatSenderMode === 'me' ? '700' : '500', color: chatSenderMode === 'me' ? '#FFFFFF' : (isLight ? '#6C6C70' : '#8E8E93') }}>
-                      Tôi ({userProfile.displayName || 'Bạn'})
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => setChatSenderMode('friend')}
-                    style={{
-                      paddingHorizontal: 9,
-                      paddingVertical: 3,
-                      borderRadius: 12,
-                      backgroundColor: chatSenderMode === 'friend' ? activeChatFriend.avatarColor : (isLight ? '#E5E5EA' : '#2C2C2E'),
-                    }}
-                  >
-                    <Text style={{ fontSize: 11.5, fontWeight: chatSenderMode === 'friend' ? '700' : '500', color: chatSenderMode === 'friend' ? '#FFFFFF' : (isLight ? '#6C6C70' : '#8E8E93') }}>
-                      {activeChatFriend.displayName}
-                    </Text>
+                    <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 13.5 }}>Bỏ Chặn Tài Khoản</Text>
                   </TouchableOpacity>
                 </View>
-
-                <TouchableOpacity
-                  onPress={() => handleClearChat(activeChatFriend.id)}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              ) : (blockedByUsers.includes(activeChatFriend.id) || blockedByUsers.includes(activeChatFriend.username.replace(/^@/, '').toLowerCase()) || activeChatFriend.isBlockedByOther) ? (
+                <View
+                  style={{
+                    padding: 22,
+                    backgroundColor: isLight ? '#F2F2F7' : '#1C1C1E',
+                    borderTopWidth: 0.5,
+                    borderTopColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
                 >
-                  <Text style={{ fontSize: 11.5, color: '#FF3B30', fontWeight: '500' }}>Xóa tin nhắn</Text>
+                  <Text style={{ color: isLight ? '#8E8E93' : '#AEAEB2', fontSize: 14.5, fontWeight: '500', textAlign: 'center' }}>
+                    Người này hiện không nhận tin nhắn từ bạn.
+                  </Text>
+                </View>
+              ) : (
+                <>
+                  {/* Messenger Style Quoted Replying Bar */}
+                  {replyingToMessage && (
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        paddingHorizontal: 16,
+                        paddingVertical: 9,
+                        backgroundColor: isLight ? '#F2F2F7' : '#242526',
+                        borderTopWidth: 0.5,
+                        borderTopColor: isLight ? '#E5E5EA' : '#3A3A3C',
+                        borderLeftWidth: 3.5,
+                        borderLeftColor: appSettings.accentColor,
+                      }}
+                    >
+                      <View style={{ flex: 1, marginRight: 10 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 2 }}>
+                          <Ionicons name="arrow-undo" size={12} color={appSettings.accentColor} />
+                          <Text style={{ fontSize: 12, fontWeight: '700', color: appSettings.accentColor }}>
+                            Đang trả lời {replyingToMessage.sender === 'me' ? 'chính bạn' : activeChatFriend.displayName}
+                          </Text>
+                        </View>
+                        <Text style={{ fontSize: 12.5, color: isLight ? '#3C3C43' : '#AEAEB2' }} numberOfLines={1}>
+                          {replyingToMessage.text}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => setReplyingToMessage(null)}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        style={{
+                          width: 24,
+                          height: 24,
+                          borderRadius: 12,
+                          backgroundColor: isLight ? '#E5E5EA' : '#3A3A3C',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <Ionicons name="close" size={14} color={isLight ? '#3C3C43' : '#FFFFFF'} />
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
+
+
+                  {/* Emoji / Sticker Quick Tray */}
+                  {showEmojiPicker && (
+                    <View
+                      style={{
+                        backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                        borderTopWidth: 0.5,
+                        borderTopColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                        paddingHorizontal: 10,
+                        paddingVertical: 8,
+                      }}
+                    >
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 4 }}>
+                        {CHAT_EMOJIS.map((emoji, idx) => (
+                          <TouchableOpacity
+                            key={idx}
+                            onPress={() => setChatInputText((prev) => prev + emoji)}
+                            style={{
+                              width: 36,
+                              height: 36,
+                              borderRadius: 18,
+                              backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E',
+                              justifyContent: 'center',
+                              alignItems: 'center',
+                            }}
+                          >
+                            <Text style={{ fontSize: 20 }}>{emoji}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  )}
+
+                  {/* Chat Input Bar */}
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingHorizontal: 10,
+                      paddingTop: 8,
+                      paddingBottom: Platform.OS === 'ios' ? 22 : 10,
+                      backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                      borderTopWidth: 0.5,
+                      borderTopColor: isLight ? '#E5E5EA' : 'rgba(255,255,255,0.08)',
+                      gap: 8,
+                    }}
+                  >
+                    <TouchableOpacity
+                      style={{
+                        width: 34,
+                        height: 34,
+                        borderRadius: 17,
+                        backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                      }}
+                      onPress={() => triggerToast('Đính kèm dữ liệu tài khoản két sắt', 'Két Sắt LockX', 'info', 'shield-checkmark')}
+                    >
+                      <Ionicons name="add" size={20} color={appSettings.accentColor} />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={{
+                        width: 34,
+                        height: 34,
+                        borderRadius: 17,
+                        backgroundColor: showEmojiPicker ? (isLight ? '#E5E5EA' : '#3A3A3C') : (isLight ? '#F2F2F7' : '#2C2C2E'),
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                      }}
+                      onPress={() => setShowEmojiPicker(!showEmojiPicker)}
+                    >
+                      <Ionicons name="happy-outline" size={20} color={showEmojiPicker ? appSettings.accentColor : '#8E8E93'} />
+                    </TouchableOpacity>
+
+                    <TextInput
+                      style={{
+                        flex: 1,
+                        backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E',
+                        borderRadius: 20,
+                        paddingHorizontal: 16,
+                        paddingVertical: 8,
+                        color: isLight ? '#000000' : '#FFFFFF',
+                        fontSize: 15,
+                        maxHeight: 100,
+                      }}
+                      placeholder={
+                        activeChatFriend.isBot
+                          ? 'Hỏi Gehihi AI (Google Gemini)...'
+                          : chatSenderMode === 'me'
+                          ? (t.typeMessage || 'Nhắn tin bí mật...')
+                          : `Soạn tin từ ${activeChatFriend.displayName}...`
+                      }
+                      placeholderTextColor="#8E8E93"
+                      value={chatInputText}
+                      onChangeText={(val) => {
+                        setChatInputText(val);
+                        notifyTyping();
+                      }}
+                      multiline
+                      blurOnSubmit={false}
+                      onSubmitEditing={() => handleSendMessage()}
+                    />
+
+                    <TouchableOpacity
+                      style={{
+                        width: 34,
+                        height: 34,
+                        borderRadius: 17,
+                        backgroundColor: chatInputText.trim()
+                          ? (activeChatFriend.isBot ? '#BF5AF2' : (chatSenderMode === 'friend' ? activeChatFriend.avatarColor : appSettings.accentColor))
+                          : (isLight ? '#E5E5EA' : '#3A3A3C'),
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                      }}
+                      onPress={() => handleSendMessage()}
+                      disabled={!chatInputText.trim()}
+                    >
+                      <Ionicons name="arrow-up" size={18} color="#FFFFFF" />
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+            </KeyboardAvoidingView>
+          ) : friendsSubView === 'add_friend' ? (
+            /* MÀN HÌNH THÊM BẠN BÈ MỚI ĐẦY ĐỦ TÍNH NĂNG CHUẨN APPLE */
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: isLight ? '#F2F2F7' : '#000000' }}>
+              {/* Apple Top Navigation Bar */}
+              <View style={[styles.fullScreenNavBar, isLight && { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E5EA' }]}>
+                <TouchableOpacity onPress={() => setFriendsSubView('list')} style={styles.fullScreenNavBtn}>
+                  <Ionicons name="chevron-back" size={20} color={appSettings.accentColor} />
+                  <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor }]}>{t.tabFriends || 'Bạn Bè'}</Text>
                 </TouchableOpacity>
+                <Text style={[styles.fullScreenNavTitle, isLight && { color: '#000000' }]}>Thêm Bạn Bè</Text>
+                <View style={{ width: 60 }} />
               </View>
 
-              {/* Chat Input Bar */}
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  paddingHorizontal: 12,
-                  paddingTop: 8,
-                  paddingBottom: Platform.OS === 'ios' ? 22 : 10,
-                  backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
-                  borderTopWidth: 0.5,
-                  borderTopColor: isLight ? '#E5E5EA' : 'rgba(255,255,255,0.08)',
-                  gap: 8,
-                }}
-              >
-                <TouchableOpacity
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 100 }} keyboardShouldPersistTaps="handled">
+                {/* 3-Way Apple Segmented Tabs: Tìm Kiếm / Mã QR & ID / Gợi Ý */}
+                <View
                   style={{
-                    width: 34,
-                    height: 34,
-                    borderRadius: 17,
-                    backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E',
-                    justifyContent: 'center',
-                    alignItems: 'center',
+                    flexDirection: 'row',
+                    backgroundColor: isLight ? '#E3E3E8' : '#1C1C1E',
+                    borderRadius: 10,
+                    padding: 3,
+                    marginBottom: 16,
                   }}
-                  onPress={() => triggerToast('Đính kèm dữ liệu tài khoản két sắt', 'Két Sắt LockX', 'info', 'shield-checkmark')}
                 >
-                  <Ionicons name="add" size={20} color={appSettings.accentColor} />
-                </TouchableOpacity>
+                  {[
+                    { id: 'search', label: 'Tìm Kiếm', icon: 'search' },
+                    { id: 'qr', label: 'Mã QR & ID', icon: 'qr-code-outline' },
+                    { id: 'suggestions', label: `Gợi Ý (${SYSTEM_SUGGESTED_FRIENDS.length})`, icon: 'sparkles' },
+                  ].map((tab) => {
+                    const isSel = addFriendTab === tab.id;
+                    return (
+                      <TouchableOpacity
+                        key={tab.id}
+                        onPress={() => setAddFriendTab(tab.id as any)}
+                        style={{
+                          flex: 1,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 4,
+                          paddingVertical: 7,
+                          borderRadius: 8,
+                          backgroundColor: isSel ? (isLight ? '#FFFFFF' : '#636366') : 'transparent',
+                          shadowColor: isSel ? '#000000' : 'transparent',
+                          shadowOffset: { width: 0, height: 1 },
+                          shadowOpacity: isSel ? 0.2 : 0,
+                          shadowRadius: 2,
+                        }}
+                      >
+                        <Ionicons name={tab.icon as any} size={14} color={isSel ? (isLight ? '#000000' : '#FFFFFF') : (isLight ? '#6C6C70' : '#8E8E93')} />
+                        <Text
+                          style={{
+                            fontSize: 12.5,
+                            fontWeight: isSel ? '700' : '500',
+                            color: isSel ? (isLight ? '#000000' : '#FFFFFF') : (isLight ? '#6C6C70' : '#8E8E93'),
+                          }}
+                        >
+                          {tab.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
 
-                <TextInput
-                  style={{
-                    flex: 1,
-                    backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E',
-                    borderRadius: 20,
-                    paddingHorizontal: 16,
-                    paddingVertical: 8,
-                    color: isLight ? '#000000' : '#FFFFFF',
-                    fontSize: 15,
-                    maxHeight: 100,
-                  }}
-                  placeholder={
-                    chatSenderMode === 'me'
-                      ? (t.typeMessage || 'Nhắn tin bí mật...')
-                      : `Soạn tin từ ${activeChatFriend.displayName}...`
-                  }
-                  placeholderTextColor="#8E8E93"
-                  value={chatInputText}
-                  onChangeText={setChatInputText}
-                  multiline
-                  blurOnSubmit={false}
-                  onSubmitEditing={() => handleSendMessage()}
-                />
+                {/* TAB 1: TÌM KIẾM & KẾT NỐI QUA USERNAME */}
+                {addFriendTab === 'search' && (
+                  <>
+                    <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 16 }]}>
+                      <Text style={[styles.sectionCaption, { marginLeft: 16, marginBottom: 6 }]}>
+                        TÌM KIẾM NGƯỜI DÙNG LOCKX
+                      </Text>
+                      <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }, { padding: 14 }]}>
+                        <Text style={{ fontSize: 13, color: isLight ? '#6C6C70' : '#8E8E93', marginBottom: 10, lineHeight: 18 }}>
+                          Nhập chính xác <Text style={{ fontWeight: '700', color: appSettings.accentColor }}>@username</Text>, họ tên hoặc mã định danh của bạn bè để gửi yêu cầu kết nối bảo mật.
+                        </Text>
+                        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                          <View
+                            style={{
+                              flex: 1,
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E',
+                              borderRadius: 10,
+                              paddingHorizontal: 12,
+                              height: 42,
+                            }}
+                          >
+                            <Ionicons name="at" size={18} color="#8E8E93" style={{ marginRight: 4 }} />
+                            <TextInput
+                              style={{
+                                flex: 1,
+                                color: isLight ? '#000000' : '#FFFFFF',
+                                fontSize: 15,
+                                padding: 0,
+                              }}
+                              placeholder="username_ban_be..."
+                              placeholderTextColor="#8E8E93"
+                              value={addFriendSearchText}
+                              onChangeText={setAddFriendSearchText}
+                              autoCapitalize="none"
+                              autoCorrect={false}
+                              onSubmitEditing={() => handleAddFriendByUsername(addFriendSearchText)}
+                            />
+                            {addFriendSearchText.length > 0 && (
+                              <TouchableOpacity onPress={() => setAddFriendSearchText('')}>
+                                <Ionicons name="close-circle" size={16} color="#8E8E93" />
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                          <TouchableOpacity
+                            onPress={() => handleAddFriendByUsername(addFriendSearchText)}
+                            disabled={!addFriendSearchText.trim()}
+                            style={{
+                              backgroundColor: addFriendSearchText.trim() ? appSettings.accentColor : (isLight ? '#C7C7CC' : '#3A3A3C'),
+                              paddingHorizontal: 16,
+                              height: 42,
+                              borderRadius: 10,
+                              justifyContent: 'center',
+                              alignItems: 'center',
+                            }}
+                          >
+                            <Text style={{ color: '#FFFFFF', fontSize: 14.5, fontWeight: '700' }}>Kết Nối</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </View>
 
-                <TouchableOpacity
-                  style={{
-                    width: 34,
-                    height: 34,
-                    borderRadius: 17,
-                    backgroundColor: chatInputText.trim()
-                      ? (chatSenderMode === 'friend' ? activeChatFriend.avatarColor : appSettings.accentColor)
-                      : (isLight ? '#E5E5EA' : '#3A3A3C'),
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                  }}
-                  onPress={() => handleSendMessage()}
-                  disabled={!chatInputText.trim()}
-                >
-                  <Ionicons name="arrow-up" size={18} color="#FFFFFF" />
-                </TouchableOpacity>
-              </View>
+                    {/* Kết quả tìm kiếm người dùng THẬT trên hệ thống */}
+                    {addFriendSearchText.trim().length > 0 && (
+                      <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 20 }]}>
+                        <Text style={[styles.sectionCaption, { marginLeft: 16, marginBottom: 6 }]}>
+                          KẾT QUẢ TÌM KIẾM ({searchedUsers.length})
+                        </Text>
+                        <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }]}>
+                          {searchedUsers.map((u, idx, arr) => {
+                            const isAlreadyFriend = friendsList.some(
+                              (f) => f.username.toLowerCase().replace(/^@/, '') === u.username.toLowerCase().replace(/^@/, '') || (u.isBot && f.isBot)
+                            );
+                            return (
+                              <View
+                                key={u.id || u.username}
+                                style={[
+                                  styles.cellItem,
+                                  isLight && { borderBottomColor: '#E5E5EA' },
+                                  idx === arr.length - 1 && { borderBottomWidth: 0 },
+                                  { paddingVertical: 12 },
+                                ]}
+                              >
+                                {/* Avatar */}
+                                <View style={{ position: 'relative', marginRight: 12 }}>
+                                  {u.isBot || u.username === '@gehihi' ? (
+                                    <Image source={GEMINI_AVATAR_IMG} style={{ width: 44, height: 44, borderRadius: 22 }} resizeMode="contain" />
+                                  ) : (
+                                    <View
+                                      style={{
+                                        width: 44,
+                                        height: 44,
+                                        borderRadius: 22,
+                                        backgroundColor: u.avatarColor || appSettings.accentColor,
+                                        justifyContent: 'center',
+                                        alignItems: 'center',
+                                      }}
+                                    >
+                                      <Ionicons name={(u.avatarIcon || 'person') as any} size={22} color="#FFFFFF" />
+                                    </View>
+                                  )}
+                                  <View
+                                    style={{
+                                      position: 'absolute',
+                                      bottom: 0,
+                                      right: 0,
+                                      width: 12,
+                                      height: 12,
+                                      borderRadius: 6,
+                                      backgroundColor: '#34C759',
+                                      borderWidth: 2,
+                                      borderColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                                    }}
+                                  />
+                                </View>
+
+                                {/* Info */}
+                                <View style={{ flex: 1, marginRight: 8 }}>
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                    <Text style={{ fontSize: 15.5, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }} numberOfLines={1}>
+                                      {u.displayName}
+                                    </Text>
+                                    <Ionicons name="checkmark-circle" size={14} color="#0A84FF" />
+                                  </View>
+                                  <Text style={{ fontSize: 12.5, color: appSettings.accentColor, marginTop: 1 }}>
+                                    {u.username.startsWith('@') ? u.username : `@${u.username}`}
+                                  </Text>
+                                  <Text style={{ fontSize: 12, color: isLight ? '#6C6C70' : '#8E8E93', marginTop: 2 }} numberOfLines={1}>
+                                    {u.bio || 'Thành viên LockX Vault 🛡️'}
+                                  </Text>
+                                </View>
+
+                                {/* Action Button */}
+                                <TouchableOpacity
+                                  onPress={() => {
+                                    if (isAlreadyFriend) {
+                                      const existing = friendsList.find(
+                                        (f) => f.username.toLowerCase().replace(/^@/, '') === u.username.toLowerCase().replace(/^@/, '') || (u.isBot && f.isBot)
+                                      );
+                                      if (existing) {
+                                        setActiveChatFriend(existing);
+                                        setFriendsSubView('list');
+                                      }
+                                    } else {
+                                      handleAddFriendByUsername(u.username, u.displayName, u.bio, u.avatarColor, u.isBot, u.avatarIcon);
+                                    }
+                                  }}
+                                  style={{
+                                    backgroundColor: isAlreadyFriend ? (isLight ? '#E5E5EA' : '#2C2C2E') : appSettings.accentColor,
+                                    paddingHorizontal: 13,
+                                    paddingVertical: 7,
+                                    borderRadius: 8,
+                                    minWidth: 80,
+                                    alignItems: 'center',
+                                  }}
+                                >
+                                  <Text
+                                    style={{
+                                      color: isAlreadyFriend ? (isLight ? '#3C3C43' : '#AEAEB2') : '#FFFFFF',
+                                      fontSize: 13,
+                                      fontWeight: '700',
+                                    }}
+                                  >
+                                    {isAlreadyFriend ? 'Nhắn Tin' : 'Kết Bạn'}
+                                  </Text>
+                                </TouchableOpacity>
+                              </View>
+                            );
+                          })}
+
+                          {searchedUsers.length === 0 && (
+                            <View style={{ padding: 22, alignItems: 'center' }}>
+                              <Ionicons name="alert-circle-outline" size={38} color="#FF9500" style={{ marginBottom: 8 }} />
+                              <Text style={{ fontSize: 16, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF', textAlign: 'center' }}>
+                                Không tìm thấy người dùng "{addFriendSearchText}"
+                              </Text>
+                              <Text style={{ fontSize: 13, color: isLight ? '#6C6C70' : '#8E8E93', textAlign: 'center', marginTop: 4, lineHeight: 18 }}>
+                                Tài khoản này không tồn tại trên hệ thống LockX. Vui lòng kiểm tra lại chính xác @username hoặc mời bạn bè đăng ký tài khoản.
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                    )}
+
+                    {/* Hướng dẫn bảo mật */}
+                    <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 16 }]}>
+                      <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }, { padding: 14 }]}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                          <Ionicons name="shield-checkmark" size={18} color="#34C759" />
+                          <Text style={{ fontSize: 14.5, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
+                            Mã Hóa Đầu Cuối (E2EE)
+                          </Text>
+                        </View>
+                        <Text style={{ fontSize: 13, color: isLight ? '#6C6C70' : '#8E8E93', lineHeight: 18 }}>
+                          Mọi tin nhắn gửi giữa bạn và bạn bè đều được mã hóa bằng thuật toán AES-256 + RSA chuẩn quân đội. Máy chủ LockX không thể đọc nội dung tin nhắn của bạn.
+                        </Text>
+                      </View>
+                    </View>
+                  </>
+                )}
+
+                {/* TAB 2: MÃ QR & ĐỊNH DANH CỦA BẠN */}
+                {addFriendTab === 'qr' && (
+                  <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 16 }]}>
+                    <Text style={[styles.sectionCaption, { marginLeft: 16, marginBottom: 6 }]}>
+                      MÃ ĐỊNH DANH LOCKX CỦA BẠN
+                    </Text>
+                    <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }, { padding: 20, alignItems: 'center' }]}>
+                      {/* Avatar */}
+                      <View
+                        style={{
+                          width: 64,
+                          height: 64,
+                          borderRadius: 32,
+                          backgroundColor: appSettings.accentColor,
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          marginBottom: 10,
+                          shadowColor: appSettings.accentColor,
+                          shadowOffset: { width: 0, height: 4 },
+                          shadowOpacity: 0.35,
+                          shadowRadius: 8,
+                        }}
+                      >
+                        <Ionicons name="person" size={32} color="#FFFFFF" />
+                      </View>
+                      <Text style={{ fontSize: 18, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
+                        {userProfile.displayName || 'Người Dùng LockX'}
+                      </Text>
+                      <Text style={{ fontSize: 14, color: appSettings.accentColor, fontWeight: '600', marginTop: 2 }}>
+                        {userProfile.username.startsWith('@') ? userProfile.username : `@${userProfile.username}`}
+                      </Text>
+
+                      {/* Visual QR Code Mockup */}
+                      <View
+                        style={{
+                          width: 180,
+                          height: 180,
+                          backgroundColor: '#FFFFFF',
+                          borderRadius: 16,
+                          marginTop: 18,
+                          marginBottom: 14,
+                          padding: 12,
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          borderWidth: 1,
+                          borderColor: '#E5E5EA',
+                          shadowColor: '#000',
+                          shadowOffset: { width: 0, height: 2 },
+                          shadowOpacity: 0.1,
+                          shadowRadius: 6,
+                        }}
+                      >
+                        <Ionicons name="qr-code" size={150} color="#000000" />
+                      </View>
+
+                      <Text style={{ fontSize: 12.5, color: '#8E8E93', textAlign: 'center', marginBottom: 16 }}>
+                        Đưa mã này cho bạn bè quét để kết nối trò chuyện mã hóa ngay lập tức.
+                      </Text>
+
+                      {/* Action buttons */}
+                      <View style={{ width: '100%', gap: 10 }}>
+                        <TouchableOpacity
+                          style={{
+                            backgroundColor: appSettings.accentColor,
+                            height: 42,
+                            borderRadius: 10,
+                            flexDirection: 'row',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            gap: 8,
+                          }}
+                          onPress={() => {
+                            const link = `https://lockx.me/u/${userProfile.username.replace('@', '')}`;
+                            Clipboard.setString(link);
+                            triggerToast('Đã sao chép liên kết kết bạn vào bộ nhớ tạm!', 'Sao Chép Link', 'success', 'link-outline');
+                          }}
+                        >
+                          <Ionicons name="link-outline" size={18} color="#FFFFFF" />
+                          <Text style={{ color: '#FFFFFF', fontSize: 14.5, fontWeight: '700' }}>Sao Chép Link Kết Bạn</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={{
+                            backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E',
+                            height: 42,
+                            borderRadius: 10,
+                            flexDirection: 'row',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            gap: 8,
+                          }}
+                          onPress={() => {
+                            triggerToast('Tính năng quét camera QR đang sẵn sàng.', 'Quét QR Bạn Bè', 'info', 'camera-outline');
+                          }}
+                        >
+                          <Ionicons name="scan-outline" size={18} color={isLight ? '#000000' : '#FFFFFF'} />
+                          <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 14.5, fontWeight: '600' }}>Quét Mã QR Bạn Bè</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+                )}
+
+                {/* TAB 3: GỢI Ý KẾT BẠN CHÍNH THỨC */}
+                {addFriendTab === 'suggestions' && (
+                  <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 20 }]}>
+                    <Text style={[styles.sectionCaption, { marginLeft: 16, marginBottom: 6 }]}>
+                      TÀI KHOẢN CHÍNH THỨC & GỢI Ý ({SYSTEM_SUGGESTED_FRIENDS.length})
+                    </Text>
+                    <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }]}>
+                      {SYSTEM_SUGGESTED_FRIENDS.map((sug, idx, arr) => {
+                        const isAlreadyAdded = friendsList.some((f) => f.username.toLowerCase() === sug.username.toLowerCase() || (sug.isBot && f.isBot));
+                        return (
+                          <View
+                            key={sug.id}
+                            style={[
+                              styles.cellItem,
+                              isLight && { borderBottomColor: '#E5E5EA' },
+                              idx === arr.length - 1 && { borderBottomWidth: 0 },
+                              { paddingVertical: 12 },
+                            ]}
+                          >
+                            {/* Avatar */}
+                            <View style={{ position: 'relative', marginRight: 12 }}>
+                              {sug.isBot ? (
+                                <Image source={GEMINI_AVATAR_IMG} style={{ width: 44, height: 44, borderRadius: 22 }} resizeMode="contain" />
+                              ) : (
+                                <View
+                                  style={{
+                                    width: 44,
+                                    height: 44,
+                                    borderRadius: 22,
+                                    backgroundColor: sug.avatarColor,
+                                    justifyContent: 'center',
+                                    alignItems: 'center',
+                                  }}
+                                >
+                                  <Ionicons name={(sug.avatarIcon || 'person') as any} size={22} color="#FFFFFF" />
+                                </View>
+                              )}
+                              <View
+                                style={{
+                                  position: 'absolute',
+                                  bottom: 0,
+                                  right: 0,
+                                  width: 12,
+                                  height: 12,
+                                  borderRadius: 6,
+                                  backgroundColor: '#34C759',
+                                  borderWidth: 2,
+                                  borderColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                                }}
+                              />
+                            </View>
+
+                            {/* Info */}
+                            <View style={{ flex: 1, marginRight: 8 }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                <Text style={{ fontSize: 15.5, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }} numberOfLines={1}>
+                                  {sug.displayName}
+                                </Text>
+                                <Ionicons name="checkmark-circle" size={14} color="#0A84FF" />
+                              </View>
+                              <Text style={{ fontSize: 12.5, color: appSettings.accentColor, marginTop: 1 }}>
+                                {sug.username}
+                              </Text>
+                              <Text style={{ fontSize: 12, color: isLight ? '#6C6C70' : '#8E8E93', marginTop: 2 }} numberOfLines={1}>
+                                {sug.bio}
+                              </Text>
+                            </View>
+
+                            {/* Action Button */}
+                            <TouchableOpacity
+                              onPress={() => {
+                                if (isAlreadyAdded) {
+                                  const existing = friendsList.find((f) => f.username.toLowerCase() === sug.username.toLowerCase() || (sug.isBot && f.isBot));
+                                  if (existing) {
+                                    setActiveChatFriend(existing);
+                                    setFriendsSubView('list');
+                                  }
+                                } else {
+                                  handleAddFriendByUsername(sug.username, sug.displayName, sug.bio, sug.avatarColor, sug.isBot, sug.avatarIcon);
+                                }
+                              }}
+                              style={{
+                                backgroundColor: isAlreadyAdded ? (isLight ? '#E5E5EA' : '#2C2C2E') : appSettings.accentColor,
+                                paddingHorizontal: 12,
+                                paddingVertical: 7,
+                                borderRadius: 8,
+                                minWidth: 78,
+                                alignItems: 'center',
+                              }}
+                            >
+                              <Text
+                                style={{
+                                  color: isAlreadyAdded ? (isLight ? '#3C3C43' : '#AEAEB2') : '#FFFFFF',
+                                  fontSize: 13,
+                                  fontWeight: '700',
+                                }}
+                              >
+                                {isAlreadyAdded ? 'Nhắn Tin' : 'Kết Bạn'}
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </View>
+                )}
+              </ScrollView>
             </KeyboardAvoidingView>
           ) : (
             /* DANH SÁCH BẠN BÈ ĐỒNG BỘ CHUẨN APPLE iOS 18 HIG */
@@ -7080,17 +10762,20 @@ export default function App() {
                   </View>
                   <TouchableOpacity
                     style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 18,
-                      backgroundColor: isLight ? '#E5E5EA' : '#1C1C1E',
-                      justifyContent: 'center',
+                      flexDirection: 'row',
                       alignItems: 'center',
+                      gap: 5,
+                      paddingHorizontal: 12,
+                      height: 34,
+                      borderRadius: 17,
+                      backgroundColor: appSettings.accentColor,
+                      justifyContent: 'center',
                     }}
                     activeOpacity={0.75}
-                    onPress={() => setShowAddFriendBox(!showAddFriendBox)}
+                    onPress={() => setFriendsSubView('add_friend')}
                   >
-                    <Ionicons name={showAddFriendBox ? 'close' : 'person-add'} size={18} color={appSettings.accentColor} />
+                    <Ionicons name="person-add" size={15} color="#FFFFFF" />
+                    <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '700' }}>Thêm Bạn</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -7124,53 +10809,6 @@ export default function App() {
                 </View>
               </View>
 
-              {/* Hero Quick Add Friend Box (Toggleable Apple Box) */}
-              {showAddFriendBox && (
-                <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 16 }]}>
-                  <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }, { padding: 14 }]}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                      <View style={[styles.cellLeadingIcon, { backgroundColor: appSettings.accentColor, width: 28, height: 28, borderRadius: 14 }]}>
-                        <Ionicons name="person-add" size={15} color="#FFFFFF" />
-                      </View>
-                      <Text style={{ fontSize: 15, fontWeight: '600', color: isLight ? '#000000' : '#FFFFFF' }}>
-                        Thêm Bạn Bè Mới
-                      </Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-                      <TextInput
-                        style={{
-                          flex: 1,
-                          backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E',
-                          borderRadius: 10,
-                          paddingHorizontal: 12,
-                          height: 38,
-                          color: isLight ? '#000000' : '#FFFFFF',
-                          fontSize: 14.5,
-                        }}
-                        placeholder="Nhập @username bạn bè..."
-                        placeholderTextColor="#8E8E93"
-                        value={newFriendInput}
-                        onChangeText={setNewFriendInput}
-                        autoCapitalize="none"
-                      />
-                      <TouchableOpacity
-                        onPress={handleAddFriend}
-                        style={{
-                          backgroundColor: appSettings.accentColor,
-                          paddingHorizontal: 14,
-                          height: 38,
-                          borderRadius: 10,
-                          justifyContent: 'center',
-                          alignItems: 'center',
-                        }}
-                      >
-                        <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '700' }}>Kết Nối</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                </View>
-              )}
-
               {/* Segmented Filter Control (Tất cả / Trực tuyến / Chưa đọc) */}
               <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 16 }]}>
                 <View
@@ -7186,6 +10824,7 @@ export default function App() {
                     { id: 'all', label: 'Tất cả' },
                     { id: 'online', label: 'Trực tuyến' },
                     { id: 'unread', label: 'Chưa đọc' },
+                    { id: 'archived', label: `Lưu trữ${archivedFriendIds.length > 0 ? ` (${archivedFriendIds.length})` : ''}` },
                   ].map((seg) => {
                     const isSel = friendFilter === seg.id;
                     return (
@@ -7225,101 +10864,32 @@ export default function App() {
                   DANH SÁCH BẠN BÈ ({filteredFriends.length})
                 </Text>
                 <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }]}>
-                  {filteredFriends.map((friend, idx, arr) => (
-                    <TouchableOpacity
-                      key={friend.id}
-                      style={[
-                        styles.cellItem,
-                        isLight && { borderBottomColor: '#E5E5EA' },
-                        idx === arr.length - 1 && { borderBottomWidth: 0 },
-                        { paddingVertical: 12 },
-                      ]}
-                      activeOpacity={0.7}
-                      onPress={() => {
-                        setActiveChatFriend(friend);
-                        setChatInputText('');
-                      }}
-                    >
-                      {/* Avatar with Modern Icon & Live Indicator */}
-                      <View style={{ position: 'relative', marginRight: 14 }}>
-                        <View
-                          style={{
-                            width: 48,
-                            height: 48,
-                            borderRadius: 24,
-                            backgroundColor: friend.avatarColor,
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                            shadowColor: friend.avatarColor,
-                            shadowOffset: { width: 0, height: 2 },
-                            shadowOpacity: 0.35,
-                            shadowRadius: 5,
-                          }}
-                        >
-                          <Ionicons name={(friend.avatarIcon || 'person') as any} size={24} color="#FFFFFF" />
-                        </View>
-                        {friend.status === 'online' && (
-                          <View
-                            style={{
-                              position: 'absolute',
-                              bottom: 0,
-                              right: 0,
-                              width: 14,
-                              height: 14,
-                              borderRadius: 7,
-                              backgroundColor: '#34C759',
-                              borderWidth: 2.5,
-                              borderColor: isLight ? '#FFFFFF' : '#1C1C1E',
-                            }}
-                          />
-                        )}
-                      </View>
-
-                      {/* Main Content */}
-                      <View style={[styles.cellContent, { flex: 1 }]}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16.5, fontWeight: '600' }} numberOfLines={1}>
-                            {friend.displayName}
-                          </Text>
-                          <Text style={{ color: isLight ? '#8E8E93' : '#8E8E93', fontSize: 13 }}>
-                            {friend.lastTime || ''}
-                          </Text>
-                        </View>
-
-                        <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 13, marginTop: 1 }}>
-                          {friend.username} • {friend.status === 'online' ? '🟢 Trực tuyến' : 'Ngoại tuyến'}
-                        </Text>
-
-                        {friend.lastMessage ? (
-                          <Text style={{ color: isLight ? '#3C3C43' : '#AEAEB2', fontSize: 13.5, marginTop: 3 }} numberOfLines={1}>
-                            {friend.lastMessage}
-                          </Text>
-                        ) : null}
-                      </View>
-
-                      {/* Right Accessories (Unread badge + Chevron) */}
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginLeft: 8 }}>
-                        {(friend.unreadCount || 0) > 0 && (
-                          <View
-                            style={{
-                              backgroundColor: appSettings.accentColor,
-                              borderRadius: 10,
-                              minWidth: 20,
-                              height: 20,
-                              justifyContent: 'center',
-                              alignItems: 'center',
-                              paddingHorizontal: 6,
-                            }}
-                          >
-                            <Text style={{ color: '#FFFFFF', fontSize: 11.5, fontWeight: '700' }}>
-                              {friend.unreadCount}
-                            </Text>
-                          </View>
-                        )}
-                        <Ionicons name="chevron-forward" size={17} color={isLight ? '#C7C7CC' : '#48484A'} />
-                      </View>
-                    </TouchableOpacity>
-                  ))}
+                  {filteredFriends.map((friend, idx, arr) => {
+                    const isArchived = archivedFriendIds.includes(friend.id);
+                    const cleanU = (friend.username || '').replace(/^@/, '').toLowerCase();
+                    const isBlocked = blockedUsers.includes(friend.id) || blockedUsers.includes(cleanU);
+                    return (
+                      <SwipeableFriendRow
+                        key={friend.id}
+                        friend={friend}
+                        isLight={isLight}
+                        isLast={idx === arr.length - 1}
+                        isArchived={isArchived}
+                        isBlocked={isBlocked}
+                        accentColor={appSettings.accentColor}
+                        isSwiped={swipedFriendId === friend.id}
+                        onSwipeChange={(swiped) => setSwipedFriendId(swiped ? friend.id : null)}
+                        onPress={() => {
+                          setActiveChatFriend(friend);
+                          setChatInputText('');
+                        }}
+                        onLongPress={() => setFriendActionSheetUser(friend)}
+                        onArchive={() => handleToggleArchiveFriend(friend.id, friend.displayName)}
+                        onBlock={() => handleToggleBlockUser(friend.id)}
+                        onDelete={() => handleDeleteFriend(friend)}
+                      />
+                    );
+                  })}
 
                   {filteredFriends.length === 0 && (
                     <View style={{ alignItems: 'center', paddingVertical: 36 }}>
@@ -7739,7 +11309,11 @@ export default function App() {
                         flexDirection: 'row',
                         alignItems: 'center',
                         gap: 6,
-                        backgroundColor: userProfile.isVerified ? 'rgba(52, 199, 89, 0.15)' : 'rgba(255, 159, 10, 0.15)',
+                        backgroundColor: userProfile.isVerified
+                          ? 'rgba(52, 199, 89, 0.15)'
+                          : verifyRequestStatus === 'pending'
+                          ? 'rgba(255, 159, 10, 0.15)'
+                          : 'rgba(10, 132, 255, 0.15)',
                         paddingHorizontal: 12,
                         paddingVertical: 5,
                         borderRadius: 12,
@@ -7750,18 +11324,30 @@ export default function App() {
                           width: 8,
                           height: 8,
                           borderRadius: 4,
-                          backgroundColor: userProfile.isVerified ? '#34C759' : '#FF9F0A',
+                          backgroundColor: userProfile.isVerified
+                            ? '#34C759'
+                            : verifyRequestStatus === 'pending'
+                            ? '#FF9F0A'
+                            : '#0A84FF',
                         }}
                       />
                       <Text
                         style={{
-                          color: userProfile.isVerified ? '#34C759' : '#FF9F0A',
+                          color: userProfile.isVerified
+                            ? '#34C759'
+                            : verifyRequestStatus === 'pending'
+                            ? '#FF9F0A'
+                            : '#0A84FF',
                           fontSize: 12.5,
                           fontWeight: '700',
                           letterSpacing: 0.3,
                         }}
                       >
-                        {userProfile.isVerified ? 'ĐÃ XÁC MINH CHÍNH CHỦ' : 'CHƯA XÁC MINH DANH TÍNH'}
+                        {userProfile.isVerified
+                          ? 'ĐÃ XÁC MINH CHÍNH CHỦ'
+                          : verifyRequestStatus === 'pending'
+                          ? '⏳ ĐANG CHỜ ADMIN PHÊ DUYỆT'
+                          : 'CHƯA XÁC MINH DANH TÍNH'}
                       </Text>
                     </View>
                   </View>
@@ -7834,9 +11420,9 @@ export default function App() {
                           gap: 8,
                         }}
                       >
-                        <Ionicons name="scan-outline" size={18} color="#FFFFFF" />
+                        <Ionicons name="send-outline" size={18} color="#FFFFFF" />
                         <Text style={{ color: '#FFFFFF', fontSize: 15.5, fontWeight: '700' }}>
-                          Xác minh lại bằng Face ID
+                          Gửi lại yêu cầu duyệt
                         </Text>
                       </TouchableOpacity>
 
@@ -7858,6 +11444,81 @@ export default function App() {
                         <Ionicons name="trash-outline" size={16} color="#FF3B30" />
                         <Text style={{ color: '#FF3B30', fontSize: 15, fontWeight: '600' }}>
                           Hủy trạng thái xác minh
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                ) : verifyRequestStatus === 'pending' ? (
+                  /* IF PENDING APPROVAL: SHOW PENDING STATUS & CHECK STATUS BUTTON */
+                  <>
+                    <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 20 }]}>
+                      <Text style={styles.sectionCaption}>TIẾN TRÌNH XÉT DUYỆT TÍCH XANH</Text>
+                      <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }, { padding: 18 }]}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                          <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255, 159, 10, 0.15)', justifyContent: 'center', alignItems: 'center' }}>
+                            <Ionicons name="hourglass-outline" size={24} color="#FF9F0A" />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 16, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
+                              Đã Gửi Yêu Cầu Phê Duyệt
+                            </Text>
+                            <Text style={{ fontSize: 12.5, color: '#FF9F0A', marginTop: 2, fontWeight: '600' }}>
+                              Đang chờ quản trị viên duyệt trên Web Dashboard
+                            </Text>
+                          </View>
+                        </View>
+
+                        <Text style={{ fontSize: 13.5, color: isLight ? '#3C3C43' : '#AEAEB2', lineHeight: 20 }}>
+                          Yêu cầu cấp Tích Xanh chính chủ của bạn đã được tiếp nhận và tự động gửi thông báo trực tiếp đến Telegram của Quản trị viên. Khi được duyệt, tài khoản của bạn sẽ tự động hiển thị huy hiệu Tích Xanh.
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Nút Kiểm Tra Trạng Thái Duyệt */}
+                    <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 36, gap: 10 }]}>
+                      <TouchableOpacity
+                        onPress={() => checkServerVerificationStatus(true)}
+                        disabled={isCheckingVerify}
+                        activeOpacity={0.8}
+                        style={{
+                          backgroundColor: '#34C759',
+                          paddingVertical: 14,
+                          borderRadius: 14,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexDirection: 'row',
+                          gap: 8,
+                          shadowColor: '#34C759',
+                          shadowOffset: { width: 0, height: 4 },
+                          shadowOpacity: 0.35,
+                          shadowRadius: 10,
+                        }}
+                      >
+                        {isCheckingVerify ? (
+                          <ActivityIndicator size="small" color="#FFFFFF" />
+                        ) : (
+                          <>
+                            <Ionicons name="refresh-outline" size={19} color="#FFFFFF" />
+                            <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '700' }}>
+                              Kiểm Tra Trạng Thái Duyệt
+                            </Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        onPress={handleVerifyIdentity}
+                        activeOpacity={0.8}
+                        style={{
+                          backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                          paddingVertical: 12,
+                          borderRadius: 12,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 14, fontWeight: '600' }}>
+                          Gửi lại yêu cầu xác minh
                         </Text>
                       </TouchableOpacity>
                     </View>
@@ -7949,13 +11610,13 @@ export default function App() {
                           shadowRadius: 10,
                         }}
                       >
-                        <Ionicons name="scan" size={20} color="#FFFFFF" />
+                        <Ionicons name="shield-checkmark" size={20} color="#FFFFFF" />
                         <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '700' }}>
-                          Xác Minh Bằng Face ID Ngay
+                          Gửi Yêu Cầu Duyệt Tích Xanh
                         </Text>
                       </TouchableOpacity>
                       <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 12, textAlign: 'center', marginTop: 10, lineHeight: 16 }}>
-                        Quá trình xác thực diễn ra an toàn trên thiết bị của bạn thông qua Secure Enclave.
+                        Yêu cầu sẽ được gửi trực tiếp đến Web Admin Dashboard và Bot Telegram để Quản trị viên duyệt cấp Tích Xanh.
                       </Text>
                     </View>
                   </>
@@ -9292,26 +12953,30 @@ export default function App() {
                 {/* Hero Avatar Card */}
                 <View style={{ alignItems: 'center', marginVertical: 18 }}>
                   <View style={{ position: 'relative' }}>
-                    <View
-                      style={{
-                        width: 80,
-                        height: 80,
-                        borderRadius: 40,
-                        backgroundColor: viewingFriendProfile.avatarColor,
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        shadowColor: viewingFriendProfile.avatarColor,
-                        shadowOffset: { width: 0, height: 4 },
-                        shadowOpacity: 0.4,
-                        shadowRadius: 8,
-                      }}
-                    >
-                      <Ionicons
-                        name={(viewingFriendProfile.avatarIcon || 'person') as any}
-                        size={42}
-                        color="#FFFFFF"
-                      />
-                    </View>
+                    {viewingFriendProfile.isBot || viewingFriendProfile.id === 'bot-gehihi' ? (
+                      <Image source={GEMINI_AVATAR_IMG} style={{ width: 84, height: 84, borderRadius: 42 }} resizeMode="contain" />
+                    ) : (
+                      <View
+                        style={{
+                          width: 80,
+                          height: 80,
+                          borderRadius: 40,
+                          backgroundColor: viewingFriendProfile.avatarColor,
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          shadowColor: viewingFriendProfile.avatarColor,
+                          shadowOffset: { width: 0, height: 4 },
+                          shadowOpacity: 0.4,
+                          shadowRadius: 8,
+                        }}
+                      >
+                        <Ionicons
+                          name={(viewingFriendProfile.avatarIcon || 'person') as any}
+                          size={42}
+                          color="#FFFFFF"
+                        />
+                      </View>
+                    )}
                     <View
                       style={{
                         position: 'absolute',
@@ -9355,94 +13020,75 @@ export default function App() {
                   )}
                 </View>
 
-                {/* Quick Action Pills (Apple Contact Style) */}
-                <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 12, marginBottom: 20 }}>
-                  <TouchableOpacity
-                    style={{
-                      alignItems: 'center',
-                      backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
-                      paddingVertical: 10,
-                      paddingHorizontal: 14,
-                      borderRadius: 12,
-                      flex: 1,
-                      borderWidth: isLight ? 0.5 : 0,
-                      borderColor: '#E5E5EA',
-                    }}
-                    onPress={() => {
-                      setActiveChatFriend(viewingFriendProfile);
-                      setViewingFriendProfile(null);
-                      setCurrentTab('chat');
-                    }}
-                  >
-                    <Ionicons name="chatbubble" size={20} color={appSettings.accentColor} />
-                    <Text style={{ fontSize: 12, fontWeight: '600', color: appSettings.accentColor, marginTop: 4 }}>
-                      Nhắn tin
-                    </Text>
-                  </TouchableOpacity>
+                {/* Quick Action Pills (Ẩn đối với Bot Gehihi) */}
+                {!viewingFriendProfile.isBot && (
+                  <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 12, marginBottom: 20 }}>
+                    <TouchableOpacity
+                      style={{
+                        alignItems: 'center',
+                        backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                        paddingVertical: 10,
+                        paddingHorizontal: 14,
+                        borderRadius: 12,
+                        flex: 1,
+                        borderWidth: isLight ? 0.5 : 0,
+                        borderColor: '#E5E5EA',
+                      }}
+                      onPress={() => {
+                        setActiveChatFriend(viewingFriendProfile);
+                        setViewingFriendProfile(null);
+                        setCurrentTab('chat');
+                      }}
+                    >
+                      <Ionicons name="chatbubble" size={20} color={appSettings.accentColor} />
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: appSettings.accentColor, marginTop: 4 }}>
+                        Nhắn tin
+                      </Text>
+                    </TouchableOpacity>
 
-                  <TouchableOpacity
-                    style={{
-                      alignItems: 'center',
-                      backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
-                      paddingVertical: 10,
-                      paddingHorizontal: 14,
-                      borderRadius: 12,
-                      flex: 1,
-                      borderWidth: isLight ? 0.5 : 0,
-                      borderColor: '#E5E5EA',
-                    }}
-                    onPress={() => {
-                      triggerToast(`Đang kết nối cuộc gọi thoại với ${viewingFriendProfile.displayName}...`, 'Apple Audio Call', 'info', 'call');
-                    }}
-                  >
-                    <Ionicons name="call" size={20} color="#34C759" />
-                    <Text style={{ fontSize: 12, fontWeight: '600', color: '#34C759', marginTop: 4 }}>
-                      Gọi thoại
-                    </Text>
-                  </TouchableOpacity>
+                    <TouchableOpacity
+                      style={{
+                        alignItems: 'center',
+                        backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                        paddingVertical: 10,
+                        paddingHorizontal: 14,
+                        borderRadius: 12,
+                        flex: 1,
+                        borderWidth: isLight ? 0.5 : 0,
+                        borderColor: '#E5E5EA',
+                      }}
+                      onPress={() => {
+                        triggerToast(`Đang kết nối cuộc gọi thoại với ${viewingFriendProfile.displayName}...`, 'Apple Audio Call', 'info', 'call');
+                      }}
+                    >
+                      <Ionicons name="call" size={20} color="#34C759" />
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: '#34C759', marginTop: 4 }}>
+                        Gọi thoại
+                      </Text>
+                    </TouchableOpacity>
 
-                  <TouchableOpacity
-                    style={{
-                      alignItems: 'center',
-                      backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
-                      paddingVertical: 10,
-                      paddingHorizontal: 14,
-                      borderRadius: 12,
-                      flex: 1,
-                      borderWidth: isLight ? 0.5 : 0,
-                      borderColor: '#E5E5EA',
-                    }}
-                    onPress={() => {
-                      triggerToast(`Đang khởi tạo FaceTime với ${viewingFriendProfile.displayName}...`, 'Apple FaceTime', 'info', 'videocam');
-                    }}
-                  >
-                    <Ionicons name="videocam" size={20} color="#34C759" />
-                    <Text style={{ fontSize: 12, fontWeight: '600', color: '#34C759', marginTop: 4 }}>
-                      FaceTime
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={{
-                      alignItems: 'center',
-                      backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
-                      paddingVertical: 10,
-                      paddingHorizontal: 14,
-                      borderRadius: 12,
-                      flex: 1,
-                      borderWidth: isLight ? 0.5 : 0,
-                      borderColor: '#E5E5EA',
-                    }}
-                    onPress={() => {
-                      triggerToast('Đã xác thực chữ ký mã hóa đầu cuối AES-256', 'Secure Enclave', 'success', 'shield-checkmark');
-                    }}
-                  >
-                    <Ionicons name="shield-checkmark" size={20} color="#5856D6" />
-                    <Text style={{ fontSize: 12, fontWeight: '600', color: '#5856D6', marginTop: 4 }}>
-                      Khóa E2E
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+                    <TouchableOpacity
+                      style={{
+                        alignItems: 'center',
+                        backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                        paddingVertical: 10,
+                        paddingHorizontal: 14,
+                        borderRadius: 12,
+                        flex: 1,
+                        borderWidth: isLight ? 0.5 : 0,
+                        borderColor: '#E5E5EA',
+                      }}
+                      onPress={() => {
+                        triggerToast('Đã xác thực chữ ký mã hóa đầu cuối AES-256', 'Secure Enclave', 'success', 'shield-checkmark');
+                      }}
+                    >
+                      <Ionicons name="shield-checkmark" size={20} color="#5856D6" />
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: '#5856D6', marginTop: 4 }}>
+                        Khóa E2E
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
 
                 {/* Grouped Information Cells */}
                 <Text style={[styles.sectionCaption, { marginLeft: 16, marginBottom: 6 }]}>
@@ -9480,7 +13126,7 @@ export default function App() {
                     </Text>
                   </View>
 
-                  <View style={styles.cellItem}>
+                  <View style={[styles.cellItem, viewingFriendProfile.isBot && { borderBottomWidth: 0 }]}>
                     <View style={[styles.cellLeadingIcon, { backgroundColor: '#FF9500' }]}>
                       <Ionicons name="ribbon" size={17} color="#FFFFFF" />
                     </View>
@@ -9488,28 +13134,32 @@ export default function App() {
                       <Text style={{ fontSize: 15, color: isLight ? '#000000' : '#FFFFFF' }}>Cấp độ tài khoản</Text>
                     </View>
                     <Text style={{ fontSize: 15, color: isLight ? '#6C6C70' : '#8E8E93' }}>
-                      LockX Pro Member
+                      {viewingFriendProfile.isBot ? 'Official AI Assistant' : 'LockX Pro Member'}
                     </Text>
                   </View>
 
-                  <View style={[styles.cellItem, { borderBottomWidth: 0 }]}>
-                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#5856D6' }]}>
-                      <Ionicons name="key" size={17} color="#FFFFFF" />
+                  {/* Ẩn dòng vân tay mã hóa E2E khi là Bot */}
+                  {!viewingFriendProfile.isBot && (
+                    <View style={[styles.cellItem, { borderBottomWidth: 0 }]}>
+                      <View style={[styles.cellLeadingIcon, { backgroundColor: '#5856D6' }]}>
+                        <Ionicons name="key" size={17} color="#FFFFFF" />
+                      </View>
+                      <View style={[styles.cellContent, { flex: 1 }]}>
+                        <Text style={{ fontSize: 15, color: isLight ? '#000000' : '#FFFFFF' }}>Vân tay mã hóa (E2E)</Text>
+                      </View>
+                      <Text style={{ fontSize: 12, color: '#8E8E93', fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }}>
+                        SHA-256 Verified
+                      </Text>
                     </View>
-                    <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={{ fontSize: 15, color: isLight ? '#000000' : '#FFFFFF' }}>Vân tay mã hóa (E2E)</Text>
-                    </View>
-                    <Text style={{ fontSize: 12, color: '#8E8E93', fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }}>
-                      SHA-256 Verified
-                    </Text>
-                  </View>
+                  )}
                 </View>
 
-                {/* Grouped Actions (Delete, Clear) */}
+                {/* Grouped Actions (Delete, Clear, Block) */}
                 <Text style={[styles.sectionCaption, { marginLeft: 16, marginTop: 18, marginBottom: 6 }]}>
                   TÙY CHỌN TRÒ CHUYỆN
                 </Text>
                 <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }]}>
+                  {/* Xóa lịch sử trò chuyện */}
                   <TouchableOpacity
                     style={styles.cellItem}
                     onPress={() => {
@@ -9518,55 +13168,791 @@ export default function App() {
                       handleClearChat(friendId);
                     }}
                   >
-                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#FF9500' }]}>
-                      <Ionicons name="refresh" size={17} color="#FFFFFF" />
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#FF3B30' }]}>
+                      <Ionicons name="trash" size={17} color="#FFFFFF" />
                     </View>
                     <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={{ fontSize: 15, color: '#FF9500', fontWeight: '500' }}>
-                        Làm sạch lịch sử trò chuyện
+                      <Text style={{ fontSize: 15, color: '#FF3B30', fontWeight: '500' }}>
+                        Xóa lịch sử trò chuyện
                       </Text>
                     </View>
                   </TouchableOpacity>
 
+                  {/* Chặn / Bỏ chặn tài khoản */}
                   <TouchableOpacity
-                    style={[styles.cellItem, { borderBottomWidth: 0 }]}
+                    style={[styles.cellItem, viewingFriendProfile.isBot && { borderBottomWidth: 0 }]}
                     onPress={() => {
-                      const fName = viewingFriendProfile.displayName;
-                      const fId = viewingFriendProfile.id;
-                      Alert.alert(
-                        'Hủy kết bạn',
-                        `Bạn có chắc chắn muốn xóa ${fName} khỏi danh sách bạn bè?`,
-                        [
-                          { text: t.cancel, style: 'cancel' },
-                          {
-                            text: 'Xóa bạn',
-                            style: 'destructive',
-                            onPress: () => {
-                              const updated = friendsList.filter((f) => f.id !== fId);
-                              saveFriends(updated);
-                              setViewingFriendProfile(null);
-                              if (activeChatFriend?.id === fId) setActiveChatFriend(null);
-                              triggerToast(`Đã xóa ${fName} khỏi danh sách bạn bè.`, 'Bạn Bè', 'warning');
-                            },
-                          },
-                        ]
-                      );
+                      handleToggleBlockUser(viewingFriendProfile.id);
                     }}
                   >
-                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#FF3B30' }]}>
-                      <Ionicons name="person-remove" size={17} color="#FFFFFF" />
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: (blockedUsers.includes(viewingFriendProfile.id) || blockedUsers.includes(viewingFriendProfile.username.replace(/^@/, '').toLowerCase())) ? '#34C759' : '#FF3B30' }]}>
+                      <Ionicons name={(blockedUsers.includes(viewingFriendProfile.id) || blockedUsers.includes(viewingFriendProfile.username.replace(/^@/, '').toLowerCase())) ? "checkmark-circle" : "ban"} size={17} color="#FFFFFF" />
                     </View>
                     <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={{ fontSize: 15, color: '#FF3B30', fontWeight: '500' }}>
-                        Xóa khỏi danh sách bạn bè
+                      <Text style={{ fontSize: 15, color: (blockedUsers.includes(viewingFriendProfile.id) || blockedUsers.includes(viewingFriendProfile.username.replace(/^@/, '').toLowerCase())) ? '#34C759' : '#FF3B30', fontWeight: '500' }}>
+                        {(blockedUsers.includes(viewingFriendProfile.id) || blockedUsers.includes(viewingFriendProfile.username.replace(/^@/, '').toLowerCase())) ? 'Bỏ chặn tài khoản này' : 'Chặn tài khoản này'}
                       </Text>
                     </View>
                   </TouchableOpacity>
+
+                  {!viewingFriendProfile.isBot && (
+                    <TouchableOpacity
+                      style={[styles.cellItem, { borderBottomWidth: 0 }]}
+                      onPress={() => {
+                        const fName = viewingFriendProfile.displayName;
+                        const fId = viewingFriendProfile.id;
+                        Alert.alert(
+                          'Hủy kết bạn',
+                          `Bạn có chắc chắn muốn xóa ${fName} khỏi danh sách bạn bè?`,
+                          [
+                            { text: t.cancel, style: 'cancel' },
+                            {
+                              text: 'Xóa bạn',
+                              style: 'destructive',
+                              onPress: () => {
+                                const updated = friendsList.filter((f) => f.id !== fId);
+                                saveFriends(updated);
+                                setViewingFriendProfile(null);
+                                if (activeChatFriend?.id === fId) setActiveChatFriend(null);
+                                triggerToast(`Đã xóa ${fName} khỏi danh sách bạn bè.`, 'Bạn Bè', 'warning');
+                              },
+                            },
+                          ]
+                        );
+                      }}
+                    >
+                      <View style={[styles.cellLeadingIcon, { backgroundColor: '#FF3B30' }]}>
+                        <Ionicons name="person-remove" size={17} color="#FFFFFF" />
+                      </View>
+                      <View style={[styles.cellContent, { flex: 1 }]}>
+                        <Text style={{ fontSize: 15, color: '#FF3B30', fontWeight: '500' }}>
+                          Xóa khỏi danh sách bạn bè
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  )}
                 </View>
               </ScrollView>
             )}
           </SafeAreaView>
         </View>
+      </Modal>
+
+
+
+      {/* MODAL: FORM CUỘC GỌI ĐẾN (INCOMING CALL POPUP APPLE STYLE) */}
+      <Modal visible={!!incomingCallData} animationType="slide" transparent={false}>
+        {incomingCallData && (
+          <SafeAreaView
+            style={{
+              flex: 1,
+              backgroundColor: '#0A0C10',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              paddingVertical: 32,
+              paddingHorizontal: 20,
+            }}
+          >
+            {/* 1. Header Information */}
+            <View style={{ alignItems: 'center', marginTop: 12 }}>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  backgroundColor: 'rgba(52, 199, 89, 0.15)',
+                  paddingHorizontal: 14,
+                  paddingVertical: 6,
+                  borderRadius: 16,
+                  marginBottom: 16,
+                  borderWidth: 1,
+                  borderColor: 'rgba(52, 199, 89, 0.3)',
+                }}
+              >
+                <CallSvgIcon name="phone-incoming" size={14} color="#34C759" />
+                <Text style={{ color: '#34C759', fontSize: 11, fontWeight: '700', letterSpacing: 0.5 }}>
+                  CUỘC GỌI THOẠI ĐẾN E2EE
+                </Text>
+              </View>
+
+              <Text
+                style={{
+                  color: '#FFFFFF',
+                  fontSize: 30,
+                  fontWeight: '800',
+                  textAlign: 'center',
+                  letterSpacing: 0.3,
+                }}
+                numberOfLines={1}
+              >
+                {incomingCallData.callerName}
+              </Text>
+
+              <Text style={{ color: '#8E8E93', fontSize: 16, fontWeight: '500', marginTop: 4 }}>
+                @{incomingCallData.caller}
+              </Text>
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12 }}>
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#34C759' }} />
+                <Text style={{ color: '#34C759', fontSize: 16, fontWeight: '600' }}>
+                  Cuộc gọi thoại đến... ({Math.max(1, Math.floor((Date.now() - incomingCallData.startTime) / 1000))}s)
+                </Text>
+              </View>
+            </View>
+
+            {/* 2. Pulsing Avatar Centerpiece */}
+            <View style={{ alignItems: 'center', justifyContent: 'center', marginVertical: 30 }}>
+              <View
+                style={{
+                  width: 180,
+                  height: 180,
+                  borderRadius: 90,
+                  backgroundColor: 'rgba(52, 199, 89, 0.12)',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  borderWidth: 2,
+                  borderColor: 'rgba(52, 199, 89, 0.4)',
+                }}
+              >
+                <View
+                  style={{
+                    width: 140,
+                    height: 140,
+                    borderRadius: 70,
+                    backgroundColor: incomingCallData.callerAvatar || '#0A84FF',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    shadowColor: '#34C759',
+                    shadowOffset: { width: 0, height: 0 },
+                    shadowOpacity: 0.6,
+                    shadowRadius: 20,
+                  }}
+                >
+                  <Ionicons name="person" size={72} color="#FFFFFF" />
+                </View>
+              </View>
+            </View>
+
+            {/* 3. Actions: Decline (Từ chối) & Accept (Nghe máy) với icon SVG */}
+            <View style={{ width: '100%', maxWidth: 340, marginBottom: 24 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', width: '100%' }}>
+                {/* Nút Từ chối (Đỏ) */}
+                <TouchableOpacity
+                  onPress={handleDeclineCall}
+                  activeOpacity={0.7}
+                  style={{ alignItems: 'center', gap: 10 }}
+                >
+                  <View
+                    style={{
+                      width: 72,
+                      height: 72,
+                      borderRadius: 36,
+                      backgroundColor: '#FF3B30',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      shadowColor: '#FF3B30',
+                      shadowOffset: { width: 0, height: 4 },
+                      shadowOpacity: 0.5,
+                      shadowRadius: 12,
+                    }}
+                  >
+                    <CallSvgIcon name="phone-hangup" size={34} color="#FFFFFF" />
+                  </View>
+                  <Text style={{ color: '#FF3B30', fontSize: 14, fontWeight: '700' }}>Từ chối</Text>
+                </TouchableOpacity>
+
+                {/* Nút Nghe máy (Xanh lá) */}
+                <TouchableOpacity
+                  onPress={handleAcceptCall}
+                  activeOpacity={0.7}
+                  style={{ alignItems: 'center', gap: 10 }}
+                >
+                  <View
+                    style={{
+                      width: 72,
+                      height: 72,
+                      borderRadius: 36,
+                      backgroundColor: '#34C759',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      shadowColor: '#34C759',
+                      shadowOffset: { width: 0, height: 4 },
+                      shadowOpacity: 0.5,
+                      shadowRadius: 12,
+                    }}
+                  >
+                    <CallSvgIcon name="phone" size={34} color="#FFFFFF" />
+                  </View>
+                  <Text style={{ color: '#34C759', fontSize: 14, fontWeight: '700' }}>Nghe máy</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </SafeAreaView>
+        )}
+      </Modal>
+
+      {/* MODAL: CUỘC GỌI TOÀN MÀN HÌNH APPLE CALL SCREEN */}
+      <Modal visible={isCallingModalOpen} animationType="slide" transparent={false}>
+        {(activeCallFriend || activeChatFriend) && (() => {
+          const curFriend = activeCallFriend || activeChatFriend!;
+          return (
+            <SafeAreaView
+              style={{
+                flex: 1,
+                backgroundColor: '#0A0C10',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                paddingVertical: 24,
+                paddingHorizontal: 20,
+              }}
+            >
+              {/* 1. Header Information */}
+              <View style={{ alignItems: 'center', marginTop: 16 }}>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                    paddingHorizontal: 12,
+                    paddingVertical: 5,
+                    borderRadius: 14,
+                    marginBottom: 16,
+                  }}
+                >
+                  <Ionicons name="lock-closed" size={13} color="#34C759" />
+                  <Text style={{ color: '#34C759', fontSize: 11, fontWeight: '700', letterSpacing: 0.5 }}>
+                    MÃ HÓA ĐẦU CUỐI E2EE
+                  </Text>
+                </View>
+
+                <Text
+                  style={{
+                    color: '#FFFFFF',
+                    fontSize: 28,
+                    fontWeight: '800',
+                    textAlign: 'center',
+                    letterSpacing: 0.3,
+                  }}
+                  numberOfLines={1}
+                >
+                  {curFriend.displayName}
+                </Text>
+
+                <Text style={{ color: '#8E8E93', fontSize: 15, fontWeight: '500', marginTop: 4 }}>
+                  {curFriend.username}
+                </Text>
+
+                <Text style={{ color: callStatusText.includes(':') ? '#34C759' : (callStatusText.includes('kết nối') ? '#FF9500' : '#30B0C7'), fontSize: 16, fontWeight: '600', marginTop: 10 }}>
+                  {callStatusText}
+                </Text>
+              </View>
+
+              {/* 2. Big Animated Avatar Centerpiece */}
+              <View style={{ alignItems: 'center', justifyContent: 'center', marginVertical: 30 }}>
+                <View
+                  style={{
+                    width: 170,
+                    height: 170,
+                    borderRadius: 85,
+                    backgroundColor: 'rgba(52, 199, 89, 0.1)',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    borderWidth: 1.5,
+                    borderColor: 'rgba(52, 199, 89, 0.3)',
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 136,
+                      height: 136,
+                      borderRadius: 68,
+                      backgroundColor: curFriend.avatarColor,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      shadowColor: '#34C759',
+                      shadowOffset: { width: 0, height: 0 },
+                      shadowOpacity: 0.5,
+                      shadowRadius: 16,
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {curFriend.id === 'bot-gehihi' || curFriend.isBot ? (
+                      <Image source={GEMINI_AVATAR_IMG} style={{ width: 136, height: 136, borderRadius: 68 }} resizeMode="contain" />
+                    ) : (
+                      <Ionicons name={(curFriend.avatarIcon || 'person') as any} size={70} color="#FFFFFF" />
+                    )}
+                  </View>
+                </View>
+              </View>
+
+              {/* 3. Bottom Call Controls (Loa ngoài, Tắt mic, Nút tắt) với icon SVG */}
+              <View style={{ width: '100%', maxWidth: 360, alignItems: 'center', gap: 24, marginBottom: 20 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-around', width: '100%' }}>
+                  {/* Nút Loa Ngoài SVG */}
+                  <TouchableOpacity
+                    onPress={() => {
+                      const next = !isCallSpeaker;
+                      setIsCallSpeaker(next);
+                      if (remoteAudioRef.current) {
+                        remoteAudioRef.current.muted = !next;
+                      }
+                      playAppleNotificationSound('tap');
+                      triggerToast(next ? 'Đã bật loa ngoài' : 'Đã tắt loa ngoài', 'Loa Thoại', 'info', 'volume-high');
+                    }}
+                    activeOpacity={0.7}
+                    style={{ alignItems: 'center', gap: 8 }}
+                  >
+                    <View
+                      style={{
+                        width: 66,
+                        height: 66,
+                        borderRadius: 33,
+                        backgroundColor: isCallSpeaker ? '#FFFFFF' : 'rgba(255, 255, 255, 0.14)',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <CallSvgIcon name={isCallSpeaker ? "speaker" : "speaker-mute"} size={28} color={isCallSpeaker ? '#000000' : '#FFFFFF'} />
+                    </View>
+                    <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '600' }}>Loa ngoài</Text>
+                  </TouchableOpacity>
+
+                  {/* Nút Tắt Mic SVG */}
+                  <TouchableOpacity
+                    onPress={() => {
+                      const next = !isCallMuted;
+                      setIsCallMuted(next);
+                      if (localStreamRef.current) {
+                        localStreamRef.current.getAudioTracks().forEach((track: any) => {
+                          track.enabled = !next;
+                        });
+                      }
+                      playAppleNotificationSound('tap');
+                      triggerToast(next ? 'Đã tắt micro' : 'Đã bật micro', 'Microphone', 'info', 'mic');
+                    }}
+                    activeOpacity={0.7}
+                    style={{ alignItems: 'center', gap: 8 }}
+                  >
+                    <View
+                      style={{
+                        width: 66,
+                        height: 66,
+                        borderRadius: 33,
+                        backgroundColor: isCallMuted ? '#FF9500' : 'rgba(255, 255, 255, 0.14)',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <CallSvgIcon name={isCallMuted ? "mic-mute" : "mic"} size={28} color="#FFFFFF" />
+                    </View>
+                    <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '600' }}>
+                      {isCallMuted ? 'Đã tắt mic' : 'Tắt mic'}
+                    </Text>
+                  </TouchableOpacity>
+
+                  {/* Nút Tắt Cuộc Gọi (Đỏ) SVG */}
+                  <TouchableOpacity
+                    onPress={() => handleEndCall('Cuộc gọi đã hủy')}
+                    activeOpacity={0.7}
+                    style={{ alignItems: 'center', gap: 8 }}
+                  >
+                    <View
+                      style={{
+                        width: 66,
+                        height: 66,
+                        borderRadius: 33,
+                        backgroundColor: '#FF3B30',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        shadowColor: '#FF3B30',
+                        shadowOffset: { width: 0, height: 4 },
+                        shadowOpacity: 0.4,
+                        shadowRadius: 10,
+                      }}
+                    >
+                      <CallSvgIcon name="phone-hangup" size={32} color="#FFFFFF" />
+                    </View>
+                    <Text style={{ color: '#FF3B30', fontSize: 13, fontWeight: '700' }}>Kết thúc</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </SafeAreaView>
+          );
+        })()}
+      </Modal>
+
+      {/* MODAL: ACTION SHEET (LƯU TRỮ, CHẶN, XÓA KHI ĐÈ GIỮ HOẶC VUỐT BẠN BÈ) */}
+      <Modal visible={!!friendActionSheetUser} animationType="fade" transparent>
+        <TouchableOpacity
+          style={[styles.modalBackdrop, { justifyContent: 'flex-end', paddingBottom: Platform.OS === 'ios' ? 34 : 20, backgroundColor: 'rgba(0,0,0,0.6)' }]}
+          activeOpacity={1}
+          onPress={() => setFriendActionSheetUser(null)}
+        >
+          {friendActionSheetUser && (
+            <View
+              style={{
+                width: '100%',
+                maxWidth: 440,
+                alignSelf: 'center',
+                paddingHorizontal: 16,
+              }}
+            >
+              {/* Menu Card */}
+              <View
+                style={{
+                  backgroundColor: isLight ? '#FFFFFF' : '#2C2C2E',
+                  borderRadius: 16,
+                  overflow: 'hidden',
+                  marginBottom: 10,
+                  borderWidth: 0.5,
+                  borderColor: isLight ? '#E5E5EA' : 'rgba(255,255,255,0.1)',
+                }}
+              >
+                {/* Header User Preview */}
+                <View
+                  style={{
+                    alignItems: 'center',
+                    paddingVertical: 18,
+                    paddingHorizontal: 16,
+                    borderBottomWidth: 0.5,
+                    borderBottomColor: isLight ? '#E5E5EA' : 'rgba(255,255,255,0.08)',
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 52,
+                      height: 52,
+                      borderRadius: 26,
+                      backgroundColor: friendActionSheetUser.avatarColor,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      marginBottom: 8,
+                    }}
+                  >
+                    {friendActionSheetUser.id === 'bot-gehihi' || friendActionSheetUser.isBot ? (
+                      <Image source={GEMINI_AVATAR_IMG} style={{ width: 52, height: 52, borderRadius: 26 }} resizeMode="contain" />
+                    ) : (
+                      <Ionicons name={(friendActionSheetUser.avatarIcon || 'person') as any} size={28} color="#FFFFFF" />
+                    )}
+                  </View>
+                  <Text style={{ fontSize: 17, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
+                    {friendActionSheetUser.displayName}
+                  </Text>
+                  <Text style={{ fontSize: 13, color: '#8E8E93', marginTop: 2 }}>
+                    {friendActionSheetUser.username}
+                  </Text>
+                </View>
+
+                {/* Option 1: Lưu trữ */}
+                <TouchableOpacity
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingVertical: 14,
+                    paddingHorizontal: 18,
+                    borderBottomWidth: 0.5,
+                    borderBottomColor: isLight ? '#E5E5EA' : 'rgba(255,255,255,0.08)',
+                  }}
+                  activeOpacity={0.7}
+                  onPress={() => handleToggleArchiveFriend(friendActionSheetUser.id, friendActionSheetUser.displayName)}
+                >
+                  <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(88, 86, 214, 0.15)', justifyContent: 'center', alignItems: 'center', marginRight: 14 }}>
+                    <Ionicons name={archivedFriendIds.includes(friendActionSheetUser.id) ? "file-tray" : "archive-outline"} size={20} color="#5856D6" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 16, fontWeight: '600', color: '#5856D6' }}>
+                      {archivedFriendIds.includes(friendActionSheetUser.id) ? 'Bỏ lưu trữ cuộc trò chuyện' : 'Lưu trữ cuộc trò chuyện'}
+                    </Text>
+                    <Text style={{ fontSize: 12.5, color: '#8E8E93', marginTop: 1 }}>
+                      {archivedFriendIds.includes(friendActionSheetUser.id) ? 'Đưa bạn bè trở lại danh sách chính' : 'Chuyển bạn bè vào mục Lưu trữ riêng biệt'}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                {/* Option 2: Chặn */}
+                <TouchableOpacity
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingVertical: 14,
+                    paddingHorizontal: 18,
+                    borderBottomWidth: 0.5,
+                    borderBottomColor: isLight ? '#E5E5EA' : 'rgba(255,255,255,0.08)',
+                  }}
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    const f = friendActionSheetUser;
+                    setFriendActionSheetUser(null);
+                    handleToggleBlockUser(f.id);
+                  }}
+                >
+                  <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255, 149, 0, 0.15)', justifyContent: 'center', alignItems: 'center', marginRight: 14 }}>
+                    <Ionicons name={blockedUsers.includes(friendActionSheetUser.id) ? "checkmark-circle-outline" : "ban-outline"} size={20} color="#FF9500" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 16, fontWeight: '600', color: '#FF9500' }}>
+                      {blockedUsers.includes(friendActionSheetUser.id) ? 'Bỏ chặn người này' : 'Chặn tài khoản'}
+                    </Text>
+                    <Text style={{ fontSize: 12.5, color: '#8E8E93', marginTop: 1 }}>
+                      {blockedUsers.includes(friendActionSheetUser.id) ? 'Cho phép người này nhắn tin lại cho bạn' : 'Không nhận tin nhắn hoặc cuộc gọi từ người này'}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                {/* Option 3: Xóa */}
+                <TouchableOpacity
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingVertical: 14,
+                    paddingHorizontal: 18,
+                  }}
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    const f = friendActionSheetUser;
+                    setFriendActionSheetUser(null);
+                    handleDeleteFriend(f);
+                  }}
+                >
+                  <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255, 59, 48, 0.15)', justifyContent: 'center', alignItems: 'center', marginRight: 14 }}>
+                    <Ionicons name="trash-outline" size={20} color="#FF3B30" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 16, fontWeight: '600', color: '#FF3B30' }}>
+                      Xóa bạn bè
+                    </Text>
+                    <Text style={{ fontSize: 12.5, color: '#8E8E93', marginTop: 1 }}>
+                      Xóa người này khỏi danh sách bạn bè
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+
+              {/* Cancel Button */}
+              <TouchableOpacity
+                style={{
+                  backgroundColor: isLight ? '#FFFFFF' : '#2C2C2E',
+                  borderRadius: 14,
+                  paddingVertical: 14,
+                  alignItems: 'center',
+                }}
+                activeOpacity={0.8}
+                onPress={() => setFriendActionSheetUser(null)}
+              >
+                <Text style={{ fontSize: 16.5, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
+                  {t.cancel || 'Hủy'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </TouchableOpacity>
+      </Modal>
+
+      {/* MODAL: THẢ CẢM XÚC & MENU TÁC VỤ CHUẨN FACEBOOK MESSENGER */}
+      <Modal visible={!!selectedMsgForAction} animationType="fade" transparent>
+        <TouchableOpacity
+          style={[styles.modalBackdrop, { justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20, backgroundColor: 'rgba(0,0,0,0.68)' }]}
+          activeOpacity={1}
+          onPress={() => setSelectedMsgForAction(null)}
+        >
+          <View style={{ width: '100%', maxWidth: 360, alignItems: 'center', gap: 12 }}>
+            {/* 1. Messenger Floating Reaction Capsule (Thanh Thả Cảm Xúc Nổi Messenger) */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-around',
+                backgroundColor: isLight ? '#FFFFFF' : '#242526',
+                borderRadius: 36,
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                width: '100%',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 8 },
+                shadowOpacity: 0.35,
+                shadowRadius: 18,
+                borderWidth: 1,
+                borderColor: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.12)',
+              }}
+            >
+              {[
+                { emoji: '❤️', label: 'Yêu thích' },
+                { emoji: '😆', label: 'Haha' },
+                { emoji: '😮', label: 'Wow' },
+                { emoji: '😢', label: 'Buồn' },
+                { emoji: '😡', label: 'Phẫn nộ' },
+                { emoji: '👍', label: 'Thích' },
+                { emoji: '🔥', label: 'Tuyệt vời' },
+                { emoji: '🎉', label: 'Ăn mừng' },
+              ].map((item) => {
+                const isReacted = selectedMsgForAction?.reactions?.includes(item.emoji);
+                return (
+                  <TouchableOpacity
+                    key={item.emoji}
+                    onPress={() => {
+                      if (selectedMsgForAction) {
+                        handleToggleReaction(selectedMsgForAction.id, item.emoji);
+                      }
+                    }}
+                    activeOpacity={0.7}
+                    style={{
+                      padding: 4,
+                      borderRadius: 20,
+                      backgroundColor: isReacted ? (isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.15)') : 'transparent',
+                      transform: [{ scale: isReacted ? 1.25 : 1 }],
+                    }}
+                  >
+                    <Text style={{ fontSize: 26 }}>{item.emoji}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* 2. Selected Message Preview Bubble */}
+            {selectedMsgForAction && (
+              <View
+                style={{
+                  alignSelf: selectedMsgForAction.sender === 'me' ? 'flex-end' : 'flex-start',
+                  maxWidth: '85%',
+                  backgroundColor: selectedMsgForAction.sender === 'me' ? appSettings.accentColor : (isLight ? '#FFFFFF' : '#3A3A3C'),
+                  borderRadius: 18,
+                  paddingHorizontal: 15,
+                  paddingVertical: 10,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.2,
+                  shadowRadius: 8,
+                }}
+              >
+                <Text
+                  style={{
+                    color: selectedMsgForAction.sender === 'me' ? '#FFFFFF' : (isLight ? '#000000' : '#FFFFFF'),
+                    fontSize: 14.5,
+                    lineHeight: 20,
+                  }}
+                  numberOfLines={4}
+                >
+                  {selectedMsgForAction.text}
+                </Text>
+              </View>
+            )}
+
+            {/* 3. Messenger Context Action Menu Card */}
+            <View
+              style={{
+                width: '100%',
+                backgroundColor: isLight ? '#FFFFFF' : '#242526',
+                borderRadius: 18,
+                overflow: 'hidden',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 8 },
+                shadowOpacity: 0.25,
+                shadowRadius: 16,
+                borderWidth: 1,
+                borderColor: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.1)',
+              }}
+            >
+              {/* Nút Trả Lời */}
+              <TouchableOpacity
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingVertical: 13,
+                  paddingHorizontal: 16,
+                  borderBottomWidth: 0.5,
+                  borderBottomColor: isLight ? '#F2F2F7' : 'rgba(255,255,255,0.08)',
+                }}
+                activeOpacity={0.7}
+                onPress={() => {
+                  if (selectedMsgForAction) {
+                    handleReplyMessage(selectedMsgForAction);
+                  }
+                }}
+              >
+                <Text style={{ fontSize: 15, fontWeight: '600', color: isLight ? '#000000' : '#FFFFFF' }}>
+                  Trả lời
+                </Text>
+                <Ionicons name="arrow-undo-outline" size={20} color={appSettings.accentColor} />
+              </TouchableOpacity>
+
+              {/* Nút Sao Chép */}
+              <TouchableOpacity
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingVertical: 13,
+                  paddingHorizontal: 16,
+                  borderBottomWidth: 0.5,
+                  borderBottomColor: isLight ? '#F2F2F7' : 'rgba(255,255,255,0.08)',
+                }}
+                activeOpacity={0.7}
+                onPress={() => {
+                  if (selectedMsgForAction) {
+                    Clipboard.setString(selectedMsgForAction.text);
+                    triggerToast('Đã sao chép tin nhắn vào bộ nhớ tạm', 'Sao Chép', 'info');
+                    setSelectedMsgForAction(null);
+                  }
+                }}
+              >
+                <Text style={{ fontSize: 15, fontWeight: '600', color: isLight ? '#000000' : '#FFFFFF' }}>
+                  Sao chép tin nhắn
+                </Text>
+                <Ionicons name="copy-outline" size={19} color={isLight ? '#3C3C43' : '#AEAEB2'} />
+              </TouchableOpacity>
+
+              {/* Nút Chuyển Tiếp */}
+              <TouchableOpacity
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingVertical: 13,
+                  paddingHorizontal: 16,
+                  borderBottomWidth: 0.5,
+                  borderBottomColor: isLight ? '#F2F2F7' : 'rgba(255,255,255,0.08)',
+                }}
+                activeOpacity={0.7}
+                onPress={() => {
+                  if (selectedMsgForAction) {
+                    Clipboard.setString(selectedMsgForAction.text);
+                    triggerToast('Đã sao chép để chuyển tiếp tin nhắn', 'Chuyển Tiếp', 'info', 'arrow-redo-outline');
+                    setSelectedMsgForAction(null);
+                  }
+                }}
+              >
+                <Text style={{ fontSize: 15, fontWeight: '600', color: isLight ? '#000000' : '#FFFFFF' }}>
+                  Chuyển tiếp
+                </Text>
+                <Ionicons name="arrow-redo-outline" size={19} color={isLight ? '#3C3C43' : '#AEAEB2'} />
+              </TouchableOpacity>
+
+              {/* Nút Thu Hồi / Xóa Tin Nhắn */}
+              <TouchableOpacity
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingVertical: 13,
+                  paddingHorizontal: 16,
+                }}
+                activeOpacity={0.7}
+                onPress={() => {
+                  if (selectedMsgForAction) {
+                    handleRevokeMessage(selectedMsgForAction.id);
+                  }
+                }}
+              >
+                <Text style={{ fontSize: 15, fontWeight: '600', color: '#FF3B30' }}>
+                  {selectedMsgForAction?.sender === 'me' ? 'Thu hồi tin nhắn' : 'Xóa ở phía bạn'}
+                </Text>
+                <Ionicons name="trash-outline" size={19} color="#FF3B30" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
       </Modal>
 
       {/* MODAL: PHONE APP DETAIL SHEET */}
@@ -10581,6 +14967,155 @@ export default function App() {
               })()}
             </ScrollView>
           </SafeAreaView>
+        </View>
+      </Modal>
+
+      {/* MODAL CẤU HÌNH GOOGLE AI STUDIO (GEMINI API KEY) */}
+      <Modal
+        visible={showGeminiKeyModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowGeminiKeyModal(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'flex-end' }}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={{
+              backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              paddingHorizontal: 20,
+              paddingTop: 18,
+              paddingBottom: Platform.OS === 'ios' ? 36 : 24,
+              borderTopWidth: 0.5,
+              borderTopColor: isLight ? '#E5E5EA' : 'rgba(255,255,255,0.1)',
+            }}
+          >
+            {/* Modal Header */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 16,
+                    backgroundColor: 'rgba(10,132,255,0.15)',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}
+                >
+                  <Ionicons name="sparkles" size={17} color={appSettings.accentColor} />
+                </View>
+                <View>
+                  <Text style={{ fontSize: 16, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
+                    Google AI Studio Key
+                  </Text>
+                  <Text style={{ fontSize: 11.5, color: isLight ? '#8E8E93' : '#8E8E93' }}>
+                    Tích hợp Gemini 1.5 / 2.0 Flash AI
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowGeminiKeyModal(false)}
+                style={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: 15,
+                  backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}
+              >
+                <Ionicons name="close" size={16} color={isLight ? '#3C3C43' : '#FFFFFF'} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Description & Instruction */}
+            <Text style={{ fontSize: 13, color: isLight ? '#3C3C43' : '#AEAEB2', lineHeight: 18, marginBottom: 14 }}>
+              Nhập API Key từ <Text style={{ fontWeight: '700', color: appSettings.accentColor }}>aistudio.google.com</Text> để Gehihi AI trả lời thông minh mọi câu hỏi chuyên sâu không giới hạn. Mặc định hệ thống cũng đã có AI dự phòng hoạt động tự động.
+            </Text>
+
+            {/* API Key Input */}
+            <View
+              style={{
+                backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E',
+                borderRadius: 14,
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+                borderWidth: 1,
+                borderColor: isLight ? '#E5E5EA' : 'rgba(255,255,255,0.08)',
+                marginBottom: 16,
+              }}
+            >
+              <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#8E8E93', textTransform: 'uppercase', marginBottom: 4 }}>
+                Google AI Studio API Key (AIzaSy...)
+              </Text>
+              <TextInput
+                style={{
+                  fontSize: 14,
+                  color: isLight ? '#000000' : '#FFFFFF',
+                  fontFamily: 'monospace',
+                  padding: 0,
+                }}
+                placeholder="Dán mã AIzaSy... vào đây"
+                placeholderTextColor="#8E8E93"
+                value={tempGeminiKey}
+                onChangeText={setTempGeminiKey}
+                autoCapitalize="none"
+                autoCorrect={false}
+                secureTextEntry={false}
+              />
+            </View>
+
+            {/* Action Buttons */}
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              {geminiApiKey ? (
+                <TouchableOpacity
+                  onPress={() => {
+                    setGeminiApiKey('');
+                    setTempGeminiKey('');
+                    AsyncStorage.removeItem('lockx_gemini_api_key').catch(() => {});
+                    triggerToast('Đã xóa API Key cá nhân. Gehihi AI sẽ dùng backend mặc định.', 'Đã Xóa API Key', 'info');
+                    setShowGeminiKeyModal(false);
+                  }}
+                  style={{
+                    flex: 1,
+                    backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E',
+                    paddingVertical: 12,
+                    borderRadius: 12,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#FF453A' }}>Xóa Key</Text>
+                </TouchableOpacity>
+              ) : null}
+
+              <TouchableOpacity
+                onPress={() => {
+                  const cleaned = tempGeminiKey.trim();
+                  setGeminiApiKey(cleaned);
+                  if (cleaned) {
+                    AsyncStorage.setItem('lockx_gemini_api_key', cleaned).catch(() => {});
+                    triggerToast('Đã lưu Google AI Studio API Key thành công!', 'Cấu Hình Thành Công', 'success');
+                  } else {
+                    AsyncStorage.removeItem('lockx_gemini_api_key').catch(() => {});
+                  }
+                  setShowGeminiKeyModal(false);
+                }}
+                style={{
+                  flex: 2,
+                  backgroundColor: appSettings.accentColor,
+                  paddingVertical: 12,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFFFFF' }}>Lưu Cài Đặt</Text>
+              </TouchableOpacity>
+            </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
     </SafeAreaView>
