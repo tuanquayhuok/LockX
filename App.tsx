@@ -523,6 +523,13 @@ export interface FriendUser {
   username: string; // e.g. '@gehihi'
   avatarColor: string;
   avatarIcon?: string;
+  avatarUri?: string;
+  avatarType?: 'image' | 'preset' | 'monogram';
+  isVerified?: boolean;
+  nickname?: string;
+  isMuted?: boolean;
+  chatTheme?: string;
+  quickEmoji?: string;
   status: 'online' | 'offline';
   bio?: string;
   lastMessage?: string;
@@ -532,6 +539,25 @@ export interface FriendUser {
   botType?: 'gemini' | 'custom';
   isBlockedByOther?: boolean;
 }
+
+export interface ChatThemeConfig {
+  id: string;
+  name: string;
+  bubbleColor: string;
+  accent: string;
+  gradient: [string, string];
+}
+
+export const CHAT_THEMES: ChatThemeConfig[] = [
+  { id: 'default', name: 'Ocean Blue (Mặc định)', bubbleColor: '#007AFF', accent: '#007AFF', gradient: ['#0A84FF', '#007AFF'] },
+  { id: 'neon_cyber', name: 'Neon Cyber', bubbleColor: '#00C7BE', accent: '#00C7BE', gradient: ['#00E5FF', '#7C4DFF'] },
+  { id: 'sunset_orange', name: 'Sunset Warm', bubbleColor: '#FF9500', accent: '#FF9500', gradient: ['#FF9500', '#FF2D55'] },
+  { id: 'emerald_green', name: 'Emerald Forest', bubbleColor: '#34C759', accent: '#34C759', gradient: ['#34C759', '#30D158'] },
+  { id: 'midnight_purple', name: 'Midnight Purple', bubbleColor: '#AF52DE', accent: '#AF52DE', gradient: ['#AF52DE', '#5856D6'] },
+  { id: 'berry_pink', name: 'Berry Romance', bubbleColor: '#FF2D55', accent: '#FF2D55', gradient: ['#FF375F', '#FF7597'] },
+];
+
+export const QUICK_EMOJIS = ['👍', '❤️', '🔥', '🎉', '😂', '👏', '🚀', '⚡', '😎', '💯', '🥰', '✨'];
 
 export interface ChatMessage {
   id: string;
@@ -4246,6 +4272,8 @@ const SwipeableFriendRow: React.FC<{
   isLast: boolean;
   isArchived: boolean;
   isBlocked: boolean;
+  nickname?: string;
+  isMuted?: boolean;
   onPress: () => void;
   onLongPress: () => void;
   onArchive: () => void;
@@ -4260,6 +4288,8 @@ const SwipeableFriendRow: React.FC<{
   isLast,
   isArchived,
   isBlocked,
+  nickname,
+  isMuted,
   onPress,
   onLongPress,
   onArchive,
@@ -4448,6 +4478,8 @@ const SwipeableFriendRow: React.FC<{
           <View style={{ position: 'relative', marginRight: 14 }}>
             {friend.id === 'bot-gehihi' || friend.isBot ? (
               <Image source={GEMINI_AVATAR_IMG} style={{ width: 48, height: 48, borderRadius: 24 }} resizeMode="contain" />
+            ) : friend.avatarUri ? (
+              <Image source={{ uri: friend.avatarUri }} style={{ width: 48, height: 48, borderRadius: 24 }} resizeMode="cover" />
             ) : (
               <View
                 style={{
@@ -4488,8 +4520,16 @@ const SwipeableFriendRow: React.FC<{
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, marginRight: 8 }}>
                 <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16.5, fontWeight: '600' }} numberOfLines={1}>
-                  {friend.displayName}
+                  {nickname || friend.nickname || friend.displayName}
                 </Text>
+                {/* TÍCH XANH APPLE / MESSENGER CHUẨN */}
+                {(friend.isVerified !== false || friend.id.includes('tuan') || friend.username.includes('tuan')) && (
+                  <Ionicons name="checkmark-circle" size={15} color="#007AFF" />
+                )}
+                {/* Icon Tắt thông báo nếu bạn bè bị mute */}
+                {isMuted && (
+                  <Ionicons name="notifications-off" size={13} color="#8E8E93" />
+                )}
                 {isArchived && (
                   <View style={{ backgroundColor: 'rgba(88, 86, 214, 0.15)', paddingHorizontal: 6, paddingVertical: 1.5, borderRadius: 6 }}>
                     <Text style={{ color: '#5856D6', fontSize: 10, fontWeight: '700' }}>Lưu trữ</Text>
@@ -4687,6 +4727,24 @@ export default function App() {
   const [showEmojiPicker, setShowEmojiPicker] = useState<boolean>(false);
   const [selectedMsgForAction, setSelectedMsgForAction] = useState<ChatMessage | null>(null);
   const chatScrollRef = useRef<ScrollView>(null);
+
+  // Messenger Style Customization States (Biệt danh, Chủ đề, Icon cảm xúc nhanh, Tìm kiếm, Tắt thông báo)
+  const [friendNicknames, setFriendNicknames] = useState<Record<string, string>>({});
+  const [mutedFriendIds, setMutedFriendIds] = useState<string[]>([]);
+  const [chatThemes, setChatThemes] = useState<Record<string, string>>({});
+  const [chatQuickEmojis, setChatQuickEmojis] = useState<Record<string, string>>({});
+  const [isChatSearchActive, setIsChatSearchActive] = useState<boolean>(false);
+  const [chatSearchQuery, setChatSearchQuery] = useState<string>('');
+
+  // Modals for Messenger style customization
+  const [nicknameModalFriend, setNicknameModalFriend] = useState<FriendUser | null>(null);
+  const [nicknameInput, setNicknameInput] = useState<string>('');
+  const [isThemeModalOpen, setIsThemeModalOpen] = useState<boolean>(false);
+  const [isQuickEmojiModalOpen, setIsQuickEmojiModalOpen] = useState<boolean>(false);
+  const mutedFriendIdsRef = useRef<string[]>([]);
+  useEffect(() => {
+    mutedFriendIdsRef.current = mutedFriendIds;
+  }, [mutedFriendIds]);
 
   // WebRTC Audio Refs cho cuộc gọi thoại thực tế 100%
   const localStreamRef = useRef<any>(null);
@@ -5019,6 +5077,38 @@ export default function App() {
           try {
             setArchivedFriendIds(JSON.parse(b));
           } catch (e) {}
+        }
+      })
+      .catch(() => {});
+
+    AsyncStorage.getItem('lockx_friend_nicknames')
+      .then((b) => {
+        if (b) {
+          try { setFriendNicknames(JSON.parse(b)); } catch (e) {}
+        }
+      })
+      .catch(() => {});
+
+    AsyncStorage.getItem('lockx_muted_friends')
+      .then((b) => {
+        if (b) {
+          try { setMutedFriendIds(JSON.parse(b)); } catch (e) {}
+        }
+      })
+      .catch(() => {});
+
+    AsyncStorage.getItem('lockx_chat_themes')
+      .then((b) => {
+        if (b) {
+          try { setChatThemes(JSON.parse(b)); } catch (e) {}
+        }
+      })
+      .catch(() => {});
+
+    AsyncStorage.getItem('lockx_chat_quick_emojis')
+      .then((b) => {
+        if (b) {
+          try { setChatQuickEmojis(JSON.parse(b)); } catch (e) {}
         }
       })
       .catch(() => {});
@@ -5800,9 +5890,65 @@ export default function App() {
       lastUsernameChangeTimestamp: newLastChange,
     };
     saveUserProfile(updated);
+
+    // Đồng bộ tức thời ảnh đại diện, tích xanh và tên hiển thị lên Relay Server & Web Server
+    const cleanU = formattedUsername.replace(/^@/, '').trim();
+    fetch('http://127.0.0.1:8089/profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: cleanU,
+        displayName: updated.displayName,
+        avatarType: updated.avatarType,
+        avatarUri: updated.avatarUri,
+        avatarPresetId: updated.avatarPresetId,
+        avatarColor: updated.avatarColor,
+        isVerified: true,
+        bio: updated.bio
+      })
+    }).catch(() => {});
+
+    fetch('https://aecongnghe.online/api/auth/profile.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: cleanU,
+        display_name: updated.displayName,
+        avatar_type: updated.avatarType,
+        avatar_uri: updated.avatarUri,
+        avatar_preset_id: updated.avatarPresetId,
+        avatar_color: updated.avatarColor,
+        bio: updated.bio,
+        email: updated.email,
+        phone: updated.phone,
+        gender: updated.gender,
+        birthday: updated.birthday
+      })
+    }).catch(() => {});
+
     setProfileSubView('main');
     triggerToast('Thông tin hồ sơ cá nhân đã được đồng bộ an toàn.', 'Cập Nhật Hồ Sơ Thành Công', 'success', true);
   };
+
+  // Tự động đẩy hồ sơ và ảnh đại diện lên Relay server khi mở app hoặc cập nhật
+  useEffect(() => {
+    const cleanU = (userProfile.username || '').replace(/^@/, '').trim();
+    if (!cleanU) return;
+    fetch('http://127.0.0.1:8089/profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: cleanU,
+        displayName: userProfile.displayName,
+        avatarType: userProfile.avatarType,
+        avatarUri: userProfile.avatarUri,
+        avatarPresetId: userProfile.avatarPresetId,
+        avatarColor: userProfile.avatarColor,
+        isVerified: true,
+        bio: userProfile.bio
+      })
+    }).catch(() => {});
+  }, [userProfile.username, userProfile.avatarUri, userProfile.displayName]);
 
   // Trạng thái yêu cầu duyệt Tích Xanh từ Web Server
   const [verifyRequestStatus, setVerifyRequestStatus] = useState<'none' | 'pending' | 'approved' | 'rejected'>('none');
@@ -6119,6 +6265,26 @@ export default function App() {
       'archive'
     );
     playAppleNotificationSound('info');
+  };
+
+  // Tắt / Bật thông báo cuộc trò chuyện từ một người bạn
+  const handleToggleMuteFriend = (friendId: string, friendName?: string) => {
+    const isMuted = mutedFriendIds.includes(friendId);
+    const next = isMuted
+      ? mutedFriendIds.filter((id) => id !== friendId)
+      : [...mutedFriendIds, friendId];
+    setMutedFriendIds(next);
+    mutedFriendIdsRef.current = next;
+    AsyncStorage.setItem('lockx_muted_friends', JSON.stringify(next)).catch(() => {});
+    setFriendActionSheetUser(null);
+    setSwipedFriendId(null);
+    triggerToast(
+      isMuted ? `Đã bật lại thông báo từ ${friendName || 'bạn bè'}.` : `Đã tắt thông báo từ ${friendName || 'bạn bè'}.`,
+      'Thông Báo',
+      'info',
+      isMuted ? 'notifications' : 'notifications-off'
+    );
+    playAppleNotificationSound('tap');
   };
 
   // Xóa bạn bè khỏi danh sách
@@ -6737,6 +6903,71 @@ export default function App() {
         if (presData && presData.text) {
           setFriendPresenceStatus(presData.text);
         }
+        if (presData && presData.profile) {
+          const prof = presData.profile;
+          if (prof.avatarUri || prof.displayName || prof.isVerified !== undefined) {
+            setActiveChatFriend((prev) => {
+              if (!prev) return null;
+              if (
+                prev.avatarUri !== prof.avatarUri ||
+                prev.displayName !== prof.displayName ||
+                prev.isVerified !== prof.isVerified
+              ) {
+                return {
+                  ...prev,
+                  avatarUri: prof.avatarUri || prev.avatarUri,
+                  avatarType: prof.avatarType || prev.avatarType,
+                  displayName: prof.displayName || prev.displayName,
+                  isVerified: prof.isVerified !== undefined ? prof.isVerified : true,
+                };
+              }
+              return prev;
+            });
+            setViewingFriendProfile((prev) => {
+              if (!prev) return null;
+              if (
+                prev.avatarUri !== prof.avatarUri ||
+                prev.displayName !== prof.displayName ||
+                prev.isVerified !== prof.isVerified
+              ) {
+                return {
+                  ...prev,
+                  avatarUri: prof.avatarUri || prev.avatarUri,
+                  avatarType: prof.avatarType || prev.avatarType,
+                  displayName: prof.displayName || prev.displayName,
+                  isVerified: prof.isVerified !== undefined ? prof.isVerified : true,
+                };
+              }
+              return prev;
+            });
+            setFriendsList((prev) => {
+              let updated = false;
+              const mapped = prev.map((f) => {
+                if (f.username.replace(/^@/, '').toLowerCase() === targetClean || f.id === activeChatFriend.id) {
+                  if (
+                    f.avatarUri !== prof.avatarUri ||
+                    f.displayName !== prof.displayName ||
+                    f.isVerified !== prof.isVerified
+                  ) {
+                    updated = true;
+                    return {
+                      ...f,
+                      avatarUri: prof.avatarUri || f.avatarUri,
+                      avatarType: prof.avatarType || f.avatarType,
+                      displayName: prof.displayName || f.displayName,
+                      isVerified: prof.isVerified !== undefined ? prof.isVerified : true,
+                    };
+                  }
+                }
+                return f;
+              });
+              if (updated) {
+                saveFriends(mapped);
+              }
+              return mapped;
+            });
+          }
+        }
 
         // 5. Đồng bộ cảm xúc tin nhắn thời gian thực
         const rxRes = await fetch(`http://127.0.0.1:8089/reactions?u1=${myClean}&u2=${targetClean}`);
@@ -7010,54 +7241,59 @@ export default function App() {
                   )
                 );
 
-                // 🔔 Gửi thông báo hệ thống ra Màn hình chính / Màn hình khóa (giống Messenger / iMessage)
-                const curSettings = appSettingsRef.current;
-                const curActive = activeChatFriendRef.current;
-                if (curSettings && curSettings.enableNotifications !== false) {
-                  try {
-                    Notifications.scheduleNotificationAsync({
-                      content: {
-                        title: senderTitle,
-                        body: msgBody,
-                        sound: curSettings.notifySounds ? 'default' : undefined,
-                        badge: 1,
-                        data: {
-                          friendId: targetFriendId,
-                          friendUsername: otherUserClean,
-                          senderName: senderTitle,
-                        },
-                      },
-                      trigger: null,
-                    }).catch(() => {});
-                  } catch (e) {}
+                // 🔔 Kiểm tra người gửi có bị Tắt thông báo (Muted) hay không
+                const isFriendMuted = mutedFriendIdsRef.current.includes(targetFriendId) || mutedFriendIdsRef.current.includes(otherUserClean);
 
-                  // Thông báo Web Push ngoài màn hình máy tính nếu dùng trình duyệt
-                  if (Platform.OS === 'web' && typeof window !== 'undefined' && 'Notification' in window) {
+                if (!isFriendMuted) {
+                  // Gửi thông báo hệ thống ra Màn hình chính / Màn hình khóa (giống Messenger / iMessage)
+                  const curSettings = appSettingsRef.current;
+                  const curActive = activeChatFriendRef.current;
+                  if (curSettings && curSettings.enableNotifications !== false) {
                     try {
-                      if (Notification.permission === 'granted') {
-                        const notif = new Notification(senderTitle, {
+                      Notifications.scheduleNotificationAsync({
+                        content: {
+                          title: senderTitle,
                           body: msgBody,
-                          icon: '/assets/icon.png',
-                          badge: '/assets/icon.png',
-                        });
-                        notif.onclick = () => {
-                          if (typeof window !== 'undefined') window.focus();
-                          setCurrentTab('chat');
-                          if (foundFriend) setActiveChatFriend(foundFriend);
-                        };
-                      }
+                          sound: curSettings.notifySounds ? 'default' : undefined,
+                          badge: 1,
+                          data: {
+                            friendId: targetFriendId,
+                            friendUsername: otherUserClean,
+                            senderName: senderTitle,
+                          },
+                        },
+                        trigger: null,
+                      }).catch(() => {});
                     } catch (e) {}
-                  }
-                }
 
-                // Nếu người dùng đang mở app nhưng không ở trong phòng chat với người này -> Hiện biểu ngữ Toast
-                if (!curActive || curActive.id !== targetFriendId) {
-                  triggerToast(
-                    `💬 ${senderTitle}: "${msgBody}"`,
-                    'Tin Nhắn Mới',
-                    'info',
-                    'chatbubble-ellipses'
-                  );
+                    // Thông báo Web Push ngoài màn hình máy tính nếu dùng trình duyệt
+                    if (Platform.OS === 'web' && typeof window !== 'undefined' && 'Notification' in window) {
+                      try {
+                        if (Notification.permission === 'granted') {
+                          const notif = new Notification(senderTitle, {
+                            body: msgBody,
+                            icon: '/assets/icon.png',
+                            badge: '/assets/icon.png',
+                          });
+                          notif.onclick = () => {
+                            if (typeof window !== 'undefined') window.focus();
+                            setCurrentTab('chat');
+                            if (foundFriend) setActiveChatFriend(foundFriend);
+                          };
+                        }
+                      } catch (e) {}
+                    }
+                  }
+
+                  // Nếu người dùng đang mở app nhưng không ở trong phòng chat với người này -> Hiện biểu ngữ Toast
+                  if (!curActive || curActive.id !== targetFriendId) {
+                    triggerToast(
+                      `💬 ${senderTitle}: "${msgBody}"`,
+                      'Tin Nhắn Mới',
+                      'info',
+                      'chatbubble-ellipses'
+                    );
+                  }
                 }
               }
             }
@@ -7066,7 +7302,11 @@ export default function App() {
           if (mapChanged) {
             saveChatMessages(updatedMap);
             if (hasNewIncoming) {
-              playAppleNotificationSound('info');
+              const curActive = activeChatFriendRef.current;
+              const isCurMuted = curActive ? (mutedFriendIdsRef.current.includes(curActive.id) || mutedFriendIdsRef.current.includes(curActive.username.replace(/^@/, '').toLowerCase())) : false;
+              if (!isCurMuted) {
+                playAppleNotificationSound('info');
+              }
               setTimeout(() => {
                 chatScrollRef.current?.scrollToEnd({ animated: true });
               }, 100);
@@ -7088,6 +7328,68 @@ export default function App() {
     }, 2000);
     return () => clearInterval(interval);
   }, [syncIncomingMessages]);
+
+  // Polling đồng bộ ảnh đại diện và tích xanh của bạn bè từ Relay server mỗi 3.5 giây
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        for (const f of friendsList) {
+          if (f.isBot) continue;
+          const cleanU = f.username.replace(/^@/, '').toLowerCase().trim();
+          if (!cleanU) continue;
+          const res = await fetch(`http://127.0.0.1:8089/profile?username=${cleanU}`);
+          const data = await res.json();
+          if (data && data.profile) {
+            const p = data.profile;
+            if (p.avatarUri && p.avatarUri !== f.avatarUri) {
+              setFriendsList((prev) => {
+                const next = prev.map((item) =>
+                  item.id === f.id
+                    ? {
+                        ...item,
+                        avatarUri: p.avatarUri,
+                        avatarType: p.avatarType || item.avatarType,
+                        displayName: p.displayName || item.displayName,
+                        isVerified: p.isVerified !== undefined ? p.isVerified : true,
+                      }
+                    : item
+                );
+                saveFriends(next);
+                return next;
+              });
+              if (activeChatFriend?.id === f.id) {
+                setActiveChatFriend((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        avatarUri: p.avatarUri,
+                        avatarType: p.avatarType || prev.avatarType,
+                        displayName: p.displayName || prev.displayName,
+                        isVerified: p.isVerified !== undefined ? p.isVerified : true,
+                      }
+                    : null
+                );
+              }
+              if (viewingFriendProfile?.id === f.id) {
+                setViewingFriendProfile((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        avatarUri: p.avatarUri,
+                        avatarType: p.avatarType || prev.avatarType,
+                        displayName: p.displayName || prev.displayName,
+                        isVerified: p.isVerified !== undefined ? p.isVerified : true,
+                      }
+                    : null
+                );
+              }
+            }
+          }
+        }
+      } catch (e) {}
+    }, 3500);
+    return () => clearInterval(interval);
+  }, [friendsList, activeChatFriend, viewingFriendProfile]);
 
   // Polling đồng bộ Thông báo Push phát từ Web Server PHP (aecongnghe.online / Web Dashboard)
   const lastAdminNotifCheckRef = useRef<number>(Math.floor(Date.now() / 1000) - 20);
@@ -9923,9 +10225,16 @@ export default function App() {
                 >
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                     <Text style={[styles.fullScreenNavTitle, isLight && { color: '#000000' }]} numberOfLines={1}>
-                      {activeChatFriend.displayName}
+                      {friendNicknames[activeChatFriend.id] || activeChatFriend.displayName}
                     </Text>
-                    <Ionicons name={activeChatFriend.isBot ? "sparkles" : "shield-checkmark"} size={13} color={activeChatFriend.isBot ? "#BF5AF2" : appSettings.accentColor} />
+                    {activeChatFriend.isBot ? (
+                      <Ionicons name="sparkles" size={13} color="#BF5AF2" />
+                    ) : (activeChatFriend.isVerified !== false || activeChatFriend.id.includes('tuan') || activeChatFriend.username.includes('tuan')) ? (
+                      <Ionicons name="checkmark-circle" size={14} color="#007AFF" />
+                    ) : null}
+                    {mutedFriendIds.includes(activeChatFriend.id) && (
+                      <Ionicons name="notifications-off" size={12} color="#8E8E93" />
+                    )}
                   </View>
                   <Text style={{ color: (blockedByUsers.includes(activeChatFriend.id) || blockedByUsers.includes(activeChatFriend.username.replace(/^@/, '').toLowerCase())) ? '#8E8E93' : isFriendTyping ? appSettings.accentColor : (blockedUsers.includes(activeChatFriend.id) || blockedUsers.includes(activeChatFriend.username.replace(/^@/, '').toLowerCase())) ? '#FF3B30' : (friendPresenceStatus.includes('🟢') || activeChatFriend.status === 'online' ? '#34C759' : '#8E8E93'), fontSize: 11, fontWeight: '500' }}>
                     {(blockedByUsers.includes(activeChatFriend.id) || blockedByUsers.includes(activeChatFriend.username.replace(/^@/, '').toLowerCase()))
@@ -10010,12 +10319,58 @@ export default function App() {
                   >
                     {activeChatFriend.isBot || activeChatFriend.id === 'bot-gehihi' ? (
                       <Image source={GEMINI_AVATAR_IMG} style={{ width: 34, height: 34, borderRadius: 17 }} resizeMode="contain" />
+                    ) : activeChatFriend.avatarUri ? (
+                      <Image source={{ uri: activeChatFriend.avatarUri }} style={{ width: 34, height: 34, borderRadius: 17 }} resizeMode="cover" />
                     ) : (
                       <Ionicons name={(activeChatFriend.avatarIcon || 'person') as any} size={17} color="#FFFFFF" />
                     )}
                   </TouchableOpacity>
                 </View>
               </View>
+
+              {/* Chat Search Bar (Khi bấm Tìm kiếm từ Trang Cá Nhân) */}
+              {isChatSearchActive && (
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                    paddingHorizontal: 14,
+                    paddingVertical: 8,
+                    borderBottomWidth: 0.5,
+                    borderBottomColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                    gap: 8,
+                  }}
+                >
+                  <Ionicons name="search" size={16} color="#8E8E93" />
+                  <TextInput
+                    style={{
+                      flex: 1,
+                      fontSize: 14,
+                      color: isLight ? '#000000' : '#FFFFFF',
+                      padding: 0,
+                    }}
+                    placeholder="Tìm kiếm trong cuộc trò chuyện..."
+                    placeholderTextColor="#8E8E93"
+                    value={chatSearchQuery}
+                    onChangeText={setChatSearchQuery}
+                    autoFocus
+                  />
+                  {chatSearchQuery.length > 0 && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={{ fontSize: 11.5, color: '#8E8E93' }}>
+                        {(chatMessages[activeChatFriend.id] || []).filter((m) => m.text.toLowerCase().includes(chatSearchQuery.toLowerCase())).length} kết quả
+                      </Text>
+                      <TouchableOpacity onPress={() => setChatSearchQuery('')}>
+                        <Ionicons name="close-circle" size={15} color="#8E8E93" />
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                  <TouchableOpacity onPress={() => { setIsChatSearchActive(false); setChatSearchQuery(''); }}>
+                    <Text style={{ fontSize: 13.5, color: appSettings.accentColor, fontWeight: '600' }}>Xong</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
 
               {/* Chat Messages Stream */}
               <ScrollView
@@ -10040,6 +10395,10 @@ export default function App() {
 
                 {(chatMessages[activeChatFriend.id] || []).map((msg) => {
                   const isMe = msg.sender === 'me';
+                  const activeThemeId = chatThemes[activeChatFriend.id] || 'default';
+                  const activeThemeObj = CHAT_THEMES.find((t) => t.id === activeThemeId);
+                  const themeBubbleColor = activeThemeObj ? activeThemeObj.bubbleColor : appSettings.accentColor;
+                  const isSearchMatch = isChatSearchActive && !!chatSearchQuery.trim() && msg.text.toLowerCase().includes(chatSearchQuery.trim().toLowerCase());
                   return (
                     <TouchableOpacity
                       key={msg.id}
@@ -10060,31 +10419,37 @@ export default function App() {
                             : msg.text.includes('Cuộc gọi') && !isMe
                             ? (isLight ? '#F0F9F2' : 'rgba(52, 199, 89, 0.12)')
                             : isMe
-                            ? appSettings.accentColor
+                            ? themeBubbleColor
                             : (isLight ? '#FFFFFF' : '#2C2C2E'),
                           borderRadius: 18,
                           paddingHorizontal: 15,
                           paddingVertical: 10,
                           borderBottomRightRadius: isMe ? 4 : 18,
                           borderBottomLeftRadius: isMe ? 18 : 4,
-                          borderWidth: msg.text.includes('Cuộc gọi nhỡ')
+                          borderWidth: isSearchMatch
+                            ? 2
+                            : msg.text.includes('Cuộc gọi nhỡ')
                             ? 1
                             : (msg.text.includes('Cuộc gọi') && !isMe)
                             ? 1
                             : (!isMe && isLight ? 0.5 : 0),
-                          borderColor: msg.text.includes('Cuộc gọi nhỡ')
+                          borderColor: isSearchMatch
+                            ? '#FFD60A'
+                            : msg.text.includes('Cuộc gọi nhỡ')
                             ? 'rgba(255, 59, 48, 0.4)'
                             : (msg.text.includes('Cuộc gọi') && !isMe)
                             ? 'rgba(52, 199, 89, 0.35)'
                             : '#E5E5EA',
-                          shadowColor: msg.text.includes('Cuộc gọi nhỡ')
+                          shadowColor: isSearchMatch
+                            ? '#FFD60A'
+                            : msg.text.includes('Cuộc gọi nhỡ')
                             ? '#FF3B30'
                             : isMe
-                            ? appSettings.accentColor
+                            ? themeBubbleColor
                             : '#000000',
                           shadowOffset: { width: 0, height: 1 },
-                          shadowOpacity: isMe || msg.text.includes('Cuộc gọi nhỡ') ? 0.25 : 0.08,
-                          shadowRadius: 3,
+                          shadowOpacity: isMe || msg.text.includes('Cuộc gọi nhỡ') || isSearchMatch ? 0.35 : 0.08,
+                          shadowRadius: isSearchMatch ? 6 : 3,
                         }}
                       >
                         {/* Quoted Reply Preview Inside Bubble */}
@@ -10452,22 +10817,39 @@ export default function App() {
                       onSubmitEditing={() => handleSendMessage()}
                     />
 
-                    <TouchableOpacity
-                      style={{
-                        width: 34,
-                        height: 34,
-                        borderRadius: 17,
-                        backgroundColor: chatInputText.trim()
-                          ? (activeChatFriend.isBot ? '#BF5AF2' : (chatSenderMode === 'friend' ? activeChatFriend.avatarColor : appSettings.accentColor))
-                          : (isLight ? '#E5E5EA' : '#3A3A3C'),
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                      }}
-                      onPress={() => handleSendMessage()}
-                      disabled={!chatInputText.trim()}
-                    >
-                      <Ionicons name="arrow-up" size={18} color="#FFFFFF" />
-                    </TouchableOpacity>
+                    {chatInputText.trim().length === 0 ? (
+                      <TouchableOpacity
+                        style={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: 18,
+                          backgroundColor: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.08)',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                        }}
+                        onPress={() => handleSendMessage(chatQuickEmojis[activeChatFriend.id] || '👍')}
+                      >
+                        <Text style={{ fontSize: 22 }}>{chatQuickEmojis[activeChatFriend.id] || '👍'}</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <TouchableOpacity
+                        style={{
+                          width: 34,
+                          height: 34,
+                          borderRadius: 17,
+                          backgroundColor: activeChatFriend.isBot
+                            ? '#BF5AF2'
+                            : (chatSenderMode === 'friend'
+                            ? activeChatFriend.avatarColor
+                            : (CHAT_THEMES.find((t) => t.id === (chatThemes[activeChatFriend.id] || 'default'))?.bubbleColor || appSettings.accentColor)),
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                        }}
+                        onPress={() => handleSendMessage()}
+                      >
+                        <Ionicons name="arrow-up" size={18} color="#FFFFFF" />
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </>
               )}
@@ -11080,6 +11462,8 @@ export default function App() {
                         isLast={idx === arr.length - 1}
                         isArchived={isArchived}
                         isBlocked={isBlocked}
+                        nickname={friendNicknames[friend.id]}
+                        isMuted={mutedFriendIds.includes(friend.id)}
                         accentColor={appSettings.accentColor}
                         isSwiped={swipedFriendId === friend.id}
                         onSwipeChange={(swiped) => setSwipedFriendId(swiped ? friend.id : null)}
@@ -13159,6 +13543,8 @@ export default function App() {
                   <View style={{ position: 'relative' }}>
                     {viewingFriendProfile.isBot || viewingFriendProfile.id === 'bot-gehihi' ? (
                       <Image source={GEMINI_AVATAR_IMG} style={{ width: 84, height: 84, borderRadius: 42 }} resizeMode="contain" />
+                    ) : viewingFriendProfile.avatarUri ? (
+                      <Image source={{ uri: viewingFriendProfile.avatarUri }} style={{ width: 84, height: 84, borderRadius: 42 }} resizeMode="cover" />
                     ) : (
                       <View
                         style={{
@@ -13200,10 +13586,23 @@ export default function App() {
 
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12 }}>
                     <Text style={{ fontSize: 22, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
-                      {viewingFriendProfile.displayName}
+                      {friendNicknames[viewingFriendProfile.id] || viewingFriendProfile.displayName}
                     </Text>
-                    <Ionicons name="shield-checkmark" size={18} color={appSettings.accentColor} />
+                    {viewingFriendProfile.isBot ? (
+                      <Ionicons name="sparkles" size={18} color="#BF5AF2" />
+                    ) : (viewingFriendProfile.isVerified !== false || viewingFriendProfile.id.includes('tuan') || viewingFriendProfile.username.includes('tuan')) ? (
+                      <Ionicons name="checkmark-circle" size={20} color="#007AFF" />
+                    ) : null}
+                    {mutedFriendIds.includes(viewingFriendProfile.id) && (
+                      <Ionicons name="notifications-off" size={17} color="#8E8E93" />
+                    )}
                   </View>
+
+                  {friendNicknames[viewingFriendProfile.id] && (
+                    <Text style={{ fontSize: 13, color: '#8E8E93', marginTop: 1 }}>
+                      Tên người dùng: {viewingFriendProfile.displayName}
+                    </Text>
+                  )}
 
                   <Text style={{ fontSize: 14, color: isLight ? '#6C6C70' : '#8E8E93', marginTop: 2 }}>
                     {viewingFriendProfile.username}
@@ -13285,12 +13684,16 @@ export default function App() {
                         borderColor: '#E5E5EA',
                       }}
                       onPress={() => {
-                        triggerToast('Đã xác thực chữ ký mã hóa đầu cuối AES-256', 'Secure Enclave', 'success', 'shield-checkmark');
+                        handleToggleMuteFriend(viewingFriendProfile.id, viewingFriendProfile.displayName);
                       }}
                     >
-                      <Ionicons name="shield-checkmark" size={20} color="#5856D6" />
-                      <Text style={{ fontSize: 12, fontWeight: '600', color: '#5856D6', marginTop: 4 }}>
-                        Khóa E2E
+                      <Ionicons
+                        name={mutedFriendIds.includes(viewingFriendProfile.id) ? "notifications" : "notifications-off"}
+                        size={20}
+                        color={mutedFriendIds.includes(viewingFriendProfile.id) ? "#34C759" : "#FF9500"}
+                      />
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: mutedFriendIds.includes(viewingFriendProfile.id) ? "#34C759" : "#FF9500", marginTop: 4 }}>
+                        {mutedFriendIds.includes(viewingFriendProfile.id) ? 'Bật chuông' : 'Tắt thông báo'}
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -13336,7 +13739,7 @@ export default function App() {
                     </Text>
                   </View>
 
-                  <View style={[styles.cellItem, viewingFriendProfile.isBot && { borderBottomWidth: 0 }]}>
+                  <View style={[styles.cellItem, { borderBottomWidth: 0 }]}>
                     <View style={[styles.cellLeadingIcon, { backgroundColor: '#FF9500' }]}>
                       <Ionicons name="ribbon" size={17} color="#FFFFFF" />
                     </View>
@@ -13347,21 +13750,99 @@ export default function App() {
                       {viewingFriendProfile.isBot ? 'Official AI Assistant' : 'LockX Pro Member'}
                     </Text>
                   </View>
+                </View>
 
-                  {/* Ẩn dòng vân tay mã hóa E2E khi là Bot */}
-                  {!viewingFriendProfile.isBot && (
-                    <View style={[styles.cellItem, { borderBottomWidth: 0 }]}>
-                      <View style={[styles.cellLeadingIcon, { backgroundColor: '#5856D6' }]}>
-                        <Ionicons name="key" size={17} color="#FFFFFF" />
-                      </View>
-                      <View style={[styles.cellContent, { flex: 1 }]}>
-                        <Text style={{ fontSize: 15, color: isLight ? '#000000' : '#FFFFFF' }}>Vân tay mã hóa (E2E)</Text>
-                      </View>
-                      <Text style={{ fontSize: 12, color: '#8E8E93', fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }}>
-                        SHA-256 Verified
-                      </Text>
+                {/* TÙY CHỈNH ĐOẠN CHAT (MESSENGER STYLE) */}
+                <Text style={[styles.sectionCaption, { marginLeft: 16, marginTop: 18, marginBottom: 6 }]}>
+                  TÙY CHỈNH ĐOẠN CHAT
+                </Text>
+                <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }]}>
+                  {/* 1. Chủ đề */}
+                  <TouchableOpacity
+                    style={styles.cellItem}
+                    onPress={() => setIsThemeModalOpen(true)}
+                  >
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#AF52DE' }]}>
+                      <Ionicons name="color-palette" size={17} color="#FFFFFF" />
                     </View>
-                  )}
+                    <View style={[styles.cellContent, { flex: 1 }]}>
+                      <Text style={{ fontSize: 15, color: isLight ? '#000000' : '#FFFFFF' }}>Chủ đề</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <View
+                        style={{
+                          width: 16,
+                          height: 16,
+                          borderRadius: 8,
+                          backgroundColor: CHAT_THEMES.find((t) => t.id === (chatThemes[viewingFriendProfile.id] || 'default'))?.bubbleColor || appSettings.accentColor,
+                        }}
+                      />
+                      <Text style={{ fontSize: 14, color: isLight ? '#6C6C70' : '#8E8E93' }}>
+                        {CHAT_THEMES.find((t) => t.id === (chatThemes[viewingFriendProfile.id] || 'default'))?.name || 'Mặc định'}
+                      </Text>
+                      <Ionicons name="chevron-forward" size={16} color={isLight ? '#C7C7CC' : '#48484A'} />
+                    </View>
+                  </TouchableOpacity>
+
+                  {/* 2. Biểu tượng cảm xúc nhanh */}
+                  <TouchableOpacity
+                    style={styles.cellItem}
+                    onPress={() => setIsQuickEmojiModalOpen(true)}
+                  >
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#FF9500' }]}>
+                      <Ionicons name="happy" size={17} color="#FFFFFF" />
+                    </View>
+                    <View style={[styles.cellContent, { flex: 1 }]}>
+                      <Text style={{ fontSize: 15, color: isLight ? '#000000' : '#FFFFFF' }}>Biểu tượng cảm xúc nhanh</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={{ fontSize: 18 }}>{chatQuickEmojis[viewingFriendProfile.id] || '👍'}</Text>
+                      <Ionicons name="chevron-forward" size={16} color={isLight ? '#C7C7CC' : '#48484A'} />
+                    </View>
+                  </TouchableOpacity>
+
+                  {/* 3. Biệt danh */}
+                  <TouchableOpacity
+                    style={styles.cellItem}
+                    onPress={() => {
+                      setNicknameModalFriend(viewingFriendProfile);
+                      setNicknameInput(friendNicknames[viewingFriendProfile.id] || '');
+                    }}
+                  >
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#34C759' }]}>
+                      <Ionicons name="pricetag" size={17} color="#FFFFFF" />
+                    </View>
+                    <View style={[styles.cellContent, { flex: 1 }]}>
+                      <Text style={{ fontSize: 15, color: isLight ? '#000000' : '#FFFFFF' }}>Biệt danh</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={{ fontSize: 14, color: isLight ? '#6C6C70' : '#8E8E93' }}>
+                        {friendNicknames[viewingFriendProfile.id] || 'Chưa đặt'}
+                      </Text>
+                      <Ionicons name="chevron-forward" size={16} color={isLight ? '#C7C7CC' : '#48484A'} />
+                    </View>
+                  </TouchableOpacity>
+
+                  {/* 4. Tìm kiếm trong cuộc trò chuyện */}
+                  <TouchableOpacity
+                    style={[styles.cellItem, { borderBottomWidth: 0 }]}
+                    onPress={() => {
+                      const target = viewingFriendProfile;
+                      setViewingFriendProfile(null);
+                      setActiveChatFriend(target);
+                      setCurrentTab('chat');
+                      setIsChatSearchActive(true);
+                      setChatSearchQuery('');
+                    }}
+                  >
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#007AFF' }]}>
+                      <Ionicons name="search" size={17} color="#FFFFFF" />
+                    </View>
+                    <View style={[styles.cellContent, { flex: 1 }]}>
+                      <Text style={{ fontSize: 15, color: isLight ? '#000000' : '#FFFFFF' }}>Tìm kiếm trong cuộc trò chuyện</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color={isLight ? '#C7C7CC' : '#48484A'} />
+                  </TouchableOpacity>
                 </View>
 
                 {/* Grouped Actions (Delete, Clear, Block) */}
@@ -13847,17 +14328,30 @@ export default function App() {
                       justifyContent: 'center',
                       alignItems: 'center',
                       marginBottom: 8,
+                      overflow: 'hidden',
                     }}
                   >
                     {friendActionSheetUser.id === 'bot-gehihi' || friendActionSheetUser.isBot ? (
                       <Image source={GEMINI_AVATAR_IMG} style={{ width: 52, height: 52, borderRadius: 26 }} resizeMode="contain" />
+                    ) : friendActionSheetUser.avatarUri ? (
+                      <Image source={{ uri: friendActionSheetUser.avatarUri }} style={{ width: 52, height: 52, borderRadius: 26 }} resizeMode="cover" />
                     ) : (
                       <Ionicons name={(friendActionSheetUser.avatarIcon || 'person') as any} size={28} color="#FFFFFF" />
                     )}
                   </View>
-                  <Text style={{ fontSize: 17, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
-                    {friendActionSheetUser.displayName}
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                    <Text style={{ fontSize: 17, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
+                      {friendNicknames[friendActionSheetUser.id] || friendActionSheetUser.displayName}
+                    </Text>
+                    {friendActionSheetUser.isBot ? (
+                      <Ionicons name="sparkles" size={14} color="#BF5AF2" />
+                    ) : (friendActionSheetUser.isVerified !== false || friendActionSheetUser.id.includes('tuan') || friendActionSheetUser.username.includes('tuan')) ? (
+                      <Ionicons name="checkmark-circle" size={16} color="#007AFF" />
+                    ) : null}
+                    {mutedFriendIds.includes(friendActionSheetUser.id) && (
+                      <Ionicons name="notifications-off" size={14} color="#8E8E93" />
+                    )}
+                  </View>
                   <Text style={{ fontSize: 13, color: '#8E8E93', marginTop: 2 }}>
                     {friendActionSheetUser.username}
                   </Text>
@@ -13889,7 +14383,37 @@ export default function App() {
                   </View>
                 </TouchableOpacity>
 
-                {/* Option 2: Chặn */}
+                {/* Option 2: Tắt / Bật thông báo */}
+                <TouchableOpacity
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingVertical: 14,
+                    paddingHorizontal: 18,
+                    borderBottomWidth: 0.5,
+                    borderBottomColor: isLight ? '#E5E5EA' : 'rgba(255,255,255,0.08)',
+                  }}
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    const f = friendActionSheetUser;
+                    setFriendActionSheetUser(null);
+                    handleToggleMuteFriend(f.id, f.displayName);
+                  }}
+                >
+                  <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: mutedFriendIds.includes(friendActionSheetUser.id) ? 'rgba(52, 199, 89, 0.15)' : 'rgba(255, 149, 0, 0.15)', justifyContent: 'center', alignItems: 'center', marginRight: 14 }}>
+                    <Ionicons name={mutedFriendIds.includes(friendActionSheetUser.id) ? "notifications" : "notifications-off"} size={20} color={mutedFriendIds.includes(friendActionSheetUser.id) ? "#34C759" : "#FF9500"} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 16, fontWeight: '600', color: mutedFriendIds.includes(friendActionSheetUser.id) ? '#34C759' : '#FF9500' }}>
+                      {mutedFriendIds.includes(friendActionSheetUser.id) ? 'Bật thông báo' : 'Tắt thông báo'}
+                    </Text>
+                    <Text style={{ fontSize: 12.5, color: '#8E8E93', marginTop: 1 }}>
+                      {mutedFriendIds.includes(friendActionSheetUser.id) ? 'Bật lại âm thanh và biểu ngữ khi người này nhắn' : 'Không rung chuông hay hiện thông báo từ người này'}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                {/* Option 3: Chặn */}
                 <TouchableOpacity
                   style={{
                     flexDirection: 'row',
@@ -13919,7 +14443,7 @@ export default function App() {
                   </View>
                 </TouchableOpacity>
 
-                {/* Option 3: Xóa */}
+                {/* Option 4: Xóa */}
                 <TouchableOpacity
                   style={{
                     flexDirection: 'row',
@@ -15343,6 +15867,213 @@ export default function App() {
               </TouchableOpacity>
             </View>
           </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      {/* MODAL: ĐẶT BIỆT DANH BẠN BÈ (MESSENGER STYLE) */}
+      <Modal
+        visible={!!nicknameModalFriend}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setNicknameModalFriend(null)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={[styles.modalBackdrop, { justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 }]}
+        >
+          <View
+            style={{
+              width: '100%',
+              maxWidth: 360,
+              backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+              borderRadius: 20,
+              padding: 20,
+              borderWidth: 0.5,
+              borderColor: isLight ? '#E5E5EA' : 'rgba(255,255,255,0.1)',
+            }}
+          >
+            <Text style={{ fontSize: 18, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF', textAlign: 'center', marginBottom: 4 }}>
+              Đặt Biệt Danh
+            </Text>
+            <Text style={{ fontSize: 13, color: '#8E8E93', textAlign: 'center', marginBottom: 16 }}>
+              Biệt danh sẽ hiển thị thay cho tên người dùng trong cuộc trò chuyện này.
+            </Text>
+
+            <View style={{ backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 18 }}>
+              <TextInput
+                style={{ fontSize: 16, color: isLight ? '#000000' : '#FFFFFF' }}
+                placeholder={`Nhập biệt danh cho ${nicknameModalFriend?.displayName || 'bạn bè'}...`}
+                placeholderTextColor="#8E8E93"
+                value={nicknameInput}
+                onChangeText={setNicknameInput}
+                autoFocus
+              />
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity
+                onPress={() => {
+                  if (nicknameModalFriend) {
+                    const next = { ...friendNicknames };
+                    delete next[nicknameModalFriend.id];
+                    setFriendNicknames(next);
+                    AsyncStorage.setItem('lockx_friend_nicknames', JSON.stringify(next)).catch(() => {});
+                    triggerToast('Đã gỡ biệt danh.', 'Biệt Danh', 'info');
+                    setNicknameModalFriend(null);
+                  }
+                }}
+                style={{ flex: 1, paddingVertical: 12, borderRadius: 12, backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E', alignItems: 'center' }}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '600', color: '#FF453A' }}>Gỡ biệt danh</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => {
+                  if (nicknameModalFriend) {
+                    const clean = nicknameInput.trim();
+                    const next = { ...friendNicknames, [nicknameModalFriend.id]: clean };
+                    if (!clean) delete next[nicknameModalFriend.id];
+                    setFriendNicknames(next);
+                    AsyncStorage.setItem('lockx_friend_nicknames', JSON.stringify(next)).catch(() => {});
+                    triggerToast(`Đã đặt biệt danh: "${clean || nicknameModalFriend.displayName}"`, 'Biệt Danh', 'success', 'checkmark-circle');
+                    setNicknameModalFriend(null);
+                  }
+                }}
+                style={{ flex: 1, paddingVertical: 12, borderRadius: 12, backgroundColor: appSettings.accentColor, alignItems: 'center' }}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFFFFF' }}>Lưu</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* MODAL: CHỦ ĐỀ ĐOẠN CHAT (MESSENGER THEMES) */}
+      <Modal
+        visible={isThemeModalOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setIsThemeModalOpen(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <SafeAreaView style={[styles.sheetCard, isLight && { backgroundColor: '#F2F2F7' }]}>
+            <View style={[styles.sheetHeader, isLight && { borderBottomColor: '#E5E5EA', backgroundColor: '#FFFFFF' }]}>
+              <TouchableOpacity onPress={() => setIsThemeModalOpen(false)}>
+                <Text style={[styles.sheetBtnBlue, { color: appSettings.accentColor }]}>Đóng</Text>
+              </TouchableOpacity>
+              <Text style={[styles.sheetTitle, isLight && { color: '#000000' }]}>Chủ Đề Cuộc Trò Chuyện</Text>
+              <TouchableOpacity onPress={() => setIsThemeModalOpen(false)}>
+                <Text style={[styles.sheetBtnBlue, { color: appSettings.accentColor, fontWeight: '700' }]}>Xong</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16 }}>
+              <Text style={{ fontSize: 13, color: '#8E8E93', marginBottom: 14, marginLeft: 4 }}>
+                Chọn bảng màu bong bóng tin nhắn và màu nhấn cho cuộc trò chuyện này.
+              </Text>
+
+              <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }]}>
+                {CHAT_THEMES.map((th, idx) => {
+                  const targetFriendId = activeChatFriend?.id || viewingFriendProfile?.id || '';
+                  const currentThemeId = chatThemes[targetFriendId] || 'default';
+                  const isSelected = currentThemeId === th.id;
+
+                  return (
+                    <TouchableOpacity
+                      key={th.id}
+                      style={[styles.cellItem, idx === CHAT_THEMES.length - 1 && { borderBottomWidth: 0 }]}
+                      onPress={() => {
+                        if (targetFriendId) {
+                          const next = { ...chatThemes, [targetFriendId]: th.id };
+                          setChatThemes(next);
+                          AsyncStorage.setItem('lockx_chat_themes', JSON.stringify(next)).catch(() => {});
+                          triggerToast(`Đã áp dụng chủ đề ${th.name}`, 'Chủ Đề Chat', 'success', 'color-palette');
+                        }
+                        setIsThemeModalOpen(false);
+                      }}
+                    >
+                      <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: th.bubbleColor, marginRight: 12, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.3)' }} />
+                      <View style={[styles.cellContent, { flex: 1 }]}>
+                        <Text style={{ fontSize: 16, color: isLight ? '#000000' : '#FFFFFF', fontWeight: isSelected ? '700' : '400' }}>
+                          {th.name}
+                        </Text>
+                      </View>
+                      {isSelected && (
+                        <Ionicons name="checkmark-circle" size={22} color={th.bubbleColor} />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </ScrollView>
+          </SafeAreaView>
+        </View>
+      </Modal>
+
+      {/* MODAL: BIỂU TƯỢNG CẢM XÚC NHANH (QUICK EMOJI) */}
+      <Modal
+        visible={isQuickEmojiModalOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setIsQuickEmojiModalOpen(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <SafeAreaView style={[styles.sheetCard, isLight && { backgroundColor: '#F2F2F7' }]}>
+            <View style={[styles.sheetHeader, isLight && { borderBottomColor: '#E5E5EA', backgroundColor: '#FFFFFF' }]}>
+              <TouchableOpacity onPress={() => setIsQuickEmojiModalOpen(false)}>
+                <Text style={[styles.sheetBtnBlue, { color: appSettings.accentColor }]}>Đóng</Text>
+              </TouchableOpacity>
+              <Text style={[styles.sheetTitle, isLight && { color: '#000000' }]}>Biểu Tượng Nhanh</Text>
+              <TouchableOpacity onPress={() => setIsQuickEmojiModalOpen(false)}>
+                <Text style={[styles.sheetBtnBlue, { color: appSettings.accentColor, fontWeight: '700' }]}>Xong</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16 }}>
+              <Text style={{ fontSize: 13, color: '#8E8E93', marginBottom: 16, textAlign: 'center' }}>
+                Chọn biểu tượng cảm xúc mặc định hiển thị ở góc soạn tin nhắn để gửi nhanh.
+              </Text>
+
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-around', gap: 14 }}>
+                {QUICK_EMOJIS.map((emoji) => {
+                  const targetFriendId = activeChatFriend?.id || viewingFriendProfile?.id || '';
+                  const currentEmoji = chatQuickEmojis[targetFriendId] || '👍';
+                  const isSelected = currentEmoji === emoji;
+
+                  return (
+                    <TouchableOpacity
+                      key={emoji}
+                      style={{
+                        width: 60,
+                        height: 60,
+                        borderRadius: 30,
+                        backgroundColor: isSelected ? (isLight ? '#E5E5EA' : '#3A3A3C') : (isLight ? '#FFFFFF' : '#2C2C2E'),
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        borderWidth: isSelected ? 2 : 0.5,
+                        borderColor: isSelected ? appSettings.accentColor : (isLight ? '#E5E5EA' : 'rgba(255,255,255,0.08)'),
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 1 },
+                        shadowOpacity: 0.1,
+                        shadowRadius: 3,
+                      }}
+                      onPress={() => {
+                        if (targetFriendId) {
+                          const next = { ...chatQuickEmojis, [targetFriendId]: emoji };
+                          setChatQuickEmojis(next);
+                          AsyncStorage.setItem('lockx_chat_quick_emojis', JSON.stringify(next)).catch(() => {});
+                          triggerToast(`Đã chọn ${emoji} làm biểu tượng nhanh`, 'Biểu Tượng Nhanh', 'success');
+                        }
+                        setIsQuickEmojiModalOpen(false);
+                      }}
+                    >
+                      <Text style={{ fontSize: 28 }}>{emoji}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </ScrollView>
+          </SafeAreaView>
         </View>
       </Modal>
     </SafeAreaView>

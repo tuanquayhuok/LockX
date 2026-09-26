@@ -7,6 +7,7 @@ let presenceState = {}; // key: username => timestamp
 let reactionState = {}; // key: conversationKey => { [msgId/msgText]: reactions[] }
 let callState = {};     // key: conversationKey => { caller, target, active, time, reason }
 let activeChatState = {}; // key: username => friendUsername they are currently chatting with
+let profileState = {};    // key: username => { username, displayName, avatarType, avatarUri, avatarPresetId, avatarColor, isVerified, bio }
 
 function getConvKey(u1, u2) {
   return [u1.toLowerCase().replace(/^@/, '').trim(), u2.toLowerCase().replace(/^@/, '').trim()].sort().join('_');
@@ -40,6 +41,28 @@ const server = http.createServer((req, res) => {
           }
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ success: true, timestamp: Date.now() }));
+          return;
+        }
+
+        if (pathname === '/profile') {
+          const u = (data.username || '').toLowerCase().replace(/^@/, '').trim();
+          if (u) {
+            profileState[u] = {
+              ...(profileState[u] || {}),
+              username: u,
+              displayName: data.displayName || profileState[u]?.displayName || '',
+              avatarType: data.avatarType || profileState[u]?.avatarType || 'image',
+              avatarUri: data.avatarUri !== undefined ? data.avatarUri : (profileState[u]?.avatarUri || ''),
+              avatarPresetId: data.avatarPresetId || profileState[u]?.avatarPresetId || 'av-hacker',
+              avatarColor: data.avatarColor || profileState[u]?.avatarColor || '#0A84FF',
+              isVerified: typeof data.isVerified === 'boolean' ? data.isVerified : true,
+              bio: data.bio !== undefined ? data.bio : (profileState[u]?.bio || ''),
+              updatedAt: Date.now()
+            };
+            presenceState[u] = Date.now();
+          }
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true, profile: profileState[u] || null }));
           return;
         }
 
@@ -263,7 +286,11 @@ const server = http.createServer((req, res) => {
       const viewer = (url.searchParams.get('viewer') || '').toLowerCase().replace(/^@/, '').trim();
       const isViewingChat = isOnline && viewer ? (activeChatState[u] === viewer) : false;
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ isOnline, lastActive: last, text, isViewingChat, activeChatWith: activeChatState[u] || null }));
+      res.end(JSON.stringify({ isOnline, lastActive: last, text, isViewingChat, activeChatWith: activeChatState[u] || null, profile: profileState[u] || null }));
+    } else if (pathname === '/profile') {
+      const u = (url.searchParams.get('username') || '').toLowerCase().replace(/^@/, '').trim();
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, profile: profileState[u] || null }));
     } else if (pathname === '/typing') {
       const from = (url.searchParams.get('from') || '').toLowerCase().replace(/^@/, '').trim();
       const to = (url.searchParams.get('to') || '').toLowerCase().replace(/^@/, '').trim();
