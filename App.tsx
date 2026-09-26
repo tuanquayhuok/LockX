@@ -4660,6 +4660,15 @@ export default function App() {
   const [isSearchingServer, setIsSearchingServer] = useState<boolean>(false);
   const [chatMessages, setChatMessages] = useState<Record<string, ChatMessage[]>>(INITIAL_CHAT_MESSAGES);
   const [activeChatFriend, setActiveChatFriend] = useState<FriendUser | null>(null);
+  const activeChatFriendRef = useRef<FriendUser | null>(null);
+  useEffect(() => {
+    activeChatFriendRef.current = activeChatFriend;
+  }, [activeChatFriend]);
+
+  const appSettingsRef = useRef<AppSettings>(appSettings);
+  useEffect(() => {
+    appSettingsRef.current = appSettings;
+  }, [appSettings]);
   const [friendSearchQuery, setFriendSearchQuery] = useState('');
   const [chatInputText, setChatInputText] = useState('');
   const [friendFilter, setFriendFilter] = useState<'all' | 'online' | 'unread' | 'archived'>('all');
@@ -7001,12 +7010,65 @@ export default function App() {
 
               if (isIncomingForMe) {
                 hasNewIncoming = true;
+                const senderTitle = sm.sender_name || otherUsernameFormatted;
+                const msgBody = sm.content || '';
+
                 // Cập nhật tin nhắn gần nhất trong danh sách bạn bè
                 setFriendsList((prevFriends) =>
                   prevFriends.map((f) =>
                     f.id === targetFriendId ? { ...f, lastMessage: sm.content, lastTime: timeStr, unreadCount: (f.unreadCount || 0) + 1 } : f
                   )
                 );
+
+                // 🔔 Gửi thông báo hệ thống ra Màn hình chính / Màn hình khóa (giống Messenger / iMessage)
+                const curSettings = appSettingsRef.current;
+                const curActive = activeChatFriendRef.current;
+                if (curSettings && curSettings.enableNotifications !== false) {
+                  try {
+                    Notifications.scheduleNotificationAsync({
+                      content: {
+                        title: senderTitle,
+                        body: msgBody,
+                        sound: curSettings.notifySounds ? 'default' : undefined,
+                        badge: 1,
+                        data: {
+                          friendId: targetFriendId,
+                          friendUsername: otherUserClean,
+                          senderName: senderTitle,
+                        },
+                      },
+                      trigger: null,
+                    }).catch(() => {});
+                  } catch (e) {}
+
+                  // Thông báo Web Push ngoài màn hình máy tính nếu dùng trình duyệt
+                  if (Platform.OS === 'web' && typeof window !== 'undefined' && 'Notification' in window) {
+                    try {
+                      if (Notification.permission === 'granted') {
+                        const notif = new Notification(senderTitle, {
+                          body: msgBody,
+                          icon: '/assets/icon.png',
+                          badge: '/assets/icon.png',
+                        });
+                        notif.onclick = () => {
+                          if (typeof window !== 'undefined') window.focus();
+                          setCurrentTab('chat');
+                          if (foundFriend) setActiveChatFriend(foundFriend);
+                        };
+                      }
+                    } catch (e) {}
+                  }
+                }
+
+                // Nếu người dùng đang mở app nhưng không ở trong phòng chat với người này -> Hiện biểu ngữ Toast
+                if (!curActive || curActive.id !== targetFriendId) {
+                  triggerToast(
+                    `💬 ${senderTitle}: "${msgBody}"`,
+                    'Tin Nhắn Mới',
+                    'info',
+                    'chatbubble-ellipses'
+                  );
+                }
               }
             }
           });
@@ -7629,9 +7691,44 @@ export default function App() {
     }, 300);
   };
 
-  // Luôn vào thẳng trang chủ LockX
+  // Luôn vào thẳng trang chủ LockX & Tự động xin cấp quyền thông báo hệ thống
   useEffect(() => {
     setOnboardingStage('ready');
+    const timer = setTimeout(() => {
+      requestNotificationPermission();
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Lắng nghe khi người dùng bấm vào thông báo từ Màn hình khóa / Biểu ngữ thông báo hệ thống ngoài
+  useEffect(() => {
+    let subscription: any = null;
+    try {
+      subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+        const data = response?.notification?.request?.content?.data;
+        if (data?.friendId || data?.friendUsername) {
+          setCurrentTab('chat');
+          const targetClean = String(data.friendUsername || '').toLowerCase().replace(/^@/, '');
+          setFriendsList((currentFriends) => {
+            const friend = currentFriends.find(
+              (f) =>
+                f.id === data.friendId ||
+                f.username.toLowerCase().replace(/^@/, '') === targetClean
+            );
+            if (friend) {
+              setActiveChatFriend(friend);
+            }
+            return currentFriends;
+          });
+        }
+      });
+    } catch (e) {}
+
+    return () => {
+      if (subscription && typeof subscription.remove === 'function') {
+        subscription.remove();
+      }
+    };
   }, []);
 
   useEffect(() => {
