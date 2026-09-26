@@ -422,6 +422,7 @@ export interface FriendUser {
   displayName: string;
   username: string; // e.g. '@minh_apple'
   avatarColor: string;
+  avatarIcon?: string;
   status: 'online' | 'offline';
   bio?: string;
   lastMessage?: string;
@@ -2206,10 +2207,11 @@ export const INITIAL_FRIENDS: FriendUser[] = [
     id: 'fr-1',
     displayName: 'Minh Hoàng',
     username: '@minh_apple',
-    avatarColor: '#0A84FF',
+    avatarColor: '#007AFF',
+    avatarIcon: 'logo-apple',
     status: 'online',
     bio: 'iOS Developer & Apple Fanboy 📱',
-    lastMessage: 'LockX bản mới dùng mượt phết ông!',
+    lastMessage: 'Giao diện LockX bản mới này nhìn đẹp và mượt thật đấy ✨',
     lastTime: '15:20',
     unreadCount: 1,
   },
@@ -2217,7 +2219,8 @@ export const INITIAL_FRIENDS: FriendUser[] = [
     id: 'fr-2',
     displayName: 'Ngọc Linh',
     username: '@linh_game',
-    avatarColor: '#BF5AF2',
+    avatarColor: '#AF52DE',
+    avatarIcon: 'game-controller',
     status: 'online',
     bio: 'Gamer Genshin Impact & HSR ✨',
     lastMessage: 'Tối nay roll banner không bạn ơi?',
@@ -2228,7 +2231,8 @@ export const INITIAL_FRIENDS: FriendUser[] = [
     id: 'fr-3',
     displayName: 'Tuấn Anh',
     username: '@tuan_lockx',
-    avatarColor: '#30D158',
+    avatarColor: '#34C759',
+    avatarIcon: 'shield-checkmark',
     status: 'offline',
     bio: 'Chuyên gia an toàn thông tin 🛡️',
     lastMessage: 'Đã sao lưu Keychain an toàn rồi nhé.',
@@ -2240,6 +2244,7 @@ export const INITIAL_FRIENDS: FriendUser[] = [
     displayName: 'Khánh Vy',
     username: '@vy_shopee',
     avatarColor: '#FF9500',
+    avatarIcon: 'bag-handle',
     status: 'online',
     bio: 'Săn sale công nghệ & đời sống 🛍️',
     lastMessage: 'Cảm ơn ông đã chia sẻ app này nha!',
@@ -3378,6 +3383,9 @@ export default function App() {
   const [activeChatFriend, setActiveChatFriend] = useState<FriendUser | null>(null);
   const [friendSearchQuery, setFriendSearchQuery] = useState('');
   const [chatInputText, setChatInputText] = useState('');
+  const [friendFilter, setFriendFilter] = useState<'all' | 'online' | 'unread'>('all');
+  const [showAddFriendBox, setShowAddFriendBox] = useState(false);
+  const [newFriendInput, setNewFriendInput] = useState('');
 
   // Form tự thêm app
   const [customAppName, setCustomAppName] = useState('');
@@ -4223,6 +4231,55 @@ export default function App() {
       });
     }, 1200);
   };
+
+  // Thêm bạn bè mới qua @username chuẩn Apple
+  const handleAddFriend = () => {
+    const raw = newFriendInput.trim();
+    if (!raw) {
+      triggerToast('Vui lòng nhập @username bạn bè.', 'Thêm Bạn Bè', 'warning');
+      return;
+    }
+    const cleanUsername = raw.startsWith('@') ? raw : `@${raw}`;
+    if (friendsList.some((f) => f.username.toLowerCase() === cleanUsername.toLowerCase())) {
+      triggerToast('Người dùng này đã có trong danh sách bạn bè.', 'Đã Có Sẵn', 'info');
+      return;
+    }
+    const colors = ['#007AFF', '#34C759', '#AF52DE', '#FF9500', '#FF3B30', '#30B0C7'];
+    const icons = ['person', 'sparkles', 'shield-checkmark', 'star', 'rocket', 'heart'];
+    const randomColor = colors[Math.floor(Math.random() * colors.length)];
+    const randomIcon = icons[Math.floor(Math.random() * icons.length)];
+    const displayName = cleanUsername.replace('@', '').replace(/[._]/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+    const newFriend: FriendUser = {
+      id: `fr-${Date.now()}`,
+      displayName: displayName || cleanUsername,
+      username: cleanUsername,
+      avatarColor: randomColor,
+      avatarIcon: randomIcon,
+      status: 'online',
+      bio: 'Người dùng LockX Pro 🛡️',
+      lastMessage: 'Đã kết nối qua mã hóa E2E!',
+      lastTime: 'Vừa xong',
+      unreadCount: 0,
+    };
+    const updated = [newFriend, ...friendsList];
+    setFriendsList(updated);
+    saveFriends(updated);
+    setNewFriendInput('');
+    setShowAddFriendBox(false);
+    triggerToast(`Đã kết nối thành công với ${newFriend.displayName}`, 'Thêm Bạn Bè', 'success');
+  };
+
+  const filteredFriends = useMemo(() => {
+    return friendsList.filter((f) => {
+      const matchQuery = !friendSearchQuery.trim() ||
+        f.username.toLowerCase().includes(friendSearchQuery.toLowerCase()) ||
+        f.displayName.toLowerCase().includes(friendSearchQuery.toLowerCase());
+      if (!matchQuery) return false;
+      if (friendFilter === 'online') return f.status === 'online';
+      if (friendFilter === 'unread') return (f.unreadCount || 0) > 0;
+      return true;
+    });
+  }, [friendsList, friendSearchQuery, friendFilter]);
 
   const saveAppsToStorage = async (updated: PhoneAppItem[]) => {
     setPhoneApps(updated);
@@ -6508,177 +6565,448 @@ export default function App() {
           </ScrollView>
         )}
 
-        {/* TAB 2: BẠN BÈ & NHẮN TIN */}
+        {/* TAB 2: BẠN BÈ & NHẮN TIN (CHUẨN APPLE iOS 18 HIG ĐỒNG BỘ SETTINGS & PROFILE) */}
         {currentTab === 'chat' && (
           activeChatFriend ? (
-            /* PHÒNG CHAT IMESSAGE */
+            /* PHÒNG CHAT IMESSAGE CHUẨN APPLE iOS 18 */
             <KeyboardAvoidingView
               behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-              style={{ flex: 1, backgroundColor: '#000000' }}
+              style={{ flex: 1, backgroundColor: isLight ? '#F2F2F7' : '#000000' }}
               keyboardVerticalOffset={0}
             >
-              {/* Chat Nav Bar */}
-              <View style={styles.fullScreenNavBar}>
+              {/* Apple iMessage Top Navigation Bar */}
+              <View style={[styles.fullScreenNavBar, isLight && { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E5EA' }]}>
                 <TouchableOpacity
                   onPress={() => { setActiveChatFriend(null); setChatInputText(''); }}
                   style={styles.fullScreenNavBtn}
                   hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 >
                   <Ionicons name="chevron-back" size={20} color={appSettings.accentColor} />
-                  <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor }]}>Bạn Bè</Text>
+                  <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor }]}>{t.tabFriends}</Text>
                 </TouchableOpacity>
+
+                {/* Center Contact Header */}
                 <View style={{ alignItems: 'center' }}>
-                  <Text style={styles.fullScreenNavTitle} numberOfLines={1}>{activeChatFriend.displayName}</Text>
-                  <Text style={{ color: activeChatFriend.status === 'online' ? '#30D158' : '#8E8E93', fontSize: 11 }}>
-                    {activeChatFriend.status === 'online' ? '🟢 Đang hoạt động' : '⚪ Ngoại tuyến'}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={[styles.fullScreenNavTitle, isLight && { color: '#000000' }]} numberOfLines={1}>
+                      {activeChatFriend.displayName}
+                    </Text>
+                    <Ionicons name="shield-checkmark" size={13} color={appSettings.accentColor} />
+                  </View>
+                  <Text style={{ color: activeChatFriend.status === 'online' ? '#34C759' : '#8E8E93', fontSize: 11, fontWeight: '500' }}>
+                    {activeChatFriend.status === 'online' ? '🟢 Đang hoạt động • E2E' : '⚪ Ngoại tuyến'}
                   </Text>
                 </View>
+
+                {/* Right Avatar Accessory */}
                 <View style={{ width: 70, alignItems: 'flex-end' }}>
-                  <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: activeChatFriend.avatarColor, justifyContent: 'center', alignItems: 'center' }}>
-                    <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>
-                      {activeChatFriend.displayName.charAt(0).toUpperCase()}
-                    </Text>
+                  <View
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 18,
+                      backgroundColor: activeChatFriend.avatarColor,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      shadowColor: activeChatFriend.avatarColor,
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.35,
+                      shadowRadius: 4,
+                    }}
+                  >
+                    <Ionicons name={(activeChatFriend.avatarIcon || 'person') as any} size={18} color="#FFFFFF" />
                   </View>
                 </View>
               </View>
 
-              {/* Chat Messages */}
+              {/* Chat Messages Stream */}
               <ScrollView
-                style={{ flex: 1, paddingHorizontal: 14 }}
-                contentContainerStyle={{ paddingVertical: 12, paddingBottom: 20 }}
+                style={{ flex: 1, paddingHorizontal: 16 }}
+                contentContainerStyle={{ paddingVertical: 16, paddingBottom: 24 }}
                 showsVerticalScrollIndicator={false}
               >
-                {(chatMessages[activeChatFriend.id] || []).map((msg) => (
-                  <View
-                    key={msg.id}
-                    style={{
-                      alignSelf: msg.sender === 'me' ? 'flex-end' : 'flex-start',
-                      maxWidth: '78%',
-                      marginBottom: 8,
-                    }}
-                  >
-                    <View
-                      style={{
-                        backgroundColor: msg.sender === 'me' ? appSettings.accentColor : '#2C2C2E',
-                        borderRadius: 18,
-                        paddingHorizontal: 14,
-                        paddingVertical: 9,
-                        borderBottomRightRadius: msg.sender === 'me' ? 4 : 18,
-                        borderBottomLeftRadius: msg.sender === 'me' ? 18 : 4,
-                      }}
-                    >
-                      <Text style={{ color: '#FFFFFF', fontSize: 15, lineHeight: 21 }}>{msg.text}</Text>
-                    </View>
-                    <Text style={{ color: '#636366', fontSize: 10, marginTop: 3, alignSelf: msg.sender === 'me' ? 'flex-end' : 'flex-start', marginHorizontal: 6 }}>
-                      {msg.time}
+                {/* Security E2E Notice */}
+                <View style={{ alignItems: 'center', marginBottom: 16 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.08)', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 12 }}>
+                    <Ionicons name="lock-closed" size={12} color="#8E8E93" />
+                    <Text style={{ color: '#8E8E93', fontSize: 11, fontWeight: '500' }}>
+                      Tin nhắn được bảo vệ bằng mã hóa đầu cuối LockX
                     </Text>
                   </View>
-                ))}
+                </View>
+
+                {(chatMessages[activeChatFriend.id] || []).map((msg) => {
+                  const isMe = msg.sender === 'me';
+                  return (
+                    <View
+                      key={msg.id}
+                      style={{
+                        alignSelf: isMe ? 'flex-end' : 'flex-start',
+                        maxWidth: '78%',
+                        marginBottom: 10,
+                      }}
+                    >
+                      <View
+                        style={{
+                          backgroundColor: isMe ? appSettings.accentColor : (isLight ? '#FFFFFF' : '#2C2C2E'),
+                          borderRadius: 18,
+                          paddingHorizontal: 15,
+                          paddingVertical: 10,
+                          borderBottomRightRadius: isMe ? 4 : 18,
+                          borderBottomLeftRadius: isMe ? 18 : 4,
+                          borderWidth: !isMe && isLight ? 0.5 : 0,
+                          borderColor: '#E5E5EA',
+                          shadowColor: isMe ? appSettings.accentColor : '#000000',
+                          shadowOffset: { width: 0, height: 1 },
+                          shadowOpacity: isMe ? 0.25 : 0.08,
+                          shadowRadius: 3,
+                        }}
+                      >
+                        <Text style={{ color: isMe ? '#FFFFFF' : (isLight ? '#000000' : '#FFFFFF'), fontSize: 15, lineHeight: 21 }}>
+                          {msg.text}
+                        </Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: isMe ? 'flex-end' : 'flex-start', marginTop: 3, marginHorizontal: 4 }}>
+                        <Text style={{ color: isLight ? '#8E8E93' : '#636366', fontSize: 11 }}>
+                          {msg.time}
+                        </Text>
+                        {isMe && <Ionicons name="checkmark-done" size={13} color={appSettings.accentColor} />}
+                      </View>
+                    </View>
+                  );
+                })}
               </ScrollView>
 
               {/* Chat Input Bar */}
-              <View style={{ flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 12, paddingVertical: 10, backgroundColor: '#1C1C1E', borderTopWidth: 0.5, borderTopColor: 'rgba(255,255,255,0.08)', gap: 8 }}>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingHorizontal: 14,
+                  paddingVertical: 10,
+                  backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                  borderTopWidth: 0.5,
+                  borderTopColor: isLight ? '#E5E5EA' : 'rgba(255,255,255,0.08)',
+                  gap: 10,
+                }}
+              >
+                <TouchableOpacity
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 17,
+                    backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}
+                  onPress={() => triggerToast('Đính kèm dữ liệu tài khoản két sắt', 'Két Sắt LockX', 'info', 'shield-checkmark')}
+                >
+                  <Ionicons name="add" size={20} color={appSettings.accentColor} />
+                </TouchableOpacity>
+
                 <TextInput
-                  style={{ flex: 1, backgroundColor: '#2C2C2E', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, color: '#fff', fontSize: 15, maxHeight: 100 }}
-                  placeholder="Nhắn tin..."
-                  placeholderTextColor="#636366"
+                  style={{
+                    flex: 1,
+                    backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E',
+                    borderRadius: 20,
+                    paddingHorizontal: 16,
+                    paddingVertical: 8,
+                    color: isLight ? '#000000' : '#FFFFFF',
+                    fontSize: 15,
+                    maxHeight: 100,
+                  }}
+                  placeholder={t.typeMessage || 'Nhắn tin bí mật...'}
+                  placeholderTextColor="#8E8E93"
                   value={chatInputText}
                   onChangeText={setChatInputText}
                   multiline
                 />
+
                 <TouchableOpacity
-                  style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: chatInputText.trim() ? appSettings.accentColor : '#3A3A3C', justifyContent: 'center', alignItems: 'center' }}
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 17,
+                    backgroundColor: chatInputText.trim() ? appSettings.accentColor : (isLight ? '#E5E5EA' : '#3A3A3C'),
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}
                   onPress={() => handleSendMessage()}
                   disabled={!chatInputText.trim()}
                 >
-                  <Ionicons name="arrow-up" size={20} color="#fff" />
+                  <Ionicons name="arrow-up" size={18} color="#FFFFFF" />
                 </TouchableOpacity>
               </View>
             </KeyboardAvoidingView>
           ) : (
-            /* DANH SÁCH BẠN BÈ & TÌM KIẾM USERNAME */
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-              <View style={styles.navHeader}>
-                <Text style={styles.largeTitle}>Bạn Bè</Text>
-                <Text style={styles.navSubtitle}>Tìm kiếm bằng @username & nhắn tin trực tiếp</Text>
+            /* DANH SÁCH BẠN BÈ ĐỒNG BỘ CHUẨN APPLE iOS 18 HIG */
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, { paddingHorizontal: 16, paddingTop: 10 }]}>
+              {/* Apple Large Title Header */}
+              <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 12 }]}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <View>
+                    <Text style={{ fontSize: 34, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF', letterSpacing: 0.36 }}>
+                      {t.tabFriends}
+                    </Text>
+                    <Text style={{ fontSize: 13, color: isLight ? '#6C6C70' : '#8E8E93', marginTop: 2 }}>
+                      Tin nhắn mã hóa E2E • Bạn bè an toàn
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 18,
+                      backgroundColor: isLight ? '#E5E5EA' : '#1C1C1E',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
+                    activeOpacity={0.75}
+                    onPress={() => setShowAddFriendBox(!showAddFriendBox)}
+                  >
+                    <Ionicons name={showAddFriendBox ? 'close' : 'person-add'} size={18} color={appSettings.accentColor} />
+                  </TouchableOpacity>
+                </View>
               </View>
 
-              {/* Search Bar */}
-              <View style={[styles.searchBarBox, { marginTop: 4 }]}>
-                <Ionicons name="search" size={16} color="#8E8E93" style={{ marginRight: 6 }} />
-                <TextInput
-                  style={styles.searchInput}
-                  placeholder="Tìm bạn bè bằng @username..."
-                  placeholderTextColor="#636366"
-                  value={friendSearchQuery}
-                  onChangeText={setFriendSearchQuery}
-                  autoCapitalize="none"
-                />
+              {/* Apple Settings Search Bar */}
+              <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 14 }]}>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: isLight ? '#E3E3E8' : '#1C1C1E',
+                    borderRadius: 10,
+                    paddingHorizontal: 10,
+                    height: 36,
+                  }}
+                >
+                  <Ionicons name="search" size={17} color="#8E8E93" style={{ marginRight: 6 }} />
+                  <TextInput
+                    style={{ flex: 1, color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, padding: 0 }}
+                    placeholder={t.searchFriends || 'Tìm kiếm bạn bè qua @username...'}
+                    placeholderTextColor="#8E8E93"
+                    value={friendSearchQuery}
+                    onChangeText={setFriendSearchQuery}
+                    autoCapitalize="none"
+                  />
+                  {friendSearchQuery.length > 0 && (
+                    <TouchableOpacity onPress={() => setFriendSearchQuery('')}>
+                      <Ionicons name="close-circle" size={16} color="#8E8E93" />
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
 
-              {/* Friends List */}
-              <View style={[styles.sectionWrap, { marginTop: 16 }]}>
-                <Text style={styles.sectionCaption}>
-                  {friendSearchQuery.trim() ? `KẾT QUẢ TÌM KIẾM` : `BẠN BÈ (${friendsList.length})`}
-                </Text>
-                <View style={styles.groupedList}>
-                  {friendsList
-                    .filter((f) =>
-                      friendSearchQuery.trim()
-                        ? f.username.toLowerCase().includes(friendSearchQuery.toLowerCase()) ||
-                          f.displayName.toLowerCase().includes(friendSearchQuery.toLowerCase())
-                        : true
-                    )
-                    .map((friend, idx, arr) => (
+              {/* Hero Quick Add Friend Box (Toggleable Apple Box) */}
+              {showAddFriendBox && (
+                <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 16 }]}>
+                  <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }, { padding: 14 }]}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                      <View style={[styles.cellLeadingIcon, { backgroundColor: appSettings.accentColor, width: 28, height: 28, borderRadius: 14 }]}>
+                        <Ionicons name="person-add" size={15} color="#FFFFFF" />
+                      </View>
+                      <Text style={{ fontSize: 15, fontWeight: '600', color: isLight ? '#000000' : '#FFFFFF' }}>
+                        Thêm Bạn Bè Mới
+                      </Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                      <TextInput
+                        style={{
+                          flex: 1,
+                          backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E',
+                          borderRadius: 10,
+                          paddingHorizontal: 12,
+                          height: 38,
+                          color: isLight ? '#000000' : '#FFFFFF',
+                          fontSize: 14.5,
+                        }}
+                        placeholder="Nhập @username bạn bè..."
+                        placeholderTextColor="#8E8E93"
+                        value={newFriendInput}
+                        onChangeText={setNewFriendInput}
+                        autoCapitalize="none"
+                      />
                       <TouchableOpacity
-                        key={friend.id}
-                        style={[styles.cellItem, idx === arr.length - 1 && { borderBottomWidth: 0 }]}
-                        activeOpacity={0.7}
-                        onPress={() => {
-                          setActiveChatFriend(friend);
-                          setChatInputText('');
+                        onPress={handleAddFriend}
+                        style={{
+                          backgroundColor: appSettings.accentColor,
+                          paddingHorizontal: 14,
+                          height: 38,
+                          borderRadius: 10,
+                          justifyContent: 'center',
+                          alignItems: 'center',
                         }}
                       >
-                        {/* Avatar */}
-                        <View style={{ width: 46, height: 46, borderRadius: 23, backgroundColor: friend.avatarColor, justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
-                          <Text style={{ color: '#fff', fontWeight: '800', fontSize: 18 }}>
-                            {friend.displayName.charAt(0).toUpperCase()}
+                        <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '700' }}>Kết Nối</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              )}
+
+              {/* Segmented Filter Control (Tất cả / Trực tuyến / Chưa đọc) */}
+              <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 16 }]}>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    backgroundColor: isLight ? '#E3E3E8' : '#1C1C1E',
+                    borderRadius: 9,
+                    padding: 3,
+                    gap: 2,
+                  }}
+                >
+                  {[
+                    { id: 'all', label: 'Tất cả' },
+                    { id: 'online', label: 'Trực tuyến' },
+                    { id: 'unread', label: 'Chưa đọc' },
+                  ].map((seg) => {
+                    const isSel = friendFilter === seg.id;
+                    return (
+                      <TouchableOpacity
+                        key={seg.id}
+                        onPress={() => setFriendFilter(seg.id as any)}
+                        style={{
+                          flex: 1,
+                          paddingVertical: 6,
+                          alignItems: 'center',
+                          borderRadius: 7,
+                          backgroundColor: isSel ? (isLight ? '#FFFFFF' : '#636366') : 'transparent',
+                          shadowColor: isSel ? '#000000' : 'transparent',
+                          shadowOffset: { width: 0, height: 1 },
+                          shadowOpacity: isSel ? 0.2 : 0,
+                          shadowRadius: 2,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 13,
+                            fontWeight: isSel ? '700' : '500',
+                            color: isSel ? (isLight ? '#000000' : '#FFFFFF') : (isLight ? '#6C6C70' : '#8E8E93'),
+                          }}
+                        >
+                          {seg.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Grouped List of Friends */}
+              <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 32 }]}>
+                <Text style={[styles.sectionCaption, { marginLeft: 16, marginBottom: 6 }]}>
+                  DANH SÁCH BẠN BÈ ({filteredFriends.length})
+                </Text>
+                <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }]}>
+                  {filteredFriends.map((friend, idx, arr) => (
+                    <TouchableOpacity
+                      key={friend.id}
+                      style={[
+                        styles.cellItem,
+                        isLight && { borderBottomColor: '#E5E5EA' },
+                        idx === arr.length - 1 && { borderBottomWidth: 0 },
+                        { paddingVertical: 12 },
+                      ]}
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        setActiveChatFriend(friend);
+                        setChatInputText('');
+                      }}
+                    >
+                      {/* Avatar with Modern Icon & Live Indicator */}
+                      <View style={{ position: 'relative', marginRight: 14 }}>
+                        <View
+                          style={{
+                            width: 48,
+                            height: 48,
+                            borderRadius: 24,
+                            backgroundColor: friend.avatarColor,
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            shadowColor: friend.avatarColor,
+                            shadowOffset: { width: 0, height: 2 },
+                            shadowOpacity: 0.35,
+                            shadowRadius: 5,
+                          }}
+                        >
+                          <Ionicons name={(friend.avatarIcon || 'person') as any} size={24} color="#FFFFFF" />
+                        </View>
+                        {friend.status === 'online' && (
+                          <View
+                            style={{
+                              position: 'absolute',
+                              bottom: 0,
+                              right: 0,
+                              width: 14,
+                              height: 14,
+                              borderRadius: 7,
+                              backgroundColor: '#34C759',
+                              borderWidth: 2.5,
+                              borderColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                            }}
+                          />
+                        )}
+                      </View>
+
+                      {/* Main Content */}
+                      <View style={[styles.cellContent, { flex: 1 }]}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16.5, fontWeight: '600' }} numberOfLines={1}>
+                            {friend.displayName}
                           </Text>
-                          {friend.status === 'online' && (
-                            <View style={{ position: 'absolute', bottom: 1, right: 1, width: 12, height: 12, borderRadius: 6, backgroundColor: '#30D158', borderWidth: 2, borderColor: '#1C1C1E' }} />
-                          )}
+                          <Text style={{ color: isLight ? '#8E8E93' : '#8E8E93', fontSize: 13 }}>
+                            {friend.lastTime || ''}
+                          </Text>
                         </View>
 
-                        {/* Info */}
-                        <View style={[styles.cellContent, { flex: 1 }]}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <Text style={styles.cellTitle} numberOfLines={1}>{friend.displayName}</Text>
-                            <Text style={{ color: '#636366', fontSize: 12 }}>{friend.lastTime || ''}</Text>
-                          </View>
-                          <Text style={{ color: '#8E8E93', fontSize: 12, marginTop: 1 }}>{friend.username}</Text>
-                          {friend.lastMessage ? (
-                            <Text style={{ color: '#636366', fontSize: 13, marginTop: 3 }} numberOfLines={1}>{friend.lastMessage}</Text>
-                          ) : null}
-                        </View>
+                        <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 13, marginTop: 1 }}>
+                          {friend.username} • {friend.status === 'online' ? '🟢 Trực tuyến' : 'Ngoại tuyến'}
+                        </Text>
 
-                        {/* Unread Badge */}
+                        {friend.lastMessage ? (
+                          <Text style={{ color: isLight ? '#3C3C43' : '#AEAEB2', fontSize: 13.5, marginTop: 3 }} numberOfLines={1}>
+                            {friend.lastMessage}
+                          </Text>
+                        ) : null}
+                      </View>
+
+                      {/* Right Accessories (Unread badge + Chevron) */}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginLeft: 8 }}>
                         {(friend.unreadCount || 0) > 0 && (
-                          <View style={{ backgroundColor: appSettings.accentColor, borderRadius: 10, minWidth: 20, height: 20, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 6 }}>
-                            <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>{friend.unreadCount}</Text>
+                          <View
+                            style={{
+                              backgroundColor: appSettings.accentColor,
+                              borderRadius: 10,
+                              minWidth: 20,
+                              height: 20,
+                              justifyContent: 'center',
+                              alignItems: 'center',
+                              paddingHorizontal: 6,
+                            }}
+                          >
+                            <Text style={{ color: '#FFFFFF', fontSize: 11.5, fontWeight: '700' }}>
+                              {friend.unreadCount}
+                            </Text>
                           </View>
                         )}
+                        <Ionicons name="chevron-forward" size={17} color={isLight ? '#C7C7CC' : '#48484A'} />
+                      </View>
+                    </TouchableOpacity>
+                  ))}
 
-                        <Ionicons name="chevron-forward" size={16} color="#636366" />
-                      </TouchableOpacity>
-                    ))}
+                  {filteredFriends.length === 0 && (
+                    <View style={{ alignItems: 'center', paddingVertical: 36 }}>
+                      <Ionicons name="people-outline" size={44} color="#8E8E93" />
+                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 15, fontWeight: '600', marginTop: 10 }}>
+                        Không tìm thấy bạn bè nào
+                      </Text>
+                      <Text style={{ color: '#8E8E93', fontSize: 13, marginTop: 4, textAlign: 'center', paddingHorizontal: 30 }}>
+                        Thử tìm bằng từ khóa khác hoặc nhấn biểu tượng (+) phía trên để thêm bạn bè mới.
+                      </Text>
+                    </View>
+                  )}
                 </View>
-
-                {friendsList.filter((f) => friendSearchQuery.trim() ? f.username.toLowerCase().includes(friendSearchQuery.toLowerCase()) || f.displayName.toLowerCase().includes(friendSearchQuery.toLowerCase()) : true).length === 0 && (
-                  <View style={{ alignItems: 'center', paddingVertical: 30 }}>
-                    <Ionicons name="person-outline" size={40} color="#636366" />
-                    <Text style={{ color: '#8E8E93', fontSize: 14, marginTop: 8 }}>Không tìm thấy @username nào phù hợp</Text>
-                  </View>
-                )}
               </View>
             </ScrollView>
           )
@@ -9691,6 +10019,7 @@ const getStyles = (
   safeRoot: {
     flex: 1,
     backgroundColor: isLight ? '#F2F2F7' : '#000000',
+    paddingTop: Platform.OS === 'web' ? 44 : 0,
   },
   mainContent: {
     flex: 1,
