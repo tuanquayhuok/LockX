@@ -4886,6 +4886,94 @@ export default function App() {
   const [selectedMsgForAction, setSelectedMsgForAction] = useState<ChatMessage | null>(null);
   const chatScrollRef = useRef<ScrollView>(null);
 
+  // Web Mobile Keyboard Height Detection (visualViewport API)
+  const [webKeyboardHeight, setWebKeyboardHeight] = useState<number>(0);
+  const initialViewportHeightRef = useRef<number>(0);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+
+    // Use visualViewport API for accurate mobile keyboard detection
+    const vv = (window as any).visualViewport;
+    if (vv) {
+      initialViewportHeightRef.current = vv.height;
+
+      const handleResize = () => {
+        const currentHeight = vv.height;
+        const fullHeight = initialViewportHeightRef.current || window.innerHeight;
+        const diff = fullHeight - currentHeight;
+        // If viewport shrunk by > 100px, keyboard is likely open
+        if (diff > 100) {
+          setWebKeyboardHeight(diff);
+          // Scroll chat to bottom when keyboard opens
+          setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 150);
+        } else {
+          setWebKeyboardHeight(0);
+        }
+      };
+
+      vv.addEventListener('resize', handleResize);
+      return () => vv.removeEventListener('resize', handleResize);
+    } else {
+      // Fallback: listen to window resize for older browsers
+      let initialH = window.innerHeight;
+      const handleResize = () => {
+        const diff = initialH - window.innerHeight;
+        if (diff > 100) {
+          setWebKeyboardHeight(diff);
+          setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 150);
+        } else {
+          setWebKeyboardHeight(0);
+          initialH = window.innerHeight;
+        }
+      };
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+    }
+  }, []);
+
+  // Prevent iOS Safari auto-zoom on input focus & fix viewport for mobile web
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+
+    // Ensure viewport meta tag prevents zoom on input focus
+    let metaViewport = document.querySelector('meta[name="viewport"]') as HTMLMetaElement | null;
+    if (metaViewport) {
+      if (!metaViewport.content.includes('maximum-scale')) {
+        metaViewport.content = metaViewport.content + ', maximum-scale=1, user-scalable=no';
+      }
+    } else {
+      metaViewport = document.createElement('meta');
+      metaViewport.name = 'viewport';
+      metaViewport.content = 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no';
+      document.head.appendChild(metaViewport);
+    }
+
+    // Inject CSS to fix mobile web keyboard issues
+    const style = document.createElement('style');
+    style.textContent = `
+      /* Prevent iOS auto-zoom on input focus (font-size < 16px triggers zoom) */
+      input, textarea, select, [contenteditable] {
+        font-size: 16px !important;
+      }
+      /* Fix mobile viewport height */
+      html, body, #root {
+        height: 100%;
+        overflow: hidden;
+        position: fixed;
+        width: 100%;
+      }
+      /* Smooth transitions when keyboard opens/closes */
+      body {
+        transition: height 0.2s ease-out;
+      }
+    `;
+    style.id = 'lockx-mobile-keyboard-fix';
+    if (!document.getElementById('lockx-mobile-keyboard-fix')) {
+      document.head.appendChild(style);
+    }
+  }, []);
+
   // Messenger Style Customization States (Biệt danh, Chủ đề, Icon cảm xúc nhanh, Tìm kiếm, Tắt thông báo)
   const [friendNicknames, setFriendNicknames] = useState<Record<string, string>>({});
   const [mutedFriendIds, setMutedFriendIds] = useState<string[]>([]);
@@ -10520,8 +10608,17 @@ export default function App() {
             return (
               /* PHÒNG CHAT IMESSAGE CHUẨN APPLE iOS 18 (USER THẬT, NO BOT) */
               <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                style={{ flex: 1, backgroundColor: themeBgColor }}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={{
+                  flex: 1,
+                  backgroundColor: themeBgColor,
+                  // Web mobile keyboard avoidance: shrink container when keyboard opens
+                  ...(Platform.OS === 'web' && webKeyboardHeight > 0 ? {
+                    maxHeight: `calc(100vh - ${webKeyboardHeight}px)` as any,
+                    height: `calc(100vh - ${webKeyboardHeight}px)` as any,
+                    overflow: 'hidden' as any,
+                  } : {}),
+                }}
                 keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
               >
               {/* Apple iMessage Top Navigation Bar */}
@@ -10705,9 +10802,10 @@ export default function App() {
               <ScrollView
                 ref={chatScrollRef}
                 style={{ flex: 1, paddingHorizontal: 16 }}
-                contentContainerStyle={{ paddingVertical: 16, paddingBottom: 24, flexGrow: 1 }}
+                contentContainerStyle={{ paddingVertical: 12, paddingBottom: webKeyboardHeight > 0 ? 8 : 24, flexGrow: 1 }}
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="interactive"
                 onContentSizeChange={() => chatScrollRef.current?.scrollToEnd({ animated: true })}
               >
                 {/* Security E2E Notice */}
@@ -11088,10 +11186,10 @@ export default function App() {
                   <View
                     style={{
                       flexDirection: 'row',
-                      alignItems: 'center',
+                      alignItems: 'flex-end',
                       paddingHorizontal: 10,
-                      paddingTop: 8,
-                      paddingBottom: Platform.OS === 'ios' ? 22 : 10,
+                      paddingTop: 6,
+                      paddingBottom: Platform.OS === 'ios' ? 22 : (Platform.OS === 'web' && webKeyboardHeight > 0) ? 6 : 10,
                       backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
                       borderTopWidth: 0.5,
                       borderTopColor: isLight ? '#E5E5EA' : 'rgba(255,255,255,0.08)',
@@ -11134,7 +11232,7 @@ export default function App() {
                         paddingHorizontal: 16,
                         paddingVertical: 8,
                         color: isLight ? '#000000' : '#FFFFFF',
-                        fontSize: 15,
+                        fontSize: 16,
                         maxHeight: 100,
                       }}
                       placeholder={
@@ -11149,6 +11247,11 @@ export default function App() {
                       onChangeText={(val) => {
                         setChatInputText(val);
                         notifyTyping();
+                      }}
+                      onFocus={() => {
+                        // Scroll chat to bottom when input is focused (keyboard opening)
+                        setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 300);
+                        setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 600);
                       }}
                       multiline
                       blurOnSubmit={false}
