@@ -4955,17 +4955,12 @@ export default function App() {
       /* Prevent iOS auto-zoom on input focus (font-size < 16px triggers zoom) */
       input, textarea, select, [contenteditable] {
         font-size: 16px !important;
+        touch-action: manipulation;
       }
-      /* Fix mobile viewport height */
+      /* Use dvh for dynamic viewport height on mobile */
       html, body, #root {
-        height: 100%;
-        overflow: hidden;
-        position: fixed;
-        width: 100%;
-      }
-      /* Smooth transitions when keyboard opens/closes */
-      body {
-        transition: height 0.2s ease-out;
+        height: 100dvh;
+        height: 100vh; /* fallback for older browsers */
       }
     `;
     style.id = 'lockx-mobile-keyboard-fix';
