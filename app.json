@@ -69,7 +69,8 @@
         {
           "faceIDPermission": "LockX sử dụng Face ID để xác thực và bảo vệ an toàn cho tài khoản và két sắt của bạn."
         }
-      ]
+      ],
+      "expo-audio"
     ]
   }
 }

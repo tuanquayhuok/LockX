@@ -25,15 +25,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import * as LocalAuthentication from 'expo-local-authentication';
-import { Audio as ExpoAudio } from 'expo-av';
+import { createAudioPlayer, setAudioModeAsync, AudioPlayer } from 'expo-audio';
 
 try {
-  ExpoAudio.setAudioModeAsync({
-    allowsRecordingIOS: true,
-    playsInSilentModeIOS: true,
-    staysActiveInBackground: true,
-    shouldDuckAndroid: true,
-    playThroughEarpieceAndroid: false,
+  setAudioModeAsync({
+    playsInSilentMode: true,
+    shouldPlayInBackground: true,
+    allowsRecording: true,
   }).catch(() => {});
 } catch (e) {}
 
@@ -571,23 +569,21 @@ export const getRingtoneNotes = (ringtoneId: string = 'reflection') => {
 const ringtoneWavCache: Record<string, string> = {};
 const notifWavCache: Record<string, string> = {};
 
-// Quản lý instance âm thanh native (Expo AV)
-let activeNativeSound: ExpoAudio.Sound | null = null;
+// Quản lý instance âm thanh native (Expo Audio)
+let activeNativeAudioPlayer: AudioPlayer | null = null;
 
-const playWavSoundNative = async (wavUri: string) => {
+const playWavSoundNative = (wavUri: string) => {
   try {
-    if (activeNativeSound) {
+    if (activeNativeAudioPlayer) {
       try {
-        await activeNativeSound.stopAsync();
-        await activeNativeSound.unloadAsync();
+        activeNativeAudioPlayer.pause();
+        activeNativeAudioPlayer.release();
       } catch (e) {}
-      activeNativeSound = null;
+      activeNativeAudioPlayer = null;
     }
-    const { sound } = await ExpoAudio.Sound.createAsync(
-      { uri: wavUri },
-      { shouldPlay: true, volume: 1.0 }
-    );
-    activeNativeSound = sound;
+    const player = createAudioPlayer(wavUri);
+    activeNativeAudioPlayer = player;
+    player.play();
   } catch (err) {
     console.log('Error playing native audio:', err);
   }
@@ -671,10 +667,12 @@ export const stopRingtone = () => {
     clearInterval(callRingtoneInterval);
     callRingtoneInterval = null;
   }
-  if (activeNativeSound) {
-    activeNativeSound.stopAsync().catch(() => {});
-    activeNativeSound.unloadAsync().catch(() => {});
-    activeNativeSound = null;
+  if (activeNativeAudioPlayer) {
+    try {
+      activeNativeAudioPlayer.pause();
+      activeNativeAudioPlayer.release();
+    } catch (e) {}
+    activeNativeAudioPlayer = null;
   }
 };
 
@@ -9041,16 +9039,18 @@ export default function App() {
           console.warn('Error creating audio element:', e);
         }
       } else {
-        ExpoAudio.Sound.createAsync({ uri: audioUri }, { shouldPlay: true })
-          .then(({ sound }) => {
-            sound.setOnPlaybackStatusUpdate((status) => {
-              if (status.isLoaded && status.didJustFinish) {
-                setPlayingVoiceId(null);
-                sound.unloadAsync().catch(() => {});
-              }
-            });
-          })
-          .catch(() => setPlayingVoiceId(null));
+        try {
+          const player = createAudioPlayer(audioUri);
+          player.play();
+          player.addListener('playbackStatusUpdate', (status) => {
+            if (status.didJustFinish) {
+              setPlayingVoiceId(null);
+              player.release();
+            }
+          });
+        } catch (e) {
+          setPlayingVoiceId(null);
+        }
         return;
       }
     }
