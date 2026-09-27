@@ -56,8 +56,7 @@ const server = http.createServer((req, res) => {
               avatarType: data.avatarType || profileState[u]?.avatarType || 'image',
               avatarUri: data.avatarUri !== undefined ? data.avatarUri : (profileState[u]?.avatarUri || ''),
               avatarPresetId: data.avatarPresetId || profileState[u]?.avatarPresetId || 'av-hacker',
-              avatarColor: data.avatarColor || profileState[u]?.avatarColor || '#0A84FF',
-              isVerified: typeof data.isVerified === 'boolean' ? data.isVerified : true,
+              isVerified: typeof data.isVerified === 'boolean' ? data.isVerified : (u.includes('tuan') || u === 'admin'),
               bio: data.bio !== undefined ? data.bio : (profileState[u]?.bio || ''),
               updatedAt: Date.now()
             };

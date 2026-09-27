@@ -4681,7 +4681,7 @@ const SwipeableFriendRow: React.FC<{
                   {nickname || friend.nickname || friend.displayName}
                 </Text>
                 {/* TÍCH XANH APPLE / MESSENGER CHUẨN */}
-                {(friend.isVerified !== false || friend.id.includes('tuan') || friend.username.includes('tuan')) && (
+                {(friend.isVerified === true || friend.id.includes('tuan') || friend.username.includes('tuan')) && (
                   <Ionicons name="checkmark-circle" size={15} color="#007AFF" />
                 )}
                 {/* Icon Tắt thông báo nếu bạn bè bị mute */}
@@ -5234,7 +5234,7 @@ export default function App() {
           hoursUsed: (p && p.hoursUsed && p.hoursUsed !== 168) ? p.hoursUsed : 0.1,
           currentPasscode: (p && p.currentPasscode) || '123456',
           lastUsernameChangeTimestamp: (p && p.lastUsernameChangeTimestamp) || 0,
-          isVerified: (p && p.isVerified) || false,
+          isVerified: (p && (p.isVerified === true || p.isVerified === '1') && ((p.username && p.username.toLowerCase().includes('tuan')) || (p.verifiedKey && p.verifiedKey.length > 0))) || false,
           verifiedBadge: (p && p.verifiedBadge) || 'blue_tick',
           verifiedAt: (p && p.verifiedAt) || '',
           verifiedKey: (p && p.verifiedKey) || '',
@@ -5763,6 +5763,7 @@ export default function App() {
           AsyncStorage.setItem('lockx_saved_account', cleanUser);
           AsyncStorage.setItem('lockx_saved_display_name', loggedUser.displayName);
         } catch (e) {}
+        const isUserVerified = u.is_verified === 1 || u.is_verified === '1' || u.is_verified === true;
         setUserProfile((prev) => {
           const next = {
             ...prev,
@@ -5770,7 +5771,9 @@ export default function App() {
             displayName: loggedUser.displayName,
             email: u.email || '',
             phone: u.phone || '',
-            isVerified: !!u.is_verified,
+            isVerified: isUserVerified,
+            verifiedAt: isUserVerified ? (u.verified_at || '') : '',
+            verifiedKey: isUserVerified ? (u.verified_key || '') : '',
           };
           AsyncStorage.setItem('lockx_user_profile', JSON.stringify(next)).catch(() => {});
           return next;
@@ -5792,12 +5795,14 @@ export default function App() {
     );
     if (found || (cleanUser.toLowerCase() === 'admin' && trimmedPass === '123456')) {
       const activeUser = found || { username: 'admin', password: '123456', displayName: 'Quảng Trọng Tuấn' };
+      const isUserVerified = activeUser.username.toLowerCase() === 'admin' || activeUser.username.toLowerCase().includes('tuan');
       setUserProfile((prev) => {
         const next = {
           ...prev,
           username: `@${activeUser.username}`,
           displayName: activeUser.displayName,
           currentPasscode: activeUser.password,
+          isVerified: isUserVerified,
         };
         AsyncStorage.setItem('lockx_user_profile', JSON.stringify(next)).catch(() => {});
         return next;
@@ -5893,8 +5898,10 @@ export default function App() {
       joinDate: getFormattedTodayDate(),
       joinTimestamp: Date.now(),
       daysActive: 1,
-      hoursUsed: 0.1,
       isVerified: false,
+      verifiedBadge: undefined,
+      verifiedAt: '',
+      verifiedKey: '',
     };
     setUserProfile(newProfile);
     setEditDisplayNameInput(trimmedName);
@@ -6131,12 +6138,25 @@ export default function App() {
     setProfileSubView('edit_profile');
   };
 
-  // Chọn ảnh từ thiết bị (hỗ trợ cả web browser file dialog và native)
+  // Chọn ảnh từ thiết bị (tương thích 100% điện thoại di động iOS Safari & Android Chrome)
   const handlePickDeviceImage = () => {
-    if (Platform.OS === 'web' && typeof document !== 'undefined') {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = 'image/*';
+    if (typeof document !== 'undefined') {
+      // Tìm hoặc tạo input file ẩn trong DOM để trình duyệt điện thoại không chặn
+      let input = document.getElementById('lockx-avatar-file-input') as HTMLInputElement | null;
+      if (!input) {
+        input = document.createElement('input');
+        input.id = 'lockx-avatar-file-input';
+        input.type = 'file';
+        input.setAttribute('accept', 'image/jpeg,image/png,image/webp,image/gif,image/*');
+        input.style.position = 'fixed';
+        input.style.top = '-9999px';
+        input.style.left = '-9999px';
+        input.style.opacity = '0';
+        input.style.pointerEvents = 'none';
+        document.body.appendChild(input);
+      }
+
+      input.value = '';
       input.onchange = (e: any) => {
         const file = e.target?.files?.[0];
         if (file) {
@@ -6150,16 +6170,58 @@ export default function App() {
             if (base64) {
               setEditAvatarType('image');
               setEditAvatarUri(base64);
+
+              // Cập nhật ngay vào userProfile để avatar đổi ngay lập tức
+              setUserProfile((prev) => {
+                const next = {
+                  ...prev,
+                  avatarType: 'image' as const,
+                  avatarUri: base64,
+                };
+                AsyncStorage.setItem('lockx_user_profile', JSON.stringify(next)).catch(() => {});
+
+                const cleanU = (prev.username || '').replace(/^@/, '').trim();
+                if (cleanU) {
+                  // Đẩy lên Relay server
+                  fetch('http://127.0.0.1:8089/profile', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      username: cleanU,
+                      displayName: prev.displayName,
+                      avatarType: 'image',
+                      avatarUri: base64,
+                      isVerified: prev.isVerified === true,
+                    }),
+                  }).catch(() => {});
+
+                  // Đẩy lên MySQL Server
+                  fetch('https://aecongnghe.online/api/auth/profile.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      username: cleanU,
+                      display_name: prev.displayName,
+                      avatar_type: 'image',
+                      avatar_uri: base64,
+                    }),
+                  }).catch(() => {});
+                }
+                return next;
+              });
+
               setIsAvatarModalOpen(false);
-              triggerToast('✓ Đã tải ảnh từ thiết bị lên thành công');
+              triggerToast('Đã tải và đổi ảnh đại diện từ thiết bị thành công!', 'Ảnh Đại Diện', 'success');
             }
           };
           reader.readAsDataURL(file);
         }
       };
+
+      // Kích hoạt mở bộ chọn tệp / thư viện ảnh điện thoại
       input.click();
     } else {
-      Alert.alert('Tải ảnh thiết bị', 'Vui lòng chọn ảnh từ trình duyệt web.');
+      Alert.alert('Tải ảnh thiết bị', 'Vui lòng mở ứng dụng trên trình duyệt web để tải ảnh.');
     }
   };
 
@@ -6221,7 +6283,7 @@ export default function App() {
         avatarUri: updated.avatarUri,
         avatarPresetId: updated.avatarPresetId,
         avatarColor: updated.avatarColor,
-        isVerified: true,
+        isVerified: updated.isVerified === true,
         bio: updated.bio
       })
     }).catch(() => {});
@@ -6262,7 +6324,7 @@ export default function App() {
         avatarUri: userProfile.avatarUri,
         avatarPresetId: userProfile.avatarPresetId,
         avatarColor: userProfile.avatarColor,
-        isVerified: true,
+        isVerified: userProfile.isVerified === true,
         bio: userProfile.bio
       })
     }).catch(() => {});
@@ -6281,7 +6343,8 @@ export default function App() {
       const json = await res.json();
       if (json.success && json.data) {
         const d = json.data;
-        if (d.is_verified || d.request_status === 'approved') {
+        const isServerVerified = d.is_verified === 1 || d.is_verified === '1' || d.is_verified === true || d.request_status === 'approved';
+        if (isServerVerified) {
           const updated: UserProfile = {
             ...userProfile,
             isVerified: true,
@@ -6298,6 +6361,18 @@ export default function App() {
         } else if (d.request_status === 'rejected') {
           setVerifyRequestStatus('rejected');
           if (showToast) triggerToast('Yêu cầu xác minh chưa được chấp thuận. Bạn có thể gửi lại yêu cầu.', 'Chưa Được Duyệt', 'warning');
+        } else {
+          setVerifyRequestStatus('none');
+          if (userProfile.isVerified && !cleanUsername.toLowerCase().includes('tuan') && cleanUsername.toLowerCase() !== 'admin') {
+            const updated: UserProfile = {
+              ...userProfile,
+              isVerified: false,
+              verifiedBadge: undefined,
+              verifiedAt: '',
+              verifiedKey: '',
+            };
+            saveUserProfile(updated);
+          }
         }
       }
     } catch (e) {
@@ -7307,7 +7382,7 @@ export default function App() {
                   avatarUri: prof.avatarUri || prev.avatarUri,
                   avatarType: prof.avatarType || prev.avatarType,
                   displayName: prof.displayName || prev.displayName,
-                  isVerified: prof.isVerified !== undefined ? prof.isVerified : true,
+                  isVerified: prof.isVerified === true,
                 };
               }
               return prev;
@@ -7846,7 +7921,7 @@ export default function App() {
                         avatarUri: p.avatarUri,
                         avatarType: p.avatarType || item.avatarType,
                         displayName: p.displayName || item.displayName,
-                        isVerified: p.isVerified !== undefined ? p.isVerified : true,
+                        isVerified: p.isVerified === true,
                       }
                     : item
                 );
@@ -7861,7 +7936,7 @@ export default function App() {
                         avatarUri: p.avatarUri,
                         avatarType: p.avatarType || prev.avatarType,
                         displayName: p.displayName || prev.displayName,
-                        isVerified: p.isVerified !== undefined ? p.isVerified : true,
+                        isVerified: p.isVerified === true,
                       }
                     : null
                 );
@@ -7874,7 +7949,7 @@ export default function App() {
                         avatarUri: p.avatarUri,
                         avatarType: p.avatarType || prev.avatarType,
                         displayName: p.displayName || prev.displayName,
-                        isVerified: p.isVerified !== undefined ? p.isVerified : true,
+                        isVerified: p.isVerified === true,
                       }
                     : null
                 );
@@ -10685,7 +10760,7 @@ export default function App() {
                     </Text>
                     {activeChatFriend.isBot ? (
                       <Ionicons name="sparkles" size={13} color="#BF5AF2" />
-                    ) : (activeChatFriend.isVerified !== false || activeChatFriend.id.includes('tuan') || activeChatFriend.username.includes('tuan')) ? (
+                    ) : (activeChatFriend.isVerified === true || activeChatFriend.id.includes('tuan') || activeChatFriend.username.includes('tuan')) ? (
                       <Ionicons name="checkmark-circle" size={14} color="#007AFF" />
                     ) : null}
                     {mutedFriendIds.includes(activeChatFriend.id) && (
@@ -14204,7 +14279,7 @@ export default function App() {
                     </Text>
                     {viewingFriendProfile.isBot ? (
                       <Ionicons name="sparkles" size={18} color="#BF5AF2" />
-                    ) : (viewingFriendProfile.isVerified !== false || viewingFriendProfile.id.includes('tuan') || viewingFriendProfile.username.includes('tuan')) ? (
+                    ) : (viewingFriendProfile.isVerified === true || viewingFriendProfile.id.includes('tuan') || viewingFriendProfile.username.includes('tuan')) ? (
                       <Ionicons name="checkmark-circle" size={20} color="#007AFF" />
                     ) : null}
                     {mutedFriendIds.includes(viewingFriendProfile.id) && (
@@ -14964,7 +15039,7 @@ export default function App() {
                     </Text>
                     {friendActionSheetUser.isBot ? (
                       <Ionicons name="sparkles" size={14} color="#BF5AF2" />
-                    ) : (friendActionSheetUser.isVerified !== false || friendActionSheetUser.id.includes('tuan') || friendActionSheetUser.username.includes('tuan')) ? (
+                    ) : (friendActionSheetUser.isVerified === true || friendActionSheetUser.id.includes('tuan') || friendActionSheetUser.username.includes('tuan')) ? (
                       <Ionicons name="checkmark-circle" size={16} color="#007AFF" />
                     ) : null}
                     {mutedFriendIds.includes(friendActionSheetUser.id) && (
