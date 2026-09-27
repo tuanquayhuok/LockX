@@ -3135,6 +3135,11 @@ export const EnterpriseAuthScreen = ({
       if (!authUsername || authUsername === savedAccount) {
         setAuthUsername(greetingText);
       }
+    } else if (authMode === 'register') {
+      // Khi chuyển sang Đăng Ký, tuyệt đối không điền sẵn "Hi ..." hoặc tên tài khoản đã lưu
+      if (authUsername.toLowerCase().startsWith('hi ') || authUsername === savedAccount) {
+        setAuthUsername('');
+      }
     }
   }, [authMode, savedAccount, savedDisplayName]);
 
@@ -3716,7 +3721,7 @@ export const EnterpriseAuthScreen = ({
                     }}
                     placeholder={authMode === 'login' ? greetingText : 'VD: lockx_user'}
                     placeholderTextColor={isLight ? '#AEAEB2' : '#636366'}
-                    value={authUsername}
+                    value={authMode === 'register' && authUsername.toLowerCase().startsWith('hi ') ? '' : authUsername}
                     onChangeText={(v) => {
                       setAuthUsername(v);
                       if (authError) setAuthError(null);
@@ -3957,6 +3962,9 @@ export const EnterpriseAuthScreen = ({
                 onPress={() => {
                   setAuthMode('login');
                   setAuthError(null);
+                  if (!authUsername && (savedAccount || savedDisplayName)) {
+                    setAuthUsername(greetingText);
+                  }
                 }}
               >
                 <Text
@@ -3981,6 +3989,9 @@ export const EnterpriseAuthScreen = ({
                 onPress={() => {
                   setAuthMode('register');
                   setAuthError(null);
+                  if (authUsername.toLowerCase().startsWith('hi ') || authUsername === savedAccount) {
+                    setAuthUsername('');
+                  }
                 }}
               >
                 <Text
