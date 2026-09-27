@@ -183,7 +183,13 @@ const server = http.createServer((req, res) => {
               timestamp: Number(data.timestamp) || Date.now(),
               reactions: Array.isArray(data.reactions) ? data.reactions : [],
               replyTo: data.replyTo || undefined,
-              deliveryStatus: 'delivered'
+              deliveryStatus: 'delivered',
+              audioUri: data.audioUri || undefined,
+              audioDuration: data.audioDuration || undefined,
+              imageUri: data.imageUri || undefined,
+              fileUri: data.fileUri || undefined,
+              fileName: data.fileName || undefined,
+              fileSize: data.fileSize || undefined
             };
             // deduplicate if same id exists
             const existingIdx = messageState[ck].findIndex(m => m.id === msgObj.id || (m.clientMsgId && m.clientMsgId === msgObj.clientMsgId));

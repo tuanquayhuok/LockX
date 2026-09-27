@@ -25,6 +25,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import * as LocalAuthentication from 'expo-local-authentication';
+import { Audio as ExpoAudio } from 'expo-av';
+
+try {
+  ExpoAudio.setAudioModeAsync({
+    allowsRecordingIOS: true,
+    playsInSilentModeIOS: true,
+    staysActiveInBackground: true,
+    shouldDuckAndroid: true,
+    playThroughEarpieceAndroid: false,
+  }).catch(() => {});
+} catch (e) {}
 
 try {
   Notifications.setNotificationHandler({
@@ -88,6 +99,8 @@ interface Account {
   hasTotp?: boolean;
   totpSecret?: string;
   notes?: string;
+  createdAt?: number | string;
+  updatedAt?: number | string;
 }
 
 interface StaminaItem {
@@ -189,14 +202,93 @@ export interface LoginHistoryRecord {
   isCurrent?: boolean;
 }
 
-// Biểu tượng SVG chuyên biệt chuẩn Apple iOS cho Cuộc gọi thoại E2EE
-export const CallSvgIcon = ({
+// Hàm tính toán trạng thái hoạt động người dùng THẬT từ Server MySQL (Tránh hiển thị ảo)
+export function computeUserPresence(
+  lastLoginStr?: string | null,
+  serverTimestampStr?: string | null
+): { status: 'online' | 'offline'; text: string; isOnline: boolean } {
+  if (!lastLoginStr) {
+    return { status: 'offline', text: 'Hoạt động gần đây', isOnline: false };
+  }
+  try {
+    const parseSqlDate = (str: string) => {
+      const parts = str.split(/[- :]/);
+      if (parts.length >= 6) {
+        return new Date(
+          parseInt(parts[0], 10),
+          parseInt(parts[1], 10) - 1,
+          parseInt(parts[2], 10),
+          parseInt(parts[3], 10),
+          parseInt(parts[4], 10),
+          parseInt(parts[5], 10)
+        ).getTime();
+      }
+      return Date.parse(str);
+    };
+
+    const lastTime = parseSqlDate(lastLoginStr);
+    const now = serverTimestampStr ? parseSqlDate(serverTimestampStr) : Date.now();
+    const diffMs = Math.max(0, now - lastTime);
+    const diffSecs = Math.floor(diffMs / 1000);
+    const diffMins = Math.floor(diffSecs / 60);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    // Chỉ coi là online nếu có tương tác thực sự trong vòng 3 phút
+    if (diffMins < 3) {
+      return { status: 'online', text: 'Đang hoạt động', isOnline: true };
+    } else if (diffMins < 60) {
+      return { status: 'offline', text: `Hoạt động ${diffMins} phút trước`, isOnline: false };
+    } else if (diffHours < 24) {
+      return { status: 'offline', text: `Hoạt động ${diffHours} giờ trước`, isOnline: false };
+    } else if (diffDays === 1) {
+      return { status: 'offline', text: 'Hoạt động hôm qua', isOnline: false };
+    } else if (diffDays < 7) {
+      return { status: 'offline', text: `Hoạt động ${diffDays} ngày trước`, isOnline: false };
+    } else {
+      return { status: 'offline', text: 'Hoạt động gần đây', isOnline: false };
+    }
+  } catch (e) {
+    return { status: 'offline', text: 'Hoạt động gần đây', isOnline: false };
+  }
+}
+
+// Biểu tượng SVG chuyên biệt chuẩn Apple iOS / Web cho Toàn bộ giao diện Chat & Cuộc gọi
+export const ChatSvgIcon = ({
   name,
   size = 20,
   color = '#FFFFFF',
   style,
 }: {
-  name: 'phone' | 'phone-incoming' | 'phone-missed' | 'phone-hangup' | 'speaker' | 'speaker-mute' | 'mic' | 'mic-mute';
+  name:
+    | 'phone'
+    | 'phone-incoming'
+    | 'phone-missed'
+    | 'phone-hangup'
+    | 'speaker'
+    | 'speaker-mute'
+    | 'mic'
+    | 'mic-mute'
+    | 'chevron-back'
+    | 'ellipsis'
+    | 'happy'
+    | 'send'
+    | 'trash'
+    | 'heart'
+    | 'like'
+    | 'image'
+    | 'document'
+    | 'shield'
+    | 'palette'
+    | 'play'
+    | 'pause'
+    | 'check'
+    | 'check-all'
+    | 'verified'
+    | 'sparkles'
+    | 'notifications-off'
+    | 'key'
+    | 'close';
   size?: number;
   color?: string;
   style?: any;
@@ -217,6 +309,46 @@ export const CallSvgIcon = ({
       d = 'M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16s-4.52-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.38-1.14-1-1.14z';
     } else if (name === 'mic-mute') {
       d = 'M19 11c0 1.66-.59 3.18-1.57 4.37l1.45 1.45A8.93 8.93 0 0020 11h-1zm-7 5c-1.66 0-3-1.34-3-3V9.8L14.2 15c-.63.63-1.46 1-2.2 1zm7.71 5.71L3.27 4.27 2 5.54l4.26 4.26C6.1 10.38 6 10.68 6 11c0 3.08 2.29 5.63 5.25 5.96V19h-2.5c-.55 0-1 .45-1 1s.45 1 1 1h7c.55 0 1-.45 1-1s-.45-1-1-1H13.5v-2.04c.82-.09 1.6-.33 2.31-.69l3.44 3.44 1.46-1.43zM15 11.18V5c0-1.66-1.34-3-3-3-1.54 0-2.79 1.16-2.96 2.65l5.96 5.96V11.18z';
+    } else if (name === 'chevron-back') {
+      d = 'M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z';
+    } else if (name === 'ellipsis') {
+      d = 'M6 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm12 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z';
+    } else if (name === 'happy') {
+      d = 'M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z';
+    } else if (name === 'send') {
+      d = 'M4 12l1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8-8 8z';
+    } else if (name === 'trash') {
+      d = 'M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z';
+    } else if (name === 'heart') {
+      d = 'M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z';
+    } else if (name === 'like') {
+      d = 'M1 21h4V9H1v12zm22-11c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2z';
+    } else if (name === 'image') {
+      d = 'M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z';
+    } else if (name === 'document') {
+      d = 'M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z';
+    } else if (name === 'shield') {
+      d = 'M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z';
+    } else if (name === 'palette') {
+      d = 'M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l1.9-1.9C9.23 19.46 10.57 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z';
+    } else if (name === 'play') {
+      d = 'M8 5v14l11-7z';
+    } else if (name === 'pause') {
+      d = 'M6 19h4V5H6v14zm8-14v14h4V5h-4z';
+    } else if (name === 'check') {
+      d = 'M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z';
+    } else if (name === 'check-all') {
+      d = 'M18 7l-1.41-1.41-6.34 6.34 1.41 1.41L18 7zm4.24-1.41L11.66 16.17 7.48 12l-1.41 1.41L11.66 19l12-12-1.42-1.41zM.41 13.41L6 19l1.41-1.41L1.83 12 .41 13.41z';
+    } else if (name === 'verified') {
+      d = 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z';
+    } else if (name === 'sparkles') {
+      d = 'M19 9l1.25-2.75L23 5l-2.75-1.25L19 1l-1.25 2.75L15 5l2.75 1.25L19 9zm-7.5.5L9 4 6.5 9.5 1 12l5.5 2.5L9 20l2.5-5.5L17 12l-5.5-2.5zM19 15l-1.25 2.75L15 19l2.75 1.25L19 23l1.25-2.75L23 19l-2.75-1.25L19 15z';
+    } else if (name === 'notifications-off') {
+      d = 'M20 18.69L7.84 6.14 5.27 3.49 4 4.76l2.8 2.8v.01c-.52.99-.8 2.16-.8 3.43v5l-2 2v1h14.24l2.74 2.74 1.27-1.27-2.25-2.25zM12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6.31V11c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68c-.68.16-1.31.43-1.87.8l2.86 2.86c.17-.03.34-.04.51-.04 2.21 0 4 1.79 4 4v2.17l1.5 1.52z';
+    } else if (name === 'key') {
+      d = 'M12.65 10C11.83 7.67 9.61 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.61 0 4.83-1.67 5.65-4H17v4h4v-4h2v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z';
+    } else if (name === 'close') {
+      d = 'M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z';
     }
     return React.createElement(
       'svg',
@@ -229,6 +361,7 @@ export const CallSvgIcon = ({
       React.createElement('path', { d, fill: color })
     );
   }
+
   let fallbackIcon: any = 'call';
   if (name === 'phone-hangup') fallbackIcon = 'call';
   else if (name === 'phone-missed') fallbackIcon = 'call-outline';
@@ -236,8 +369,31 @@ export const CallSvgIcon = ({
   else if (name === 'speaker-mute') fallbackIcon = 'volume-mute';
   else if (name === 'mic') fallbackIcon = 'mic';
   else if (name === 'mic-mute') fallbackIcon = 'mic-off';
+  else if (name === 'chevron-back') fallbackIcon = 'chevron-back';
+  else if (name === 'ellipsis') fallbackIcon = 'ellipsis-horizontal';
+  else if (name === 'happy') fallbackIcon = 'happy-outline';
+  else if (name === 'send') fallbackIcon = 'arrow-up';
+  else if (name === 'trash') fallbackIcon = 'trash-outline';
+  else if (name === 'heart') fallbackIcon = 'heart';
+  else if (name === 'like') fallbackIcon = 'thumbs-up';
+  else if (name === 'image') fallbackIcon = 'image';
+  else if (name === 'document') fallbackIcon = 'document-text';
+  else if (name === 'shield') fallbackIcon = 'shield-checkmark';
+  else if (name === 'palette') fallbackIcon = 'color-palette';
+  else if (name === 'play') fallbackIcon = 'play';
+  else if (name === 'pause') fallbackIcon = 'pause';
+  else if (name === 'check') fallbackIcon = 'checkmark';
+  else if (name === 'check-all') fallbackIcon = 'checkmark-done';
+  else if (name === 'verified') fallbackIcon = 'checkmark-circle';
+  else if (name === 'sparkles') fallbackIcon = 'sparkles';
+  else if (name === 'notifications-off') fallbackIcon = 'notifications-off';
+  else if (name === 'key') fallbackIcon = 'key-outline';
+  else if (name === 'close') fallbackIcon = 'close';
   return <Ionicons name={fallbackIcon} size={size} color={color} style={style} />;
 };
+
+// Alias để tương thích ngược 100%
+export const CallSvgIcon = ChatSvgIcon;
 
 export interface AppleRingtone {
   id: string;
@@ -255,96 +411,254 @@ export const APPLE_RINGTONES: AppleRingtone[] = [
   { id: 'twinkle', name: 'Twinkle (Chuông Thủy Tinh)', subname: 'Tiếng chuông lấp lánh Apple', category: 'Thư Giãn' },
 ];
 
+// Base64 encoder độc lập không phụ thuộc môi trường
+const base64Alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+const uint8ToBase64 = (bytes: Uint8Array): string => {
+  let output = '';
+  const len = bytes.length;
+  for (let i = 0; i < len; i += 3) {
+    const b0 = bytes[i];
+    const b1 = i + 1 < len ? bytes[i + 1] : 0;
+    const b2 = i + 2 < len ? bytes[i + 2] : 0;
+    output += base64Alphabet[b0 >> 2];
+    output += base64Alphabet[((b0 & 3) << 4) | (b1 >> 4)];
+    output += i + 1 < len ? base64Alphabet[((b1 & 15) << 2) | (b2 >> 6)] : '=';
+    output += i + 2 < len ? base64Alphabet[b2 & 63] : '=';
+  }
+  return output;
+};
+
+// Tổng hợp âm thanh ra định dạng WAV 16-bit PCM Mono
+const generatePcmWavDataUri = (
+  notes: Array<{ f: number; d: number; l: number; vol?: number }>,
+  totalDuration: number,
+  sampleRate = 22050
+): string => {
+  const numSamples = Math.floor(sampleRate * totalDuration);
+  const pcm16 = new Int16Array(numSamples);
+
+  notes.forEach(({ f, d, l, vol = 0.2 }) => {
+    const startSample = Math.floor(d * sampleRate);
+    const endSample = Math.min(numSamples, Math.floor((d + l) * sampleRate));
+    const attackSamples = Math.floor(0.015 * sampleRate);
+    const noteSamples = endSample - startSample;
+    const decaySamples = Math.max(1, noteSamples - attackSamples);
+
+    for (let i = startSample; i < endSample; i++) {
+      const t = (i - startSample) / sampleRate;
+      const rel = i - startSample;
+      let env = 1;
+      if (rel < attackSamples) {
+        env = rel / attackSamples;
+      } else {
+        env = Math.max(0, 1 - (rel - attackSamples) / decaySamples);
+      }
+      const val = Math.sin(2 * Math.PI * f * t) * vol * env * 32767;
+      pcm16[i] = Math.max(-32768, Math.min(32767, pcm16[i] + val));
+    }
+  });
+
+  const dataSize = numSamples * 2;
+  const wavBytes = new Uint8Array(44 + dataSize);
+  const view = new DataView(wavBytes.buffer);
+
+  // "RIFF"
+  view.setUint32(0, 0x52494646, false);
+  view.setUint32(4, 36 + dataSize, true);
+  // "WAVE"
+  view.setUint32(8, 0x57415645, false);
+  // "fmt "
+  view.setUint32(12, 0x666d7420, false);
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true); // PCM
+  view.setUint16(22, 1, true); // Mono
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  // "data"
+  view.setUint32(36, 0x64617461, false);
+  view.setUint32(40, dataSize, true);
+
+  wavBytes.set(new Uint8Array(pcm16.buffer), 44);
+  return `data:audio/wav;base64,${uint8ToBase64(wavBytes)}`;
+};
+
+export const getRingtoneNotes = (ringtoneId: string = 'reflection') => {
+  if (ringtoneId === 'marimba') {
+    return {
+      notes: [
+        { f: 523.25, d: 0.00, l: 0.14, wave: 'triangle', vol: 0.22 },
+        { f: 392.00, d: 0.12, l: 0.14, wave: 'triangle', vol: 0.22 },
+        { f: 523.25, d: 0.24, l: 0.14, wave: 'triangle', vol: 0.22 },
+        { f: 659.25, d: 0.36, l: 0.16, wave: 'triangle', vol: 0.22 },
+        { f: 783.99, d: 0.52, l: 0.18, wave: 'triangle', vol: 0.24 },
+        { f: 1046.50, d: 0.70, l: 0.22, wave: 'triangle', vol: 0.26 },
+        { f: 523.25, d: 1.05, l: 0.14, wave: 'triangle', vol: 0.22 },
+        { f: 392.00, d: 1.17, l: 0.14, wave: 'triangle', vol: 0.22 },
+        { f: 523.25, d: 1.29, l: 0.14, wave: 'triangle', vol: 0.22 },
+        { f: 659.25, d: 1.41, l: 0.16, wave: 'triangle', vol: 0.22 },
+        { f: 783.99, d: 1.57, l: 0.18, wave: 'triangle', vol: 0.24 },
+        { f: 1046.50, d: 1.75, l: 0.30, wave: 'triangle', vol: 0.26 },
+      ],
+      total: 2.2,
+    };
+  }
+  if (ringtoneId === 'opening') {
+    return {
+      notes: [
+        { f: 369.99, d: 0.00, l: 0.22, wave: 'sine', vol: 0.20 },
+        { f: 440.00, d: 0.18, l: 0.22, wave: 'sine', vol: 0.20 },
+        { f: 554.37, d: 0.36, l: 0.25, wave: 'sine', vol: 0.20 },
+        { f: 739.99, d: 0.58, l: 0.35, wave: 'sine', vol: 0.24 },
+        { f: 659.25, d: 0.88, l: 0.30, wave: 'sine', vol: 0.20 },
+        { f: 554.37, d: 1.15, l: 0.40, wave: 'sine', vol: 0.20 },
+      ],
+      total: 1.8,
+    };
+  }
+  if (ringtoneId === 'radar') {
+    return {
+      notes: [
+        { f: 1046.5, d: 0.00, l: 0.12, wave: 'sine', vol: 0.24 },
+        { f: 1318.5, d: 0.16, l: 0.12, wave: 'sine', vol: 0.24 },
+        { f: 1046.5, d: 0.50, l: 0.12, wave: 'sine', vol: 0.24 },
+        { f: 1318.5, d: 0.66, l: 0.12, wave: 'sine', vol: 0.24 },
+        { f: 1046.5, d: 1.00, l: 0.12, wave: 'sine', vol: 0.24 },
+        { f: 1318.5, d: 1.16, l: 0.12, wave: 'sine', vol: 0.24 },
+      ],
+      total: 1.5,
+    };
+  }
+  if (ringtoneId === 'silk') {
+    return {
+      notes: [
+        { f: 587.33, d: 0.00, l: 0.50, wave: 'sine', vol: 0.18 },
+        { f: 739.99, d: 0.35, l: 0.50, wave: 'sine', vol: 0.18 },
+        { f: 880.00, d: 0.70, l: 0.60, wave: 'sine', vol: 0.18 },
+        { f: 987.77, d: 1.10, l: 0.80, wave: 'sine', vol: 0.18 },
+      ],
+      total: 2.0,
+    };
+  }
+  if (ringtoneId === 'twinkle') {
+    return {
+      notes: [
+        { f: 783.99, d: 0.00, l: 0.25, wave: 'sine', vol: 0.20 },
+        { f: 987.77, d: 0.18, l: 0.25, wave: 'sine', vol: 0.20 },
+        { f: 1174.66, d: 0.36, l: 0.30, wave: 'sine', vol: 0.20 },
+        { f: 1567.98, d: 0.56, l: 0.45, wave: 'sine', vol: 0.24 },
+        { f: 1174.66, d: 0.85, l: 0.35, wave: 'sine', vol: 0.20 },
+      ],
+      total: 1.5,
+    };
+  }
+  // Default: Reflection (iOS 17/18)
+  return {
+    notes: [
+      { f: 440.00, d: 0.00, l: 0.25, wave: 'sine', vol: 0.22 },
+      { f: 554.37, d: 0.18, l: 0.25, wave: 'sine', vol: 0.22 },
+      { f: 659.25, d: 0.36, l: 0.28, wave: 'sine', vol: 0.22 },
+      { f: 880.00, d: 0.58, l: 0.38, wave: 'sine', vol: 0.26 },
+      { f: 830.61, d: 0.88, l: 0.30, wave: 'sine', vol: 0.22 },
+      { f: 659.25, d: 1.15, l: 0.35, wave: 'sine', vol: 0.22 },
+      { f: 554.37, d: 1.45, l: 0.40, wave: 'sine', vol: 0.22 },
+    ],
+    total: 2.1,
+  };
+};
+
+const ringtoneWavCache: Record<string, string> = {};
+const notifWavCache: Record<string, string> = {};
+
+// Quản lý instance âm thanh native (Expo AV)
+let activeNativeSound: ExpoAudio.Sound | null = null;
+
+const playWavSoundNative = async (wavUri: string) => {
+  try {
+    if (activeNativeSound) {
+      try {
+        await activeNativeSound.stopAsync();
+        await activeNativeSound.unloadAsync();
+      } catch (e) {}
+      activeNativeSound = null;
+    }
+    const { sound } = await ExpoAudio.Sound.createAsync(
+      { uri: wavUri },
+      { shouldPlay: true, volume: 1.0 }
+    );
+    activeNativeSound = sound;
+  } catch (err) {
+    console.log('Error playing native audio:', err);
+  }
+};
+
+// Global Web Audio context unlocker cho Safari iOS & Mobile Chrome
+let sharedAudioContext: any = null;
+const getSharedAudioContext = () => {
+  if (typeof window === 'undefined') return null;
+  const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+  if (!AudioCtx) return null;
+  if (!sharedAudioContext) {
+    sharedAudioContext = new AudioCtx();
+  }
+  if (sharedAudioContext.state === 'suspended') {
+    sharedAudioContext.resume().catch(() => {});
+  }
+  return sharedAudioContext;
+};
+
+if (typeof window !== 'undefined') {
+  const unlock = () => {
+    try {
+      const ctx = getSharedAudioContext();
+      if (ctx && ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
+    } catch (e) {}
+  };
+  window.addEventListener('touchstart', unlock, { passive: true });
+  window.addEventListener('touchend', unlock, { passive: true });
+  window.addEventListener('click', unlock, { passive: true });
+}
+
 export const playSingleRingtoneCycle = (ringtoneId: string = 'reflection') => {
   try {
-    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
-    const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
-    const now = ctx.currentTime;
+    if (Platform.OS === 'web') {
+      const ctx = getSharedAudioContext();
+      if (!ctx) return;
+      const now = ctx.currentTime;
+      const { notes } = getRingtoneNotes(ringtoneId);
 
-    const playTone = (freq: number, startDelay: number, duration: number, waveType: OscillatorType = 'sine', volume: number = 0.12) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = waveType;
-      osc.frequency.setValueAtTime(freq, now + startDelay);
-      gain.gain.setValueAtTime(volume, now + startDelay);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + startDelay + duration);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(now + startDelay);
-      osc.stop(now + startDelay + duration);
-    };
-
-    if (ringtoneId === 'marimba') {
-      const notes = [
-        { f: 523.25, d: 0.00, l: 0.14 },
-        { f: 392.00, d: 0.12, l: 0.14 },
-        { f: 523.25, d: 0.24, l: 0.14 },
-        { f: 659.25, d: 0.36, l: 0.16 },
-        { f: 783.99, d: 0.52, l: 0.18 },
-        { f: 1046.50, d: 0.70, l: 0.22 },
-        { f: 523.25, d: 1.05, l: 0.14 },
-        { f: 392.00, d: 1.17, l: 0.14 },
-        { f: 523.25, d: 1.29, l: 0.14 },
-        { f: 659.25, d: 1.41, l: 0.16 },
-        { f: 783.99, d: 1.57, l: 0.18 },
-        { f: 1046.50, d: 1.75, l: 0.30 },
-      ];
-      notes.forEach((n) => playTone(n.f, n.d, n.l, 'triangle', 0.14));
-    } else if (ringtoneId === 'opening') {
-      const notes = [
-        { f: 369.99, d: 0.00, l: 0.22 },
-        { f: 440.00, d: 0.18, l: 0.22 },
-        { f: 554.37, d: 0.36, l: 0.25 },
-        { f: 739.99, d: 0.58, l: 0.35 },
-        { f: 659.25, d: 0.88, l: 0.30 },
-        { f: 554.37, d: 1.15, l: 0.40 },
-      ];
-      notes.forEach((n) => playTone(n.f, n.d, n.l, 'sine', 0.13));
-    } else if (ringtoneId === 'radar') {
-      [0.0, 0.16, 0.50, 0.66, 1.0, 1.16].forEach((d, idx) => {
-        playTone(idx % 2 === 0 ? 1046.5 : 1318.5, d, 0.12, 'sine', 0.15);
+      notes.forEach((n) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = (n.wave || 'sine') as OscillatorType;
+        osc.frequency.setValueAtTime(n.f, now + n.d);
+        gain.gain.setValueAtTime(n.vol || 0.18, now + n.d);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + n.d + n.l);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + n.d);
+        osc.stop(now + n.d + n.l);
       });
-    } else if (ringtoneId === 'silk') {
-      const notes = [
-        { f: 587.33, d: 0.00, l: 0.50 },
-        { f: 739.99, d: 0.35, l: 0.50 },
-        { f: 880.00, d: 0.70, l: 0.60 },
-        { f: 987.77, d: 1.10, l: 0.80 },
-      ];
-      notes.forEach((n) => playTone(n.f, n.d, n.l, 'sine', 0.10));
-    } else if (ringtoneId === 'twinkle') {
-      const notes = [
-        { f: 783.99, d: 0.00, l: 0.25 },
-        { f: 987.77, d: 0.18, l: 0.25 },
-        { f: 1174.66, d: 0.36, l: 0.30 },
-        { f: 1567.98, d: 0.56, l: 0.45 },
-        { f: 1174.66, d: 0.85, l: 0.35 },
-      ];
-      notes.forEach((n) => playTone(n.f, n.d, n.l, 'sine', 0.11));
     } else {
-      // Default: Reflection (iOS 17/18 modern chime)
-      const notes = [
-        { f: 440.00, d: 0.00, l: 0.25 },
-        { f: 554.37, d: 0.18, l: 0.25 },
-        { f: 659.25, d: 0.36, l: 0.28 },
-        { f: 880.00, d: 0.58, l: 0.38 },
-        { f: 830.61, d: 0.88, l: 0.30 },
-        { f: 659.25, d: 1.15, l: 0.35 },
-        { f: 554.37, d: 1.45, l: 0.40 },
-      ];
-      notes.forEach((n) => playTone(n.f, n.d, n.l, 'sine', 0.12));
+      // Native iOS / Android: Tổng hợp WAV và phát qua expo-av Audio.Sound
+      if (!ringtoneWavCache[ringtoneId]) {
+        const { notes, total } = getRingtoneNotes(ringtoneId);
+        ringtoneWavCache[ringtoneId] = generatePcmWavDataUri(notes, total);
+      }
+      playWavSoundNative(ringtoneWavCache[ringtoneId]);
     }
-  } catch (e) {}
+  } catch (e) {
+    console.log('Error in playSingleRingtoneCycle:', e);
+  }
 };
 
 let callRingtoneInterval: any = null;
 export const startRingtone = (ringtoneId: string = 'reflection') => {
   try {
-    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
     if (callRingtoneInterval) clearInterval(callRingtoneInterval);
-
     playSingleRingtoneCycle(ringtoneId);
     callRingtoneInterval = setInterval(() => {
       playSingleRingtoneCycle(ringtoneId);
@@ -357,109 +671,115 @@ export const stopRingtone = () => {
     clearInterval(callRingtoneInterval);
     callRingtoneInterval = null;
   }
+  if (activeNativeSound) {
+    activeNativeSound.stopAsync().catch(() => {});
+    activeNativeSound.unloadAsync().catch(() => {});
+    activeNativeSound = null;
+  }
 };
 
-// Phát âm thanh thông báo iOS 18 chân thực bằng Web Audio API
+// Phát âm thanh thông báo iOS 18 chân thực trên cả Web và Điện Thoại Thật (Native)
 export const playAppleNotificationSound = (type: 'success' | 'info' | 'warning' | 'security' | 'tap' = 'success') => {
   try {
-    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
-    const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
-    if (!AudioCtx) return;
+    if (Platform.OS === 'web') {
+      const ctx = getSharedAudioContext();
+      if (!ctx) return;
+      const now = ctx.currentTime;
 
-    const ctx = new AudioCtx();
-    if (ctx.state === 'suspended') {
-      ctx.resume().catch(() => {});
-    }
-
-    const now = ctx.currentTime;
-
-    if (type === 'success') {
-      // Apple iOS Tri-tone / Success Chord (G5 -> C6 -> E6 chime)
-      const notes = [
-        { freq: 783.99, start: 0, duration: 0.18, vol: 0.22 },
-        { freq: 1046.50, start: 0.11, duration: 0.22, vol: 0.26 },
-        { freq: 1318.51, start: 0.22, duration: 0.45, vol: 0.28 },
-      ];
-
-      notes.forEach(({ freq, start, duration, vol }) => {
+      if (type === 'success') {
+        const notes = [
+          { freq: 783.99, start: 0, duration: 0.18, vol: 0.22 },
+          { freq: 1046.50, start: 0.11, duration: 0.22, vol: 0.26 },
+          { freq: 1318.51, start: 0.22, duration: 0.45, vol: 0.28 },
+        ];
+        notes.forEach(({ freq, start, duration, vol }) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, now + start);
+          gain.gain.setValueAtTime(0, now + start);
+          gain.gain.linearRampToValueAtTime(vol, now + start + 0.015);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + start + duration);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now + start);
+          osc.stop(now + start + duration);
+        });
+      } else if (type === 'warning') {
+        [
+          { freq: 587.33, start: 0, duration: 0.15, vol: 0.2 },
+          { freq: 440.00, start: 0.12, duration: 0.25, vol: 0.22 },
+        ].forEach(({ freq, start, duration, vol }) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(freq, now + start);
+          gain.gain.setValueAtTime(0, now + start);
+          gain.gain.linearRampToValueAtTime(vol, now + start + 0.015);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + start + duration);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now + start);
+          osc.stop(now + start + duration);
+        });
+      } else if (type === 'security') {
+        [
+          { freq: 1046.50, start: 0, duration: 0.15, vol: 0.22 },
+          { freq: 1567.98, start: 0.09, duration: 0.40, vol: 0.28 },
+        ].forEach(({ freq, start, duration, vol }) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, now + start);
+          gain.gain.setValueAtTime(0, now + start);
+          gain.gain.linearRampToValueAtTime(vol, now + start + 0.012);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + start + duration);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now + start);
+          osc.stop(now + start + duration);
+        });
+      } else {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
-
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, now + start);
-
-        gain.gain.setValueAtTime(0, now + start);
-        gain.gain.linearRampToValueAtTime(vol, now + start + 0.015);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + start + duration);
-
+        osc.frequency.setValueAtTime(880, now);
+        osc.frequency.exponentialRampToValueAtTime(1760, now + 0.08);
+        gain.gain.setValueAtTime(0, now);
+        gain.gain.linearRampToValueAtTime(0.22, now + 0.012);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
         osc.connect(gain);
         gain.connect(ctx.destination);
-
-        osc.start(now + start);
-        osc.stop(now + start + duration);
-      });
-    } else if (type === 'warning') {
-      // Apple iOS Dual Warning Tone
-      [
-        { freq: 587.33, start: 0, duration: 0.15, vol: 0.2 },
-        { freq: 440.00, start: 0.12, duration: 0.25, vol: 0.22 },
-      ].forEach(({ freq, start, duration, vol }) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(freq, now + start);
-
-        gain.gain.setValueAtTime(0, now + start);
-        gain.gain.linearRampToValueAtTime(vol, now + start + 0.015);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + start + duration);
-
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-
-        osc.start(now + start);
-        osc.stop(now + start + duration);
-      });
-    } else if (type === 'security') {
-      // Apple Secure Enclave Confirmation (C6 -> G6 Ding)
-      [
-        { freq: 1046.50, start: 0, duration: 0.15, vol: 0.22 },
-        { freq: 1567.98, start: 0.09, duration: 0.40, vol: 0.28 },
-      ].forEach(({ freq, start, duration, vol }) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, now + start);
-
-        gain.gain.setValueAtTime(0, now + start);
-        gain.gain.linearRampToValueAtTime(vol, now + start + 0.012);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + start + duration);
-
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-
-        osc.start(now + start);
-        osc.stop(now + start + duration);
-      });
+        osc.start(now);
+        osc.stop(now + 0.35);
+      }
     } else {
-      // Standard Apple iOS Ding
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(880, now);
-      osc.frequency.exponentialRampToValueAtTime(1760, now + 0.08);
-
-      gain.gain.setValueAtTime(0, now);
-      gain.gain.linearRampToValueAtTime(0.22, now + 0.012);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
-
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-
-      osc.start(now);
-      osc.stop(now + 0.35);
+      // Native iOS / Android notification chime
+      if (!notifWavCache[type]) {
+        if (type === 'success') {
+          notifWavCache[type] = generatePcmWavDataUri([
+            { f: 783.99, d: 0, l: 0.18, vol: 0.24 },
+            { f: 1046.50, d: 0.11, l: 0.22, vol: 0.28 },
+            { f: 1318.51, d: 0.22, l: 0.45, vol: 0.30 },
+          ], 0.7);
+        } else if (type === 'warning') {
+          notifWavCache[type] = generatePcmWavDataUri([
+            { f: 587.33, d: 0, l: 0.15, vol: 0.22 },
+            { f: 440.00, d: 0.12, l: 0.25, vol: 0.24 },
+          ], 0.45);
+        } else if (type === 'security') {
+          notifWavCache[type] = generatePcmWavDataUri([
+            { f: 1046.50, d: 0, l: 0.15, vol: 0.24 },
+            { f: 1567.98, d: 0.09, l: 0.40, vol: 0.30 },
+          ], 0.55);
+        } else {
+          notifWavCache[type] = generatePcmWavDataUri([
+            { f: 880, d: 0, l: 0.18, vol: 0.24 },
+            { f: 1320, d: 0.06, l: 0.25, vol: 0.26 },
+          ], 0.35);
+        }
+      }
+      playWavSoundNative(notifWavCache[type]);
     }
   } catch (e) {
     console.log('Audio playback error:', e);
@@ -614,6 +934,8 @@ export interface FriendUser {
   chatTheme?: string;
   quickEmoji?: string;
   status: 'online' | 'offline';
+  presenceText?: string;
+  lastActiveTime?: string;
   bio?: string;
   lastMessage?: string;
   lastTime?: string;
@@ -647,6 +969,21 @@ export const getChatConvKey = (u1: string, u2: string) => {
 
 export const QUICK_EMOJIS = ['👍', '❤️', '🔥', '🎉', '😂', '👏', '🚀', '⚡', '😎', '💯', '🥰', '✨'];
 
+export const isOnlyEmojiMessage = (text?: string): boolean => {
+  if (!text) return false;
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  if (['💖', '❤️', '💕', '💓', '💗', '💞', '💘', '💙', '💚', '💛', '🧡', '💜', '🖤', '🤍', '🤎', '👍', '👍🏻', '👍🏼', '👍🏽', '👍🏾', '👍🏿', '🔥', '🎉', '👏', '😂', '😍', '😮', '😢', '😡', '🚀', '⚡', '😎', '💯', '🥰', '✨'].includes(trimmed)) {
+    return true;
+  }
+  try {
+    const emojiRegex = /^(\p{Extended_Pictographic}|\p{Emoji_Presentation}|\u200d|\ufe0f|\ud83c[\udffb-\udfff]){1,3}$/u;
+    return emojiRegex.test(trimmed);
+  } catch (e) {
+    return false;
+  }
+};
+
 export interface ChatMessage {
   id: string;
   clientMsgId?: string;
@@ -661,6 +998,12 @@ export interface ChatMessage {
     text: string;
   };
   deliveryStatus?: 'sent' | 'delivered' | 'seen';
+  audioUri?: string;
+  audioDuration?: number;
+  imageUri?: string;
+  fileUri?: string;
+  fileName?: string;
+  fileSize?: string;
 }
 
 export interface PhoneAppItem {
@@ -1187,53 +1530,8 @@ export const KNOWN_IPHONE_CATALOG: PhoneAppItem[] = [
 // Danh sách khởi đầu: Rỗng (Người dùng sẽ tự chọn app thật có trên máy)
 export const INITIAL_IPHONE_APPS: PhoneAppItem[] = [];
 
-// Initial Data
-const INITIAL_ACCOUNTS: Account[] = [
-  {
-    id: '1',
-    title: 'Acc Chính Hu Tao C6',
-    game: 'Genshin Impact',
-    server: 'Asia',
-    category: 'Game',
-    username: 'walnut_hutao@gmail.com',
-    password: 'HuTao#StaffOfHoma99!',
-    ign: 'WalnutDirector',
-    notes: 'Trượng Hộ Ma R5, TDV Ma Nữ 240 CV. Đã liên kết email chính chủ.',
-  },
-  {
-    id: '2',
-    title: 'Acc Acheron E2S1',
-    game: 'Honkai: Star Rail',
-    server: 'Asia',
-    category: 'Game',
-    username: 'nihility_acheron@gmail.com',
-    password: 'GalaxyRanger*2026',
-    ign: 'RaidenMei',
-    notes: 'Bảo hiểm banner nhân vật còn 45 roll. Nón ánh sáng trấn S1.',
-  },
-  {
-    id: '3',
-    title: 'Nick Smurf Cao Thủ',
-    game: 'Valorant',
-    server: 'Vietnam',
-    category: 'Clone',
-    username: 'vandal_tap1click',
-    password: 'ReynaImmortal#VN1',
-    ign: 'WindWalker#VN1',
-    notes: 'Rank Immortal 1 (68 RR). Full skin Prime Vandal và Karambit.',
-  },
-  {
-    id: '4',
-    title: 'Steam Thư Viện 200+ Game',
-    game: 'Steam',
-    server: 'Vietnam',
-    category: 'Social',
-    username: 'pro_gamer_vn',
-    password: 'SteamVault$Secure2026',
-    ign: 'GamerVN',
-    notes: 'Black Myth Wukong, Elden Ring, CS2 Prime. Không dùng hack cheat.',
-  },
-];
+// Initial Data: Két Sắt tài khoản rỗng (Chỉ lưu và hiển thị tài khoản thật của người dùng)
+const INITIAL_ACCOUNTS: Account[] = [];
 
 const INITIAL_STAMINA: StaminaItem[] = [
   {
@@ -4705,7 +5003,7 @@ const SwipeableFriendRow: React.FC<{
             </View>
 
             <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 13, marginTop: 1 }}>
-              {friend.username} • {friend.status === 'online' ? '🟢 Trực tuyến' : 'Hoạt động gần đây'}
+              {friend.username} • {friend.status === 'online' ? '🟢 Trực tuyến' : (friend.presenceText || 'Hoạt động gần đây')}
             </Text>
 
             {friend.lastMessage ? (
@@ -4796,8 +5094,8 @@ export default function App() {
   const [realIp, setRealIp] = useState<string>('14.225.21.84');
   const [totalActiveSeconds, setTotalActiveSeconds] = useState<number>(360);
 
-  // Authentication State (Đăng Nhập / Đăng Ký lúc mới vào App)
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  // Authentication State (Đăng Nhập / Đăng Ký lúc mới vào App - Khóa cứng trên web không bao giờ bắt đăng nhập lại)
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(Platform.OS === 'web' ? true : false);
   const [savedAccount, setSavedAccount] = useState<string>('');
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [authUsername, setAuthUsername] = useState('');
@@ -4908,6 +5206,15 @@ export default function App() {
   const [callStatusText, setCallStatusText] = useState<string>('Đang đổ chuông...');
   const [replyingToMessage, setReplyingToMessage] = useState<ChatMessage | null>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState<boolean>(false);
+  const [showChatMoreMenu, setShowChatMoreMenu] = useState<boolean>(false);
+  const [isRecordingVoice, setIsRecordingVoice] = useState<boolean>(false);
+  const [recordingDuration, setRecordingDuration] = useState<number>(0);
+  const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
+  const mediaRecorderRef = useRef<any>(null);
+  const audioStreamRef = useRef<any>(null);
+  const audioChunksRef = useRef<any[]>([]);
+  const currentAudioElementRef = useRef<any>(null);
+  const recordingTimerRef = useRef<any>(null);
   const [selectedMsgForAction, setSelectedMsgForAction] = useState<ChatMessage | null>(null);
   const chatScrollRef = useRef<ScrollView>(null);
 
@@ -4987,6 +5294,16 @@ export default function App() {
         height: 100dvh;
         height: 100vh; /* fallback for older browsers */
       }
+      /* Ẩn triệt để toàn bộ thanh cuộn trên web giả lập và desktop */
+      * {
+        scrollbar-width: none !important;
+        -ms-overflow-style: none !important;
+      }
+      *::-webkit-scrollbar {
+        display: none !important;
+        width: 0px !important;
+        height: 0px !important;
+      }
     `;
     style.id = 'lockx-mobile-keyboard-fix';
     if (!document.getElementById('lockx-mobile-keyboard-fix')) {
@@ -5063,20 +5380,43 @@ export default function App() {
       const res = await fetch(url);
       const data = await res.json();
       if (data && data.success && Array.isArray(data.data?.users)) {
-        const mapped: FriendUser[] = data.data.users.map((u: any) => ({
-          id: `srv-${u.id}`,
-          displayName: u.display_name || u.username,
-          username: u.username.startsWith('@') ? u.username : `@${u.username}`,
-          avatarColor: u.avatar_color || '#0A84FF',
-          avatarIcon: u.avatar_preset_id ? 'shield-checkmark' : 'person',
-          status: u.status === 'active' ? 'online' : 'offline',
-          isBot: u.username === 'support_bot' || u.username === 'gehihi',
-          bio: u.bio || (u.email ? `Email: ${u.email}` : ''),
-          lastMessage: 'Đã sẵn sàng kết nối bảo mật.',
-          lastTime: 'Vừa xong',
-          unreadCount: 0,
-        }));
+        const mapped: FriendUser[] = data.data.users.map((u: any) => {
+          const pres = computeUserPresence(u.updated_at || u.last_login, data.timestamp);
+          return {
+            id: `srv-${u.id}`,
+            displayName: u.display_name || u.username,
+            username: u.username.startsWith('@') ? u.username : `@${u.username}`,
+            avatarColor: u.avatar_color || '#0A84FF',
+            avatarIcon: u.avatar_preset_id ? 'shield-checkmark' : 'person',
+            status: pres.status,
+            presenceText: pres.text,
+            lastActiveTime: u.updated_at || u.last_login,
+            isBot: u.username === 'support_bot' || u.username === 'gehihi',
+            bio: u.bio || (u.email ? `Email: ${u.email}` : ''),
+            lastMessage: 'Đã sẵn sàng kết nối bảo mật.',
+            lastTime: 'Vừa xong',
+            unreadCount: 0,
+          };
+        });
         setServerUsers(mapped);
+        setFriendsList((prev) =>
+          prev.map((f) => {
+            if (f.isBot) return f;
+            const cleanF = (f.username || '').replace(/^@/, '').toLowerCase();
+            const match = mapped.find(
+              (m: FriendUser) => m.id === f.id || (m.username || '').replace(/^@/, '').toLowerCase() === cleanF
+            );
+            if (match) {
+              return {
+                ...f,
+                status: match.status,
+                presenceText: match.presenceText,
+                lastActiveTime: match.lastActiveTime,
+              };
+            }
+            return f;
+          })
+        );
       }
     } catch (err) {
       console.log('Error fetching server users:', err);
@@ -5148,6 +5488,7 @@ export default function App() {
   const [activeToolView, setActiveToolView] = useState<'ping' | 'pwd' | 'reset' | null>(null);
 
   // New Account Form State (Đã xóa UID & 2FA, ưu tiên Ghi Chú)
+  const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState('');
   const [newGame, setNewGame] = useState('Genshin Impact');
   const [newServer, setNewServer] = useState('Asia');
@@ -5278,6 +5619,29 @@ export default function App() {
             }
           } catch (e) {}
         }
+      })
+      .catch(() => {});
+
+    // 4c. Tải danh sách tài khoản thật trong Két Sắt (Loại bỏ triệt để dữ liệu mock ảo cũ)
+    AsyncStorage.getItem('lockx_accounts')
+      .then((s) => {
+        if (s) {
+          try {
+            const list = JSON.parse(s);
+            if (Array.isArray(list)) {
+              const cleaned = list.filter(
+                (item: any) =>
+                  !['1', '2', '3', '4'].includes(String(item.id)) &&
+                  !['Acc Chính Hu Tao C6', 'Acc Acheron E2S1', 'Nick Smurf Cao Thủ', 'Steam Thư Viện 200+ Game'].includes(item.title)
+              );
+              setAccounts(cleaned);
+              AsyncStorage.setItem('lockx_accounts', JSON.stringify(cleaned)).catch(() => {});
+              return;
+            }
+          } catch (e) {}
+        }
+        setAccounts([]);
+        AsyncStorage.setItem('lockx_accounts', JSON.stringify([])).catch(() => {});
       })
       .catch(() => {});
 
@@ -5442,8 +5806,12 @@ export default function App() {
     // 9. Tính toán dung lượng bộ nhớ đệm thực tế
     calculateRealCacheSize();
 
-    // 10. Tải danh sách người dùng thật từ Server MySQL
+    // 10. Tải danh sách người dùng thật từ Server MySQL & cập nhật định kỳ mỗi 30s
     fetchServerUsers();
+    const presenceTimer = setInterval(() => {
+      fetchServerUsers();
+    }, 30000);
+    return () => clearInterval(presenceTimer);
   }, [fetchServerUsers]);
 
   // Tự động tìm kiếm thời gian thực trên Server MySQL khi người dùng gõ tìm bạn bè
@@ -5969,7 +6337,9 @@ export default function App() {
       try {
         const ban = await checkServerUserBanStatus(cleanUser);
         if (ban.isBanned && isMounted) {
-          setIsAuthenticated(false);
+          if (Platform.OS !== 'web') {
+            setIsAuthenticated(false);
+          }
           setAuthError(ban.message);
           playAppleNotificationSound('warning');
           Alert.alert(
@@ -5990,6 +6360,10 @@ export default function App() {
   }, [isAuthenticated, userProfile.username, savedAccount, authUsername]);
 
   const handleLogout = () => {
+    if (Platform.OS === 'web') {
+      triggerToast('Bản Web được khóa cứng duy trì đăng nhập', 'LockX Web', 'info');
+      return;
+    }
     setIsAuthenticated(false);
     setAuthPassword('');
     setAuthConfirmPassword('');
@@ -6942,24 +7316,34 @@ export default function App() {
       }
     }
 
-    // 2. Kiểm tra trạng thái hoạt động thực tế của đối phương
-    let isTargetOnline = false;
-    try {
-      const presRes = await fetch(`http://127.0.0.1:8089/presence?username=${targetClean}`);
-      const presData = await presRes.json();
-      isTargetOnline = !!presData.isOnline;
-    } catch (e) {}
+    // 2. Chuyển sang trạng thái đổ chuông ngay lập tức (không bị kẹt ở "Đang kết nối...")
+    setCallPhase('ringing');
+    setCallStatusText('Đang đổ chuông...');
+    startRingtone(appSettings.ringtoneId || 'reflection');
 
-    if (isTargetOnline) {
-      setCallPhase('ringing');
-      setCallStatusText('Đang đổ chuông...');
-      startRingtone(appSettings.ringtoneId || 'reflection');
-    } else {
-      setCallPhase('connecting');
-      setCallStatusText('Đang kết nối...');
-    }
+    // 3. Gửi thông tin cuộc gọi lên Server aecongnghe.online để TẤT CẢ các thiết bị (kể cả điện thoại thật) đều đổ chuông
+    fetch('https://aecongnghe.online/api/messages/send.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sender_username: myClean,
+        sender_name: userProfile.displayName || myClean,
+        recipient_username: targetClean,
+        recipient_name: friendToCall.displayName || targetClean,
+        content: '📞 Cuộc gọi thoại LockX',
+        encrypted_payload: JSON.stringify({
+          action: 'call_invite',
+          caller: myClean,
+          callerName: userProfile.displayName || myClean,
+          callerAvatar: userProfile.avatarColor,
+          target: targetClean,
+          startTime: Date.now(),
+        }),
+        message_type: 'call_invite',
+      }),
+    }).catch(() => {});
 
-    // 3. Gửi thông tin cuộc gọi lên relay server
+    // Đồng thời gửi lên local relay nếu có
     fetch('http://127.0.0.1:8089/call', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -7009,7 +7393,22 @@ export default function App() {
       }
     }
 
-    // 2. Báo server đã nghe máy
+    // 2. Báo server aecongnghe.online đã nghe máy
+    fetch('https://aecongnghe.online/api/messages/send.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sender_username: myClean,
+        sender_name: userProfile.displayName || myClean,
+        recipient_username: targetClean,
+        recipient_name: incomingCallData.callerName || targetClean,
+        content: '📞 Đã kết nối cuộc gọi',
+        encrypted_payload: JSON.stringify({ action: 'call_accept', from: myClean, to: targetClean }),
+        message_type: 'call_accept',
+      }),
+    }).catch(() => {});
+
+    // Đồng thời gửi lên local relay
     fetch('http://127.0.0.1:8089/call/accept', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -7029,7 +7428,22 @@ export default function App() {
     const targetClean = incomingCallData.caller;
     const friendObj = incomingCallData.friendObj || friendsList.find(f => f.username.replace(/^@/, '').toLowerCase() === targetClean);
 
-    // Gửi decline lên server
+    // Báo server aecongnghe.online đã từ chối
+    fetch('https://aecongnghe.online/api/messages/send.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sender_username: myClean,
+        sender_name: userProfile.displayName || myClean,
+        recipient_username: targetClean,
+        recipient_name: incomingCallData.callerName || targetClean,
+        content: '📞 Cuộc gọi nhỡ',
+        encrypted_payload: JSON.stringify({ action: 'call_end', from: myClean, to: targetClean, reason: 'Từ chối' }),
+        message_type: 'call_end',
+      }),
+    }).catch(() => {});
+
+    // Gửi decline lên local relay
     fetch('http://127.0.0.1:8089/call/decline', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -7474,8 +7888,61 @@ export default function App() {
       } catch (err) {}
     }, 1200);
 
-    return () => clearInterval(timer);
+    // Đồng bộ trạng thái hoạt động người dùng THẬT từ Server MySQL (Tránh hiển thị ảo)
+    const checkServerRealPresence = async () => {
+      if (!activeChatFriend || activeChatFriend.isBot) return;
+      try {
+        const uRes = await fetch(`https://aecongnghe.online/api/users/list.php?search=${encodeURIComponent(targetClean)}&limit=1`);
+        const uData = await uRes.json();
+        if (uData?.success && Array.isArray(uData.data?.users) && uData.data.users.length > 0) {
+          const srvUser = uData.data.users[0];
+          const pres = computeUserPresence(srvUser.updated_at || srvUser.last_login, uData.timestamp);
+          setFriendPresenceStatus(pres.text);
+          setActiveChatFriend((prev) => {
+            if (!prev) return null;
+            return {
+              ...prev,
+              status: pres.status,
+              presenceText: pres.text,
+              lastActiveTime: srvUser.updated_at || srvUser.last_login,
+              displayName: srvUser.display_name || prev.displayName,
+              isVerified: srvUser.is_verified === '1' || srvUser.is_verified === 1 || prev.isVerified,
+            };
+          });
+        }
+      } catch (e) {}
+    };
+
+    checkServerRealPresence();
+    const serverPresenceInterval = setInterval(checkServerRealPresence, 5000);
+
+    return () => {
+      clearInterval(timer);
+      clearInterval(serverPresenceInterval);
+    };
   }, [activeChatFriend, userProfile.username, isCallingModalOpen]);
+
+  // Heartbeat định kỳ giữ trạng thái hoạt động thực tế trên MySQL Server khi đang mở app
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const cleanUser = (userProfile.username || '').replace(/^@/, '').trim();
+    if (!cleanUser) return;
+
+    const pingActivity = () => {
+      fetch('https://aecongnghe.online/api/auth/profile.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: cleanUser,
+          display_name: userProfile.displayName || cleanUser,
+        }),
+      }).catch(() => {});
+    };
+
+    pingActivity();
+    const hbTimer = setInterval(pingActivity, 60000);
+    return () => clearInterval(hbTimer);
+  }, [isAuthenticated, userProfile.username, userProfile.displayName]);
 
   // Lắng nghe sự kiện gõ phím, đã xem và chặn giữa các tab trong cùng trình duyệt
   useEffect(() => {
@@ -7697,11 +8164,68 @@ export default function App() {
             const msgTime = sm.created_at ? new Date(sm.created_at.replace(/-/g, '/')).getTime() : Date.now();
 
             let clientMsgId: string | null = null;
+            let syncAudioUri: string | undefined;
+            let syncAudioDuration: number | undefined;
+            let syncImageUri: string | undefined;
+            let syncFileUri: string | undefined;
+            let syncFileName: string | undefined;
+            let syncFileSize: string | undefined;
+            let parsedPayload: any = null;
             if (sm.encrypted_payload) {
               try {
-                const parsed = JSON.parse(sm.encrypted_payload);
-                if (parsed.clientMsgId) clientMsgId = parsed.clientMsgId;
+                parsedPayload = JSON.parse(sm.encrypted_payload);
+                if (parsedPayload.clientMsgId) clientMsgId = parsedPayload.clientMsgId;
+                if (parsedPayload.audioUri) syncAudioUri = parsedPayload.audioUri;
+                if (parsedPayload.audioDuration) syncAudioDuration = parsedPayload.audioDuration;
+                if (parsedPayload.imageUri) syncImageUri = parsedPayload.imageUri;
+                if (parsedPayload.fileUri) syncFileUri = parsedPayload.fileUri;
+                if (parsedPayload.fileName) syncFileName = parsedPayload.fileName;
+                if (parsedPayload.fileSize) syncFileSize = parsedPayload.fileSize;
               } catch (e) {}
+            }
+
+            // 0. Xử lý tín hiệu cuộc gọi thoại liên thiết bị (Web <-> Điện thoại thật)
+            if (sm.message_type === 'call_invite' || parsedPayload?.action === 'call_invite') {
+              if (isIncomingForMe) {
+                const callAge = Date.now() - msgTime;
+                if (callAge < 35000 && !isCallingModalOpen) {
+                  const friendObj = friendsList.find(f => f.username.replace(/^@/, '').toLowerCase() === otherUserClean) || {
+                    id: otherUserClean,
+                    displayName: sm.sender_name || otherUserClean,
+                    username: `@${otherUserClean}`,
+                    avatarColor: parsedPayload?.callerAvatar || '#0A84FF',
+                    avatarIcon: 'person',
+                    unreadCount: 0,
+                    status: 'online' as const,
+                  };
+                  setIncomingCallData({
+                    caller: otherUserClean,
+                    callerName: sm.sender_name || otherUserClean,
+                    callerAvatar: parsedPayload?.callerAvatar,
+                    startTime: msgTime,
+                    friendObj,
+                  });
+                  startRingtone(appSettings.ringtoneId || 'reflection');
+                  playAppleNotificationSound('info');
+                }
+              }
+            } else if (sm.message_type === 'call_accept' || parsedPayload?.action === 'call_accept') {
+              if (isCallingModalOpen && callRole === 'caller' && callPhase !== 'connected') {
+                setCallPhase('connected');
+                setCallStatusText('00:00');
+                stopRingtone();
+                playAppleNotificationSound('success');
+              }
+            } else if (sm.message_type === 'call_end' || parsedPayload?.action === 'call_end') {
+              if (isCallingModalOpen) {
+                stopRingtone();
+                setIsCallingModalOpen(false);
+                triggerToast('Cuộc gọi đã kết thúc', 'Apple Audio Call', 'info', 'call');
+              }
+              if (incomingCallData && incomingCallData.caller === otherUserClean) {
+                stopRingtone();
+                setIncomingCallData(null);
+              }
             }
 
             // 1. Kiểm tra đã có tin nhắn với id srv-${sm.id} chưa
@@ -7775,6 +8299,12 @@ export default function App() {
                 time: timeStr,
                 timestamp: msgTime,
                 deliveryStatus: isIncomingForMe ? undefined : 'delivered',
+                audioUri: syncAudioUri,
+                audioDuration: syncAudioDuration,
+                imageUri: syncImageUri,
+                fileUri: syncFileUri,
+                fileName: syncFileName,
+                fileSize: syncFileSize,
               };
               if (isIncomingForMe) {
                 const msgsWithSeen = currentMsgs.map((m) =>
@@ -7824,6 +8354,22 @@ export default function App() {
                         trigger: null,
                       }).catch(() => {});
                     } catch (e) {}
+
+                    // Ghi nhận vào lịch sử Trung tâm Thông báo (Chỉ tin nhắn mới)
+                    const newMsgNotif: AppNotification = {
+                      id: `notif-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+                      title: senderTitle,
+                      message: msgBody,
+                      type: 'info',
+                      time: 'Vừa xong',
+                      timestamp: Date.now(),
+                      read: false,
+                    };
+                    setNotifications((prev) => {
+                      const nextList = [newMsgNotif, ...prev.slice(0, 49)];
+                      AsyncStorage.setItem('lockx_notifications_history', JSON.stringify(nextList)).catch(() => {});
+                      return nextList;
+                    });
 
                     // Thông báo Web Push ngoài màn hình máy tính nếu dùng trình duyệt
                     if (Platform.OS === 'web' && typeof window !== 'undefined' && 'Notification' in window) {
@@ -8056,7 +8602,15 @@ export default function App() {
   }, [syncAdminNotifications]);
 
   // Gửi tin nhắn chat iMessage (Chat Thật Đồng Bộ MySQL Server & Chat AI Google Gemini)
-  const handleSendMessage = (customText?: string) => {
+  const handleSendMessage = (
+    customText?: string,
+    customAudioUri?: string,
+    customAudioDuration?: number,
+    customImageUri?: string,
+    customFileUri?: string,
+    customFileName?: string,
+    customFileSize?: string
+  ) => {
     const textToSend = (customText || chatInputText).trim();
     if (!textToSend || !activeChatFriend) return;
 
@@ -8097,6 +8651,12 @@ export default function App() {
       timestamp: msgTimestamp,
       replyTo: quotedReply,
       deliveryStatus: initStatus,
+      audioUri: customAudioUri,
+      audioDuration: customAudioDuration,
+      imageUri: customImageUri,
+      fileUri: customFileUri,
+      fileName: customFileName,
+      fileSize: customFileSize,
     };
 
     const currentList = getActiveChatMessages(currentFriend);
@@ -8122,6 +8682,12 @@ export default function App() {
         time: clockStr,
         timestamp: msgTimestamp,
         replyTo: quotedReply,
+        audioUri: customAudioUri,
+        audioDuration: customAudioDuration,
+        imageUri: customImageUri,
+        fileUri: customFileUri,
+        fileName: customFileName,
+        fileSize: customFileSize,
       }),
     }).catch(() => {});
 
@@ -8175,8 +8741,16 @@ export default function App() {
           recipient_username: recipientClean,
           recipient_name: currentFriend.displayName || recipientClean,
           content: textToSend,
-          encrypted_payload: JSON.stringify({ clientMsgId: uniqueClientMsgId }),
-          message_type: 'text',
+          encrypted_payload: JSON.stringify({
+            clientMsgId: uniqueClientMsgId,
+            audioUri: customAudioUri,
+            audioDuration: customAudioDuration,
+            imageUri: customImageUri,
+            fileUri: customFileUri,
+            fileName: customFileName,
+            fileSize: customFileSize,
+          }),
+          message_type: customImageUri ? 'image' : (customFileUri ? 'file' : (customAudioUri ? 'voice' : 'text')),
         }),
       })
       .then(() => {
@@ -8290,6 +8864,264 @@ export default function App() {
           setIsFriendTyping(false);
         }
       })();
+    }
+  };
+
+  // Khởi động ghi âm giọng nói thật 100% qua micro
+  const handleStartVoiceRecording = async () => {
+    setShowChatMoreMenu(false);
+    setShowEmojiPicker(false);
+    try {
+      audioChunksRef.current = [];
+      if (typeof navigator !== 'undefined' && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          audioStreamRef.current = stream;
+          if ((window as any).MediaRecorder) {
+            let options: any = {};
+            if ((window as any).MediaRecorder.isTypeSupported('audio/webm')) {
+              options = { mimeType: 'audio/webm' };
+            } else if ((window as any).MediaRecorder.isTypeSupported('audio/mp4')) {
+              options = { mimeType: 'audio/mp4' };
+            }
+            const mr = new (window as any).MediaRecorder(stream, options);
+            mediaRecorderRef.current = mr;
+            mr.ondataavailable = (event: any) => {
+              if (event.data && event.data.size > 0) {
+                audioChunksRef.current.push(event.data);
+              }
+            };
+            mr.start(100);
+          }
+        } catch (micErr) {
+          console.warn('Mic permission error:', micErr);
+          triggerToast('Vui lòng cho phép quyền micro trên trình duyệt để thu âm', 'Quyền Micro', 'warning', 'mic-off');
+        }
+      }
+      setIsRecordingVoice(true);
+      setRecordingDuration(0);
+      playAppleNotificationSound('info');
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingDuration((prev) => prev + 1);
+      }, 1000);
+    } catch (err) {
+      triggerToast('Không thể kích hoạt micro', 'Lỗi Micro', 'warning', 'mic-off');
+    }
+  };
+
+  // Dừng ghi âm và gửi tin nhắn thoại có file âm thanh thật 100%
+  const handleStopAndSendVoice = () => {
+    if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+    const finalSecs = recordingDuration || 1;
+    const durStr = `${Math.floor(finalSecs / 60)}:${(finalSecs % 60).toString().padStart(2, '0')}`;
+    
+    const mr = mediaRecorderRef.current;
+    if (mr && mr.state !== 'inactive') {
+      mr.onstop = () => {
+        try {
+          const mime = mr.mimeType || 'audio/webm';
+          const audioBlob = new Blob(audioChunksRef.current, { type: mime });
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const base64Audio = reader.result as string;
+            handleSendMessage(`🎙️ [Tin nhắn thoại • ${durStr}]`, base64Audio, finalSecs);
+          };
+          reader.onerror = () => {
+            handleSendMessage(`🎙️ [Tin nhắn thoại • ${durStr}]`);
+          };
+          reader.readAsDataURL(audioBlob);
+        } catch (e) {
+          handleSendMessage(`🎙️ [Tin nhắn thoại • ${durStr}]`);
+        }
+
+        if (audioStreamRef.current) {
+          try {
+            audioStreamRef.current.getTracks().forEach((track: any) => track.stop());
+          } catch (e) {}
+          audioStreamRef.current = null;
+        }
+      };
+
+      try {
+        mr.stop();
+      } catch (e) {
+        if (audioStreamRef.current) {
+          try {
+            audioStreamRef.current.getTracks().forEach((track: any) => track.stop());
+          } catch (e) {}
+          audioStreamRef.current = null;
+        }
+        handleSendMessage(`🎙️ [Tin nhắn thoại • ${durStr}]`);
+      }
+    } else {
+      if (audioStreamRef.current) {
+        try {
+          audioStreamRef.current.getTracks().forEach((track: any) => track.stop());
+        } catch (e) {}
+        audioStreamRef.current = null;
+      }
+      handleSendMessage(`🎙️ [Tin nhắn thoại • ${durStr}]`);
+    }
+
+    setIsRecordingVoice(false);
+    setRecordingDuration(0);
+    playAppleNotificationSound('success');
+  };
+
+  // Hủy bản ghi âm hiện tại
+  const handleCancelVoiceRecording = () => {
+    if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      try {
+        mediaRecorderRef.current.onstop = null;
+        mediaRecorderRef.current.stop();
+      } catch (e) {}
+    }
+    audioChunksRef.current = [];
+    if (audioStreamRef.current) {
+      try {
+        audioStreamRef.current.getTracks().forEach((track: any) => track.stop());
+      } catch (e) {}
+      audioStreamRef.current = null;
+    }
+    setIsRecordingVoice(false);
+    setRecordingDuration(0);
+    triggerToast('Đã hủy ghi âm', 'Microphone', 'info', 'trash-outline');
+  };
+
+  // Phát lại âm thanh tin nhắn thoại (phát file ghi âm thật 100%)
+  const handlePlayVoiceMessage = (msgId: string, audioUri?: string, duration?: number) => {
+    // Nếu đang phát chính tin nhắn này thì tạm dừng
+    if (playingVoiceId === msgId) {
+      if (currentAudioElementRef.current) {
+        try {
+          currentAudioElementRef.current.pause();
+          currentAudioElementRef.current.currentTime = 0;
+        } catch (e) {}
+        currentAudioElementRef.current = null;
+      }
+      setPlayingVoiceId(null);
+      return;
+    }
+
+    // Dừng âm thanh đang phát khác
+    if (currentAudioElementRef.current) {
+      try {
+        currentAudioElementRef.current.pause();
+        currentAudioElementRef.current.currentTime = 0;
+      } catch (e) {}
+      currentAudioElementRef.current = null;
+    }
+
+    setPlayingVoiceId(msgId);
+
+    // Nếu có file ghi âm thật (Data URL Base64 / Blob) -> Dùng HTML5 Audio hoặc ExpoAudio phát thật
+    if (audioUri) {
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        try {
+          const audio = new (window as any).Audio(audioUri);
+          currentAudioElementRef.current = audio;
+          audio.onended = () => {
+            setPlayingVoiceId(null);
+            currentAudioElementRef.current = null;
+          };
+          audio.onerror = (err: any) => {
+            console.warn('Audio play error, falling back:', err);
+            setPlayingVoiceId(null);
+            currentAudioElementRef.current = null;
+          };
+          audio.play().catch((playErr: any) => {
+            console.warn('Audio play error:', playErr);
+            setPlayingVoiceId(null);
+            currentAudioElementRef.current = null;
+          });
+          return;
+        } catch (e) {
+          console.warn('Error creating audio element:', e);
+        }
+      } else {
+        ExpoAudio.Sound.createAsync({ uri: audioUri }, { shouldPlay: true })
+          .then(({ sound }) => {
+            sound.setOnPlaybackStatusUpdate((status) => {
+              if (status.isLoaded && status.didJustFinish) {
+                setPlayingVoiceId(null);
+                sound.unloadAsync().catch(() => {});
+              }
+            });
+          })
+          .catch(() => setPlayingVoiceId(null));
+        return;
+      }
+    }
+
+    // Fallback cho tin nhắn thoại không kèm audioUri
+    playAppleNotificationSound('tap');
+    const durSecs = duration || 3;
+    setTimeout(() => {
+      setPlayingVoiceId((prev) => (prev === msgId ? null : prev));
+    }, durSecs * 1000);
+  };
+
+  // Chọn và gửi hình ảnh từ thiết bị
+  const handleSendImageMessage = () => {
+    setShowChatMoreMenu(false);
+    if (typeof document !== 'undefined') {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = (e: any) => {
+        const file = e.target?.files?.[0];
+        if (!file) return;
+        if (file.size > 10 * 1024 * 1024) {
+          triggerToast('Kích thước ảnh quá lớn (tối đa 10MB)', 'Gửi Ảnh', 'warning', 'warning-outline');
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+          const base64Data = reader.result as string;
+          handleSendMessage('📷 [Hình ảnh]', undefined, undefined, base64Data);
+        };
+        reader.onerror = () => {
+          triggerToast('Không thể đọc file ảnh đã chọn', 'Lỗi', 'warning', 'alert-circle-outline');
+        };
+        reader.readAsDataURL(file);
+      };
+      input.click();
+    } else {
+      triggerToast('Vui lòng chọn ảnh trên phiên bản Web/Desktop', 'Gửi Ảnh', 'info', 'image-outline');
+    }
+  };
+
+  // Chọn và gửi tệp tin từ thiết bị
+  const handleSendFileMessage = () => {
+    setShowChatMoreMenu(false);
+    if (typeof document !== 'undefined') {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.onchange = (e: any) => {
+        const file = e.target?.files?.[0];
+        if (!file) return;
+        if (file.size > 15 * 1024 * 1024) {
+          triggerToast('Kích thước tệp quá lớn (tối đa 15MB)', 'Gửi Tệp', 'warning', 'warning-outline');
+          return;
+        }
+        const sizeFormatted = file.size > 1024 * 1024
+          ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+          : `${Math.round(file.size / 1024)} KB`;
+        const reader = new FileReader();
+        reader.onload = () => {
+          const base64Data = reader.result as string;
+          handleSendMessage(`📎 [Tệp] ${file.name}`, undefined, undefined, undefined, base64Data, file.name, sizeFormatted);
+        };
+        reader.onerror = () => {
+          triggerToast('Không thể đọc tệp tin đã chọn', 'Lỗi', 'warning', 'alert-circle-outline');
+        };
+        reader.readAsDataURL(file);
+      };
+      input.click();
+    } else {
+      triggerToast('Vui lòng chọn tệp trên phiên bản Web/Desktop', 'Gửi Tệp', 'info', 'document-attach-outline');
     }
   };
 
@@ -8441,19 +9273,36 @@ export default function App() {
   };
 
   const filteredFriends = useMemo(() => {
-    return friendsList.filter((f) => {
-      const matchQuery = !friendSearchQuery.trim() ||
-        f.username.toLowerCase().includes(friendSearchQuery.toLowerCase()) ||
-        f.displayName.toLowerCase().includes(friendSearchQuery.toLowerCase());
-      if (!matchQuery) return false;
-      const isArchived = archivedFriendIds.includes(f.id);
-      if (friendFilter === 'archived') return isArchived;
-      if (isArchived && !friendSearchQuery.trim()) return false; // Ẩn khỏi danh sách chính khi đã lưu trữ
-      if (friendFilter === 'online') return f.status === 'online';
-      if (friendFilter === 'unread') return (f.unreadCount || 0) > 0;
-      return true;
-    });
-  }, [friendsList, friendSearchQuery, friendFilter, archivedFriendIds]);
+    return friendsList
+      .map((f) => {
+        if (f.isBot) return f;
+        const cleanU = (f.username || '').replace(/^@/, '').toLowerCase();
+        const match = serverUsers.find(
+          (u) => u.id === f.id || (u.username || '').replace(/^@/, '').toLowerCase() === cleanU
+        );
+        if (match) {
+          return {
+            ...f,
+            status: match.status,
+            presenceText: match.presenceText,
+            lastActiveTime: match.lastActiveTime,
+          };
+        }
+        return f;
+      })
+      .filter((f) => {
+        const matchQuery = !friendSearchQuery.trim() ||
+          f.username.toLowerCase().includes(friendSearchQuery.toLowerCase()) ||
+          f.displayName.toLowerCase().includes(friendSearchQuery.toLowerCase());
+        if (!matchQuery) return false;
+        const isArchived = archivedFriendIds.includes(f.id);
+        if (friendFilter === 'archived') return isArchived;
+        if (isArchived && !friendSearchQuery.trim()) return false; // Ẩn khỏi danh sách chính khi đã lưu trữ
+        if (friendFilter === 'online') return f.status === 'online';
+        if (friendFilter === 'unread') return (f.unreadCount || 0) > 0;
+        return true;
+      });
+  }, [friendsList, serverUsers, friendSearchQuery, friendFilter, archivedFriendIds]);
 
   const saveAppsToStorage = async (updated: PhoneAppItem[]) => {
     setPhoneApps(updated);
@@ -8883,58 +9732,14 @@ export default function App() {
     }
 
     const cleanMsg = msg.replace(/^[✓⚠️🔒🔓🎉•\s]+/, '').trim();
-    const notifId = `notif-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
-
-    // 1. Phát âm thanh chuông Apple iOS thật nếu bật Âm thanh thông báo
-    if (appSettings.notifySounds !== false) {
-      playAppleNotificationSound(resolvedType);
+    // 1. Âm thanh tương tác nhẹ (nếu bật âm thanh)
+    if (appSettings.notifySounds !== false && resolvedType === 'success') {
+      playAppleNotificationSound('tap');
     }
 
-    // Biểu ngữ trượt tinh tế ở đầu màn hình (Apple Dynamic Island Top Banner Toast)
+    // 2. Biểu ngữ trượt tinh tế ở đầu màn hình (Apple Dynamic Island Top Banner Popup)
+    // CHỈ hiển thị popup thành công, KHÔNG gửi thông báo đẩy hệ thống cho các thao tác chỉnh sửa/cập nhật thông thường
     showBannerToast(resolvedTitle, cleanMsg, resolvedType, resolvedIcon, resolvedColor);
-
-    // 2. Lưu vào danh sách Thông báo
-    const newNotif: AppNotification = {
-      id: notifId,
-      title: resolvedTitle,
-      message: cleanMsg,
-      type: resolvedType,
-      time: 'Vừa xong',
-      timestamp: Date.now(),
-      read: false,
-    };
-
-    setNotifications((prev) => {
-      const nextList = [newNotif, ...prev.slice(0, 49)];
-      AsyncStorage.setItem('lockx_notifications_history', JSON.stringify(nextList)).catch(() => {});
-      return nextList;
-    });
-
-    // 3. Gửi thông báo thực tế qua Expo Notifications & Web Notification API
-    if (appSettings.enableNotifications !== false) {
-      try {
-        Notifications.scheduleNotificationAsync({
-          content: {
-            title: resolvedTitle,
-            body: cleanMsg,
-            sound: appSettings.notifySounds ? 'default' : undefined,
-            badge: 1,
-          },
-          trigger: null,
-        }).catch(() => {});
-      } catch (e) {}
-
-      if (Platform.OS === 'web' && typeof window !== 'undefined' && 'Notification' in window) {
-        try {
-          if (Notification.permission === 'granted') {
-            new Notification(resolvedTitle, {
-              body: cleanMsg,
-              icon: '/assets/icon.png',
-            });
-          }
-        } catch (e) {}
-      }
-    }
   };
 
   // Lên lịch gửi thông báo đẩy thực tế ra bên ngoài màn hình khóa iPhone / Trình duyệt
@@ -9022,13 +9827,73 @@ export default function App() {
     return p;
   };
 
+  const handleOpenEditAccount = (acc: Account) => {
+    setEditingAccountId(acc.id);
+    setNewTitle(acc.title);
+    setNewGame(acc.game);
+    setNewServer(acc.server);
+    setNewCategory(acc.category);
+    setNewUser(acc.username);
+    setNewPwd(acc.password);
+    setNewIgn(acc.ign || '');
+    setNewNotes(acc.notes || '');
+    setVaultSubView('add');
+  };
+
+  const formatAccountCreatedDate = (acc: Account) => {
+    let ts = typeof acc.createdAt === 'number' ? acc.createdAt : Number(acc.id);
+    if (!ts || isNaN(ts) || ts < 1600000000000) {
+      ts = 1759000000000;
+    }
+    const d = new Date(ts);
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${hours}:${minutes} • ${day}/${month}/${year}`;
+  };
+
   const handleSaveAccount = () => {
     if (!newTitle.trim() || !newUser.trim()) {
       Alert.alert('Thiếu thông tin', 'Vui lòng nhập Tên gợi nhớ và Tài khoản.');
       return;
     }
+
+    if (editingAccountId) {
+      const now = Date.now();
+      const updatedAccounts = accounts.map((a) => {
+        if (a.id === editingAccountId) {
+          const updated: Account = {
+            ...a,
+            title: newTitle.trim(),
+            game: newGame,
+            server: newServer,
+            category: newCategory,
+            username: newUser.trim(),
+            password: newPwd || a.password,
+            ign: newIgn.trim() || undefined,
+            notes: newNotes.trim() || undefined,
+            updatedAt: now,
+          };
+          if (selectedAccount?.id === editingAccountId) {
+            setSelectedAccount(updated);
+          }
+          return updated;
+        }
+        return a;
+      });
+      setAccounts(updatedAccounts);
+      AsyncStorage.setItem('lockx_accounts', JSON.stringify(updatedAccounts)).catch(() => {});
+      setEditingAccountId(null);
+      setVaultSubView(selectedAccount ? 'detail' : 'list');
+      triggerToast('Đã cập nhật thông tin tài khoản thành công', 'Cập Nhật Két Sắt', 'success');
+      return;
+    }
+
+    const now = Date.now();
     const acc: Account = {
-      id: String(Date.now()),
+      id: String(now),
       title: newTitle.trim(),
       game: newGame,
       server: newServer,
@@ -9037,8 +9902,12 @@ export default function App() {
       password: newPwd || 'AppleSecurePass#2026',
       ign: newIgn.trim() || undefined,
       notes: newNotes.trim() || undefined,
+      createdAt: now,
+      updatedAt: now,
     };
-    setAccounts([acc, ...accounts]);
+    const nextAccs = [acc, ...accounts];
+    setAccounts(nextAccs);
+    AsyncStorage.setItem('lockx_accounts', JSON.stringify(nextAccs)).catch(() => {});
     setVaultSubView('list');
     triggerToast('Đã lưu tài khoản vào Keychain LockX');
   };
@@ -9050,7 +9919,9 @@ export default function App() {
         text: 'Xóa',
         style: 'destructive',
         onPress: () => {
-          setAccounts(accounts.filter((a) => a.id !== id));
+          const remaining = accounts.filter((a) => a.id !== id);
+          setAccounts(remaining);
+          AsyncStorage.setItem('lockx_accounts', JSON.stringify(remaining)).catch(() => {});
           setSelectedAccount(null);
           setVaultSubView('list');
           triggerToast('Đã xóa tài khoản');
@@ -9496,7 +10367,7 @@ export default function App() {
         </Animated.View>
       )}
 
-            {!isAuthenticated ? (
+            {(!isAuthenticated && Platform.OS !== 'web') ? (
         <EnterpriseAuthScreen
           authMode={authMode}
           setAuthMode={setAuthMode}
@@ -9540,19 +10411,26 @@ export default function App() {
               {/* Top Navigation Bar with Proper Safe Padding */}
               <View style={[styles.fullScreenNavBar, isLight && { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E5EA' }]}>
                 <TouchableOpacity
-                  onPress={() => setVaultSubView('list')}
+                  onPress={() => {
+                    setEditingAccountId(null);
+                    setVaultSubView(selectedAccount ? 'detail' : 'list');
+                  }}
                   style={styles.fullScreenNavBtn}
                   hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 >
                   <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor }]}>Hủy</Text>
                 </TouchableOpacity>
-                <Text style={[styles.fullScreenNavTitle, isLight && { color: '#000000' }]}>Thêm Tài Khoản</Text>
+                <Text style={[styles.fullScreenNavTitle, isLight && { color: '#000000' }]}>
+                  {editingAccountId ? 'Sửa Thông Tin Tài Khoản' : 'Thêm Tài Khoản'}
+                </Text>
                 <TouchableOpacity
                   onPress={handleSaveAccount}
                   style={styles.fullScreenNavBtn}
                   hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 >
-                  <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor, fontWeight: '700' }]}>Lưu</Text>
+                  <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor, fontWeight: '700' }]}>
+                    {editingAccountId ? 'Cập Nhật' : 'Lưu'}
+                  </Text>
                 </TouchableOpacity>
               </View>
 
@@ -9766,7 +10644,7 @@ export default function App() {
                   >
                     <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />
                     <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '700' }}>
-                      Lưu Tài Khoản Vào Két Sắt
+                      {editingAccountId ? 'Cập Nhật Thông Tin Tài Khoản' : 'Lưu Tài Khoản Vào Két Sắt'}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -9794,13 +10672,23 @@ export default function App() {
                 <Text style={[styles.fullScreenNavTitle, isLight && { color: '#000000' }]} numberOfLines={1}>
                   {selectedAccount.title}
                 </Text>
-                <TouchableOpacity
-                  onPress={() => handleDeleteAccount(selectedAccount.id)}
-                  style={styles.fullScreenNavBtn}
-                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                >
-                  <Ionicons name="trash-outline" size={20} color="#FF453A" />
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  {/* Nút sửa thông tin kế bên nút xóa trên thanh tiêu đề */}
+                  <TouchableOpacity
+                    onPress={() => handleOpenEditAccount(selectedAccount)}
+                    style={styles.fullScreenNavBtn}
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  >
+                    <Ionicons name="create-outline" size={21} color={appSettings.accentColor} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => handleDeleteAccount(selectedAccount.id)}
+                    style={styles.fullScreenNavBtn}
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  >
+                    <Ionicons name="trash-outline" size={20} color="#FF453A" />
+                  </TouchableOpacity>
+                </View>
               </View>
 
               <ScrollView
@@ -9861,6 +10749,13 @@ export default function App() {
                     </View>
                     <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 13 }}>
                       {selectedAccount.game} {selectedAccount.server ? `• ${selectedAccount.server}` : ''}
+                    </Text>
+                  </View>
+                  {/* Thời gian khi thêm tài khoản */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6 }}>
+                    <Ionicons name="time-outline" size={13} color="#8E8E93" />
+                    <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 12.5 }}>
+                      Đã thêm: {formatAccountCreatedDate(selectedAccount)}
                     </Text>
                   </View>
                 </View>
@@ -9943,26 +10838,54 @@ export default function App() {
                     <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontWeight: '600', fontSize: 15 }}>Sao Chép Toàn Bộ Thông Tin</Text>
                   </TouchableOpacity>
 
-                  <TouchableOpacity
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      paddingVertical: 14,
-                      borderRadius: 12,
-                      backgroundColor: 'rgba(255,69,58,0.1)',
-                      borderWidth: 1,
-                      borderColor: 'rgba(255,69,58,0.25)',
-                      gap: 6,
-                    }}
-                    activeOpacity={0.8}
-                    onPress={() => handleDeleteAccount(selectedAccount.id)}
-                  >
-                    <Ionicons name="trash-outline" size={16} color="#FF453A" />
-                    <Text style={{ color: '#FF453A', fontWeight: '700', fontSize: 15 }}>
-                      Xóa Tài Khoản Khỏi Két Sắt
-                    </Text>
-                  </TouchableOpacity>
+                  {/* Nút Sửa Thông Tin và Nút Xóa kế bên nhau */}
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <TouchableOpacity
+                      style={{
+                        flex: 1,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        paddingVertical: 14,
+                        borderRadius: 12,
+                        backgroundColor: appSettings.accentColor,
+                        gap: 6,
+                        shadowColor: appSettings.accentColor,
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.25,
+                        shadowRadius: 4,
+                      }}
+                      activeOpacity={0.8}
+                      onPress={() => handleOpenEditAccount(selectedAccount)}
+                    >
+                      <Ionicons name="create-outline" size={17} color="#FFFFFF" />
+                      <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 15 }}>
+                        Sửa Thông Tin
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={{
+                        flex: 1,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        paddingVertical: 14,
+                        borderRadius: 12,
+                        backgroundColor: 'rgba(255,69,58,0.1)',
+                        borderWidth: 1,
+                        borderColor: 'rgba(255,69,58,0.25)',
+                        gap: 6,
+                      }}
+                      activeOpacity={0.8}
+                      onPress={() => handleDeleteAccount(selectedAccount.id)}
+                    >
+                      <Ionicons name="trash-outline" size={17} color="#FF453A" />
+                      <Text style={{ color: '#FF453A', fontWeight: '700', fontSize: 15 }}>
+                        Xóa Tài Khoản
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </ScrollView>
             </KeyboardAvoidingView>
@@ -10010,6 +10933,7 @@ export default function App() {
                   <TouchableOpacity
                     style={styles.circlePlusBtn}
                     onPress={() => {
+                      setEditingAccountId(null);
                       setNewTitle('');
                       setNewUser('');
                       setNewPwd('');
@@ -10193,6 +11117,7 @@ export default function App() {
                   <TouchableOpacity
                     activeOpacity={0.75}
                     onPress={() => {
+                      setEditingAccountId(null);
                       setNewTitle('');
                       setNewUser('');
                       setNewPwd('');
@@ -10744,7 +11669,7 @@ export default function App() {
                   style={styles.fullScreenNavBtn}
                   hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 >
-                  <Ionicons name="chevron-back" size={20} color={appSettings.accentColor} />
+                  <ChatSvgIcon name="chevron-back" size={20} color={appSettings.accentColor} />
                   <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor }]}>{t.tabFriends}</Text>
                 </TouchableOpacity>
 
@@ -10759,19 +11684,19 @@ export default function App() {
                       {friendNicknames[activeChatFriend.id] || activeChatFriend.displayName}
                     </Text>
                     {activeChatFriend.isBot ? (
-                      <Ionicons name="sparkles" size={13} color="#BF5AF2" />
+                      <ChatSvgIcon name="sparkles" size={13} color="#BF5AF2" />
                     ) : (activeChatFriend.isVerified === true || activeChatFriend.id.includes('tuan') || activeChatFriend.username.includes('tuan')) ? (
-                      <Ionicons name="checkmark-circle" size={14} color="#007AFF" />
+                      <ChatSvgIcon name="verified" size={14} color="#007AFF" />
                     ) : null}
                     {mutedFriendIds.includes(activeChatFriend.id) && (
-                      <Ionicons name="notifications-off" size={12} color="#8E8E93" />
+                      <ChatSvgIcon name="notifications-off" size={12} color="#8E8E93" />
                     )}
                   </View>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 1 }}>
-                    {((activeChatFriend.status === 'online' || friendPresenceStatus.includes('🟢')) && !activeChatFriend.isBot && !blockedUsers.includes(activeChatFriend.id) && !blockedUsers.includes(activeChatFriend.username.replace(/^@/, '').toLowerCase()) && !blockedByUsers.includes(activeChatFriend.id) && !blockedByUsers.includes(activeChatFriend.username.replace(/^@/, '').toLowerCase()) && !isFriendTyping) && (
+                    {(!activeChatFriend.isBot && activeChatFriend.status === 'online' && (friendPresenceStatus === 'Đang hoạt động' || friendPresenceStatus.includes('🟢')) && !blockedUsers.includes(activeChatFriend.id) && !blockedUsers.includes(activeChatFriend.username.replace(/^@/, '').toLowerCase()) && !blockedByUsers.includes(activeChatFriend.id) && !blockedByUsers.includes(activeChatFriend.username.replace(/^@/, '').toLowerCase()) && !isFriendTyping) && (
                       <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#34C759' }} />
                     )}
-                    <Text style={{ color: (blockedByUsers.includes(activeChatFriend.id) || blockedByUsers.includes(activeChatFriend.username.replace(/^@/, '').toLowerCase())) ? '#8E8E93' : isFriendTyping ? appSettings.accentColor : (blockedUsers.includes(activeChatFriend.id) || blockedUsers.includes(activeChatFriend.username.replace(/^@/, '').toLowerCase())) ? '#FF3B30' : (friendPresenceStatus.includes('🟢') || activeChatFriend.status === 'online' ? '#34C759' : '#8E8E93'), fontSize: 11, fontWeight: '500' }}>
+                    <Text style={{ color: (blockedByUsers.includes(activeChatFriend.id) || blockedByUsers.includes(activeChatFriend.username.replace(/^@/, '').toLowerCase())) ? '#8E8E93' : isFriendTyping ? appSettings.accentColor : (blockedUsers.includes(activeChatFriend.id) || blockedUsers.includes(activeChatFriend.username.replace(/^@/, '').toLowerCase())) ? '#FF3B30' : (!activeChatFriend.isBot && activeChatFriend.status === 'online' && (friendPresenceStatus === 'Đang hoạt động' || friendPresenceStatus.includes('🟢')) ? '#34C759' : '#8E8E93'), fontSize: 11, fontWeight: '500' }}>
                       {(blockedByUsers.includes(activeChatFriend.id) || blockedByUsers.includes(activeChatFriend.username.replace(/^@/, '').toLowerCase()))
                         ? 'Không thể nhận tin'
                         : isFriendTyping
@@ -10780,11 +11705,11 @@ export default function App() {
                         ? '🚫 Đã chặn tài khoản'
                         : activeChatFriend.isBot
                         ? 'Trợ lý AI sẵn sàng'
-                        : (activeChatFriend.status === 'online' || friendPresenceStatus.includes('🟢'))
+                        : (!activeChatFriend.isBot && activeChatFriend.status === 'online' && (friendPresenceStatus === 'Đang hoạt động' || friendPresenceStatus.includes('🟢')))
                         ? 'Đang hoạt động'
                         : (friendPresenceStatus
                             ? friendPresenceStatus.replace(/^[🟢⚪\s]+/, '').replace(/Ngoại tuyến/g, 'Hoạt động gần đây')
-                            : 'Hoạt động gần đây')}
+                            : (activeChatFriend.presenceText || 'Hoạt động gần đây'))}
                     </Text>
                   </View>
                 </TouchableOpacity>
@@ -10812,7 +11737,7 @@ export default function App() {
                       }}
                       activeOpacity={0.7}
                     >
-                      <Ionicons name="key-outline" size={14} color={appSettings.accentColor} />
+                      <ChatSvgIcon name="key" size={14} color={appSettings.accentColor} />
                       <Text style={{ fontSize: 11, fontWeight: '700', color: appSettings.accentColor }}>AI Key</Text>
                     </TouchableOpacity>
                   )}
@@ -10942,6 +11867,7 @@ export default function App() {
                   }
                   const isMe = msg.sender === 'me';
                   const isSearchMatch = isChatSearchActive && !!chatSearchQuery.trim() && msg.text.toLowerCase().includes(chatSearchQuery.trim().toLowerCase());
+                  const isSingleEmoji = isOnlyEmojiMessage(msg.text) && !msg.imageUri && !msg.fileUri && !msg.audioUri && !msg.replyTo;
                   return (
                     <TouchableOpacity
                       key={msg.id}
@@ -10951,13 +11877,15 @@ export default function App() {
                       style={{
                         alignSelf: isMe ? 'flex-end' : 'flex-start',
                         maxWidth: '82%',
-                        marginBottom: (msg.reactions && msg.reactions.length > 0) ? 18 : 10,
+                        marginBottom: (msg.reactions && msg.reactions.length > 0) ? 18 : (isSingleEmoji ? 4 : 10),
                         position: 'relative',
                       }}
                     >
                       <View
                         style={{
-                          backgroundColor: msg.text.includes('Cuộc gọi nhỡ')
+                          backgroundColor: isSingleEmoji
+                            ? 'transparent'
+                            : msg.text.includes('Cuộc gọi nhỡ')
                             ? (isLight ? '#FFF0F0' : 'rgba(255, 59, 48, 0.14)')
                             : msg.text.includes('Cuộc gọi') && !isMe
                             ? (isLight ? '#F0F9F2' : 'rgba(52, 199, 89, 0.12)')
@@ -10965,11 +11893,13 @@ export default function App() {
                             ? themeBubbleColor
                             : (isLight ? '#FFFFFF' : '#2C2C2E'),
                           borderRadius: 18,
-                          paddingHorizontal: 15,
-                          paddingVertical: 10,
-                          borderBottomRightRadius: isMe ? 4 : 18,
-                          borderBottomLeftRadius: isMe ? 18 : 4,
-                          borderWidth: isSearchMatch
+                          paddingHorizontal: isSingleEmoji ? 4 : 15,
+                          paddingVertical: isSingleEmoji ? 2 : 10,
+                          borderBottomRightRadius: isSingleEmoji ? 18 : (isMe ? 4 : 18),
+                          borderBottomLeftRadius: isSingleEmoji ? 18 : (isMe ? 18 : 4),
+                          borderWidth: isSingleEmoji
+                            ? 0
+                            : isSearchMatch
                             ? 2
                             : msg.text.includes('Cuộc gọi nhỡ')
                             ? 1
@@ -10983,7 +11913,9 @@ export default function App() {
                             : (msg.text.includes('Cuộc gọi') && !isMe)
                             ? 'rgba(52, 199, 89, 0.35)'
                             : '#E5E5EA',
-                          shadowColor: isSearchMatch
+                          shadowColor: isSingleEmoji
+                            ? 'transparent'
+                            : isSearchMatch
                             ? '#FFD60A'
                             : msg.text.includes('Cuộc gọi nhỡ')
                             ? '#FF3B30'
@@ -10991,8 +11923,11 @@ export default function App() {
                             ? themeBubbleColor
                             : '#000000',
                           shadowOffset: { width: 0, height: 1 },
-                          shadowOpacity: isMe || msg.text.includes('Cuộc gọi nhỡ') || isSearchMatch ? 0.35 : 0.08,
+                          shadowOpacity: isSingleEmoji
+                            ? 0
+                            : (isMe || msg.text.includes('Cuộc gọi nhỡ') || isSearchMatch ? 0.35 : 0.08),
                           shadowRadius: isSearchMatch ? 6 : 3,
+                          elevation: isSingleEmoji ? 0 : 2,
                         }}
                       >
                         {/* Quoted Reply Preview Inside Bubble */}
@@ -11097,8 +12032,150 @@ export default function App() {
                               </Text>
                             </View>
                           </View>
+                        ) : msg.text.includes('Tin nhắn thoại') || msg.text.startsWith('🎙️') ? (
+                          /* Tin nhắn thoại ghi âm Micro (Voice Message) */
+                          <TouchableOpacity
+                            activeOpacity={0.8}
+                            onPress={() => handlePlayVoiceMessage(msg.id, msg.audioUri, msg.audioDuration)}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 10,
+                              minWidth: 165,
+                              paddingVertical: 3,
+                            }}
+                          >
+                            <View
+                              style={{
+                                width: 34,
+                                height: 34,
+                                borderRadius: 17,
+                                backgroundColor: isMe ? 'rgba(255, 255, 255, 0.25)' : (isLight ? '#E5E5EA' : '#3A3A3C'),
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                              }}
+                            >
+                              <ChatSvgIcon
+                                name={playingVoiceId === msg.id ? "pause" : "play"}
+                                size={17}
+                                color={isMe ? '#FFFFFF' : (isLight ? '#000000' : '#FFFFFF')}
+                                style={{ marginLeft: playingVoiceId === msg.id ? 0 : 2 }}
+                              />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              {/* Audio Waveform Graphic */}
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2.5, marginBottom: 4 }}>
+                                {[8, 14, 20, 11, 18, 24, 15, 21, 9, 16, 8, 13].map((h, wi) => (
+                                  <View
+                                    key={wi}
+                                    style={{
+                                      width: 2.5,
+                                      height: playingVoiceId === msg.id ? Math.max(6, (h * 1.3) % 24) : h,
+                                      borderRadius: 1.5,
+                                      backgroundColor: isMe
+                                        ? (playingVoiceId === msg.id ? '#FFFFFF' : 'rgba(255,255,255,0.7)')
+                                        : (playingVoiceId === msg.id ? appSettings.accentColor : '#8E8E93'),
+                                    }}
+                                  />
+                                ))}
+                              </View>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <Text style={{ fontSize: 11, fontWeight: '700', color: isMe ? 'rgba(255,255,255,0.95)' : (isLight ? '#3A3A3C' : '#8E8E93') }}>
+                                  {msg.text.includes('•') ? msg.text.split('•')[1]?.replace(']', '').trim() : '0:03'}
+                                </Text>
+                                <Text style={{ fontSize: 10, color: isMe ? 'rgba(255,255,255,0.75)' : '#8E8E93' }}>
+                                  {playingVoiceId === msg.id ? 'Đang phát...' : 'Ghi âm'}
+                                </Text>
+                              </View>
+                            </View>
+                          </TouchableOpacity>
+                        ) : msg.imageUri ? (
+                          /* 3. Tin nhắn Hình ảnh đính kèm */
+                          <View style={{ minWidth: 160, maxWidth: 260, borderRadius: 12, overflow: 'hidden' }}>
+                            <Image
+                              source={{ uri: msg.imageUri }}
+                              style={{ width: 240, height: 180, borderRadius: 12, backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E' }}
+                              resizeMode="cover"
+                            />
+                            {!!msg.text && !msg.text.startsWith('📷') && (
+                              <Text style={{ color: isMe ? '#FFFFFF' : (isLight ? '#000000' : '#FFFFFF'), fontSize: 14, marginTop: 6, lineHeight: 19 }}>
+                                {msg.text}
+                              </Text>
+                            )}
+                          </View>
+                        ) : msg.fileUri ? (
+                          /* 4. Tin nhắn Tệp tin đính kèm */
+                          <TouchableOpacity
+                            activeOpacity={0.8}
+                            onPress={() => {
+                              if (typeof window !== 'undefined' && msg.fileUri) {
+                                const a = document.createElement('a');
+                                a.href = msg.fileUri;
+                                a.download = msg.fileName || 'tap-tin-lockx';
+                                document.body.appendChild(a);
+                                a.click();
+                                document.body.removeChild(a);
+                              } else {
+                                triggerToast('Đang tải tệp tin...', 'Tệp Tin', 'info', 'download-outline');
+                              }
+                            }}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 10,
+                              minWidth: 180,
+                              maxWidth: 250,
+                              paddingVertical: 3,
+                            }}
+                          >
+                            <View
+                              style={{
+                                width: 38,
+                                height: 38,
+                                borderRadius: 10,
+                                backgroundColor: isMe ? 'rgba(255, 255, 255, 0.25)' : (isLight ? 'rgba(0,122,255,0.12)' : 'rgba(10,132,255,0.2)'),
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                              }}
+                            >
+                              <ChatSvgIcon name="document" size={22} color={isMe ? '#FFFFFF' : '#0A84FF'} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text
+                                numberOfLines={1}
+                                style={{
+                                  color: isMe ? '#FFFFFF' : (isLight ? '#000000' : '#FFFFFF'),
+                                  fontSize: 13,
+                                  fontWeight: '600',
+                                }}
+                              >
+                                {msg.fileName || 'Tệp tin đính kèm'}
+                              </Text>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                                <Text style={{ color: isMe ? 'rgba(255,255,255,0.75)' : '#8E8E93', fontSize: 11 }}>
+                                  {msg.fileSize || 'Tệp'}
+                                </Text>
+                                <Text style={{ color: isMe ? 'rgba(255,255,255,0.95)' : '#0A84FF', fontSize: 11, fontWeight: '700' }}>
+                                  • Tải về
+                                </Text>
+                              </View>
+                            </View>
+                          </TouchableOpacity>
+                        ) : isSingleEmoji ? (
+                          /* 5. Tin nhắn icon / emoji đơn lẻ: không nền bubble, icon to sắc nét, gọn gàng chuẩn Messenger */
+                          <View style={{ paddingHorizontal: 2, paddingVertical: 2, alignItems: 'center', justifyContent: 'center' }}>
+                            {['💖', '❤️', '💕', '💓', '💗', '💞', '💘'].includes(msg.text.trim()) ? (
+                              <ChatSvgIcon name="heart" size={42} color="#FF2D55" />
+                            ) : ['👍', '👍🏻', '👍🏼', '👍🏽', '👍🏾', '👍🏿'].includes(msg.text.trim()) ? (
+                              <ChatSvgIcon name="like" size={42} color="#0A84FF" />
+                            ) : (
+                              <Text style={{ fontSize: 38, lineHeight: 44 }}>
+                                {msg.text.trim()}
+                              </Text>
+                            )}
+                          </View>
                         ) : (
-                          /* 3. Tin nhắn văn bản thông thường */
+                          /* 6. Tin nhắn văn bản thông thường */
                           <Text style={{ color: isMe ? '#FFFFFF' : (isLight ? '#000000' : '#FFFFFF'), fontSize: 15, lineHeight: 21 }}>
                             {msg.text}
                           </Text>
@@ -11106,7 +12183,7 @@ export default function App() {
                       </View>
 
                       {/* Message Time and Delivery Status (Đã gửi / Đã nhận / Đã xem) */}
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: isMe ? 'flex-end' : 'flex-start', marginTop: 3, marginHorizontal: 4 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: isMe ? 'flex-end' : 'flex-start', marginTop: isSingleEmoji ? 1 : 3, marginHorizontal: isSingleEmoji ? 2 : 4 }}>
                         <Text style={{ color: isLight ? '#8E8E93' : '#636366', fontSize: 11 }}>
                           {msg.time}
                         </Text>
@@ -11114,17 +12191,17 @@ export default function App() {
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginLeft: 2 }}>
                             {(!msg.deliveryStatus || msg.deliveryStatus === 'seen') ? (
                               <>
-                                <Ionicons name="checkmark-done" size={13} color="#0A84FF" />
+                                <ChatSvgIcon name="check-all" size={13} color="#0A84FF" />
                                 <Text style={{ fontSize: 10, fontWeight: '600', color: '#0A84FF' }}>Đã xem</Text>
                               </>
                             ) : msg.deliveryStatus === 'delivered' ? (
                               <>
-                                <Ionicons name="checkmark-circle" size={12} color={isLight ? '#636366' : '#8E8E93'} />
+                                <ChatSvgIcon name="check" size={12} color={isLight ? '#636366' : '#8E8E93'} />
                                 <Text style={{ fontSize: 10, fontWeight: '500', color: isLight ? '#636366' : '#8E8E93' }}>Đã nhận</Text>
                               </>
                             ) : (
                               <>
-                                <Ionicons name="checkmark-circle-outline" size={12} color={isLight ? '#8E8E93' : '#636366'} />
+                                <ChatSvgIcon name="check" size={12} color={isLight ? '#8E8E93' : '#636366'} />
                                 <Text style={{ fontSize: 10, fontWeight: '500', color: isLight ? '#8E8E93' : '#636366' }}>Đã gửi</Text>
                               </>
                             )}
@@ -11253,7 +12330,7 @@ export default function App() {
                           alignItems: 'center',
                         }}
                       >
-                        <Ionicons name="close" size={14} color={isLight ? '#3C3C43' : '#FFFFFF'} />
+                        <ChatSvgIcon name="close" size={14} color={isLight ? '#3C3C43' : '#FFFFFF'} />
                       </TouchableOpacity>
                     </View>
                   )}
@@ -11292,114 +12369,416 @@ export default function App() {
                     </View>
                   )}
 
+                  {/* 3-Dots More Actions Menu Sheet */}
+                  {showChatMoreMenu && (
+                    <View
+                      style={{
+                        backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                        borderTopWidth: 0.5,
+                        borderTopColor: isLight ? '#E5E5EA' : 'rgba(255,255,255,0.08)',
+                        paddingHorizontal: 14,
+                        paddingVertical: 12,
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: isLight ? '#8E8E93' : '#8E8E93', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                          Tiện Ích Trò Chuyện LockX
+                        </Text>
+                        <TouchableOpacity onPress={() => setShowChatMoreMenu(false)}>
+                          <ChatSvgIcon name="close" size={18} color="#8E8E93" />
+                        </TouchableOpacity>
+                      </View>
+                      
+                      <ScrollView 
+                        horizontal 
+                        showsHorizontalScrollIndicator={false} 
+                        contentContainerStyle={{ flexDirection: 'row', gap: 10, paddingBottom: 4 }}
+                      >
+                        {/* 1. Ghi âm Mic Voice Note */}
+                        <TouchableOpacity
+                          style={{
+                            width: 82,
+                            backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E',
+                            borderRadius: 14,
+                            paddingVertical: 12,
+                            paddingHorizontal: 6,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderWidth: 1,
+                            borderColor: 'rgba(255, 45, 85, 0.25)',
+                          }}
+                          activeOpacity={0.7}
+                          onPress={handleStartVoiceRecording}
+                        >
+                          <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255, 45, 85, 0.15)', justifyContent: 'center', alignItems: 'center', marginBottom: 6 }}>
+                            <ChatSvgIcon name="mic" size={22} color="#FF2D55" />
+                          </View>
+                          <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 12, fontWeight: '700', textAlign: 'center' }}>
+                            Ghi Âm
+                          </Text>
+                          <Text style={{ color: '#8E8E93', fontSize: 10, marginTop: 2, textAlign: 'center' }}>
+                            Thoại mic
+                          </Text>
+                        </TouchableOpacity>
+
+                        {/* 2. Gửi Hình Ảnh */}
+                        <TouchableOpacity
+                          style={{
+                            width: 82,
+                            backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E',
+                            borderRadius: 14,
+                            paddingVertical: 12,
+                            paddingHorizontal: 6,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderWidth: 1,
+                            borderColor: 'rgba(48, 209, 88, 0.25)',
+                          }}
+                          activeOpacity={0.7}
+                          onPress={handleSendImageMessage}
+                        >
+                          <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(48, 209, 88, 0.15)', justifyContent: 'center', alignItems: 'center', marginBottom: 6 }}>
+                            <ChatSvgIcon name="image" size={22} color="#30D158" />
+                          </View>
+                          <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 12, fontWeight: '700', textAlign: 'center' }}>
+                            Gửi Ảnh
+                          </Text>
+                          <Text style={{ color: '#8E8E93', fontSize: 10, marginTop: 2, textAlign: 'center' }}>
+                            Media/Ảnh
+                          </Text>
+                        </TouchableOpacity>
+
+                        {/* 3. Gửi Tệp Tin */}
+                        <TouchableOpacity
+                          style={{
+                            width: 82,
+                            backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E',
+                            borderRadius: 14,
+                            paddingVertical: 12,
+                            paddingHorizontal: 6,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderWidth: 1,
+                            borderColor: 'rgba(10, 132, 255, 0.25)',
+                          }}
+                          activeOpacity={0.7}
+                          onPress={handleSendFileMessage}
+                        >
+                          <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(10, 132, 255, 0.15)', justifyContent: 'center', alignItems: 'center', marginBottom: 6 }}>
+                            <ChatSvgIcon name="document" size={22} color="#0A84FF" />
+                          </View>
+                          <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 12, fontWeight: '700', textAlign: 'center' }}>
+                            Gửi Tệp
+                          </Text>
+                          <Text style={{ color: '#8E8E93', fontSize: 10, marginTop: 2, textAlign: 'center' }}>
+                            Tập tin doc
+                          </Text>
+                        </TouchableOpacity>
+
+                        {/* 4. Đính kèm Két Sắt */}
+                        <TouchableOpacity
+                          style={{
+                            width: 82,
+                            backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E',
+                            borderRadius: 14,
+                            paddingVertical: 12,
+                            paddingHorizontal: 6,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderWidth: 1,
+                            borderColor: isLight ? '#E5E5EA' : 'rgba(255,255,255,0.06)',
+                          }}
+                          activeOpacity={0.7}
+                          onPress={() => {
+                            setShowChatMoreMenu(false);
+                            if (accounts.length > 0) {
+                              const firstAcc = accounts[0];
+                              handleSendMessage(`🔐 [Két Sắt LockX • ${firstAcc.title}] ${firstAcc.game} | User: ${firstAcc.username}`);
+                            } else {
+                              triggerToast('Chưa có tài khoản nào trong két sắt', 'Két Sắt LockX', 'info', 'shield-outline');
+                            }
+                          }}
+                        >
+                          <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(94, 92, 230, 0.15)', justifyContent: 'center', alignItems: 'center', marginBottom: 6 }}>
+                            <ChatSvgIcon name="shield" size={22} color="#5E5CE6" />
+                          </View>
+                          <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 12, fontWeight: '700', textAlign: 'center' }}>
+                            Két Sắt
+                          </Text>
+                          <Text style={{ color: '#8E8E93', fontSize: 10, marginTop: 2, textAlign: 'center' }}>
+                            Bảo mật
+                          </Text>
+                        </TouchableOpacity>
+
+                        {/* 5. Thay đổi Theme */}
+                        <TouchableOpacity
+                          style={{
+                            width: 82,
+                            backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E',
+                            borderRadius: 14,
+                            paddingVertical: 12,
+                            paddingHorizontal: 6,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderWidth: 1,
+                            borderColor: isLight ? '#E5E5EA' : 'rgba(255,255,255,0.06)',
+                          }}
+                          activeOpacity={0.7}
+                          onPress={() => {
+                            setShowChatMoreMenu(false);
+                            setIsThemeModalOpen(true);
+                          }}
+                        >
+                          <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255, 159, 10, 0.15)', justifyContent: 'center', alignItems: 'center', marginBottom: 6 }}>
+                            <ChatSvgIcon name="palette" size={22} color="#FF9F0A" />
+                          </View>
+                          <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 12, fontWeight: '700', textAlign: 'center' }}>
+                            Chủ Đề
+                          </Text>
+                          <Text style={{ color: '#8E8E93', fontSize: 10, marginTop: 2, textAlign: 'center' }}>
+                            Giao diện
+                          </Text>
+                        </TouchableOpacity>
+                      </ScrollView>
+                    </View>
+                  )}
+
                   {/* Chat Input Bar */}
                   <View
                     style={{
                       flexDirection: 'row',
-                      alignItems: 'flex-end',
-                      paddingHorizontal: 10,
-                      paddingTop: 6,
-                      paddingBottom: Platform.OS === 'ios' ? 22 : (Platform.OS === 'web' && webKeyboardHeight > 0) ? 6 : 10,
+                      alignItems: 'center',
+                      paddingHorizontal: 12,
+                      paddingTop: 8,
+                      paddingBottom: Platform.OS === 'ios' ? 24 : (Platform.OS === 'web' && webKeyboardHeight > 0) ? 8 : 22,
                       backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
                       borderTopWidth: 0.5,
                       borderTopColor: isLight ? '#E5E5EA' : 'rgba(255,255,255,0.08)',
                       gap: 8,
                     }}
                   >
-                    <TouchableOpacity
-                      style={{
-                        width: 34,
-                        height: 34,
-                        borderRadius: 17,
-                        backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E',
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                      }}
-                      onPress={() => triggerToast('Đính kèm dữ liệu tài khoản két sắt', 'Két Sắt LockX', 'info', 'shield-checkmark')}
-                    >
-                      <Ionicons name="add" size={20} color={appSettings.accentColor} />
-                    </TouchableOpacity>
+                    {isRecordingVoice ? (
+                      /* ACTIVE VOICE RECORDING CONTROLS */
+                      <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        {/* Cancel Recording Button */}
+                        <TouchableOpacity
+                          style={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: 18,
+                            backgroundColor: 'rgba(255, 69, 58, 0.15)',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                          }}
+                          onPress={handleCancelVoiceRecording}
+                        >
+                          <ChatSvgIcon name="trash" size={18} color="#FF453A" />
+                        </TouchableOpacity>
 
-                    <TouchableOpacity
-                      style={{
-                        width: 34,
-                        height: 34,
-                        borderRadius: 17,
-                        backgroundColor: showEmojiPicker ? (isLight ? '#E5E5EA' : '#3A3A3C') : (isLight ? '#F2F2F7' : '#2C2C2E'),
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                      }}
-                      onPress={() => setShowEmojiPicker(!showEmojiPicker)}
-                    >
-                      <Ionicons name="happy-outline" size={20} color={showEmojiPicker ? appSettings.accentColor : '#8E8E93'} />
-                    </TouchableOpacity>
+                        {/* Live Recording Pulsing Indicator & Waveform */}
+                        <View
+                          style={{
+                            flex: 1,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E',
+                            borderRadius: 20,
+                            paddingHorizontal: 14,
+                            height: 40,
+                            gap: 8,
+                          }}
+                        >
+                          <View
+                            style={{
+                              width: 10,
+                              height: 10,
+                              borderRadius: 5,
+                              backgroundColor: '#FF3B30',
+                            }}
+                          />
+                          <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 13, fontWeight: '700' }}>
+                            {`${Math.floor(recordingDuration / 60)}:${(recordingDuration % 60).toString().padStart(2, '0')}`}
+                          </Text>
+                          {/* Animated Sound Waveform Bars */}
+                          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3 }}>
+                            {[10, 18, 26, 14, 22, 30, 16, 24, 12, 28, 14, 20].map((h, i) => (
+                              <View
+                                key={i}
+                                style={{
+                                  width: 3,
+                                  height: Math.max(6, (h * ((recordingDuration % 3) + 1)) % 24),
+                                  borderRadius: 2,
+                                  backgroundColor: '#FF2D55',
+                                }}
+                              />
+                            ))}
+                          </View>
+                        </View>
 
-                    <TextInput
-                      style={{
-                        flex: 1,
-                        backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E',
-                        borderRadius: 20,
-                        paddingHorizontal: 16,
-                        paddingVertical: 8,
-                        color: isLight ? '#000000' : '#FFFFFF',
-                        fontSize: 16,
-                        maxHeight: 100,
-                      }}
-                      placeholder={
-                        activeChatFriend.isBot
-                          ? 'Hỏi Gehihi AI (Google Gemini)...'
-                          : chatSenderMode === 'me'
-                          ? (t.typeMessage || 'Nhắn tin bí mật...')
-                          : `Soạn tin từ ${activeChatFriend.displayName}...`
-                      }
-                      placeholderTextColor="#8E8E93"
-                      value={chatInputText}
-                      onChangeText={(val) => {
-                        setChatInputText(val);
-                        notifyTyping();
-                      }}
-                      onFocus={() => {
-                        // Scroll chat to bottom when input is focused (keyboard opening)
-                        setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 300);
-                        setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 600);
-                      }}
-                      multiline
-                      blurOnSubmit={false}
-                      onSubmitEditing={() => handleSendMessage()}
-                    />
-
-                    {chatInputText.trim().length === 0 ? (
-                      <TouchableOpacity
-                        style={{
-                          width: 36,
-                          height: 36,
-                          borderRadius: 18,
-                          backgroundColor: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.08)',
-                          justifyContent: 'center',
-                          alignItems: 'center',
-                        }}
-                        onPress={() => handleSendMessage(activeQuickEmoji)}
-                      >
-                        <Text style={{ fontSize: 22 }}>{activeQuickEmoji}</Text>
-                      </TouchableOpacity>
+                        {/* Send Voice Message Button */}
+                        <TouchableOpacity
+                          style={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: 18,
+                            backgroundColor: '#FF2D55',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            shadowColor: '#FF2D55',
+                            shadowOffset: { width: 0, height: 2 },
+                            shadowOpacity: 0.35,
+                            shadowRadius: 4,
+                          }}
+                          onPress={handleStopAndSendVoice}
+                        >
+                          <ChatSvgIcon name="send" size={18} color="#FFFFFF" />
+                        </TouchableOpacity>
+                      </View>
                     ) : (
-                      <TouchableOpacity
-                        style={{
-                          width: 34,
-                          height: 34,
-                          borderRadius: 17,
-                          backgroundColor: activeChatFriend.isBot
-                            ? '#BF5AF2'
-                            : (chatSenderMode === 'friend'
-                            ? activeChatFriend.avatarColor
-                            : themeBubbleColor),
-                          justifyContent: 'center',
-                          alignItems: 'center',
-                        }}
-                        onPress={() => handleSendMessage()}
-                      >
-                        <Ionicons name="arrow-up" size={18} color="#FFFFFF" />
-                      </TouchableOpacity>
+                      /* STANDARD CHAT INPUT CONTROLS */
+                      <>
+                        {/* Nút 3 Chấm (...) mở tiện ích mở rộng có chức năng ghi âm mic */}
+                        <TouchableOpacity
+                          style={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: 18,
+                            backgroundColor: showChatMoreMenu ? (isLight ? '#E5E5EA' : '#3A3A3C') : (isLight ? '#F2F2F7' : '#2C2C2E'),
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                          }}
+                          onPress={() => {
+                            setShowChatMoreMenu(!showChatMoreMenu);
+                            setShowEmojiPicker(false);
+                          }}
+                        >
+                          <ChatSvgIcon
+                            name="ellipsis"
+                            size={19}
+                            color={showChatMoreMenu ? appSettings.accentColor : (isLight ? '#000000' : '#FFFFFF')}
+                          />
+                        </TouchableOpacity>
+
+                        {/* Nút Emoji */}
+                        <TouchableOpacity
+                          style={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: 18,
+                            backgroundColor: showEmojiPicker ? (isLight ? '#E5E5EA' : '#3A3A3C') : (isLight ? '#F2F2F7' : '#2C2C2E'),
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                          }}
+                          onPress={() => {
+                            setShowEmojiPicker(!showEmojiPicker);
+                            setShowChatMoreMenu(false);
+                          }}
+                        >
+                          <ChatSvgIcon
+                            name="happy"
+                            size={20}
+                            color={showEmojiPicker ? appSettings.accentColor : '#8E8E93'}
+                          />
+                        </TouchableOpacity>
+
+                        {/* Ô Nhập Tin Nhắn */}
+                        <TextInput
+                          style={{
+                            flex: 1,
+                            backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E',
+                            borderRadius: 20,
+                            paddingHorizontal: 16,
+                            paddingVertical: Platform.OS === 'ios' ? 8 : 7,
+                            color: isLight ? '#000000' : '#FFFFFF',
+                            fontSize: 15,
+                            minHeight: 38,
+                            maxHeight: 100,
+                          }}
+                          placeholder={
+                            activeChatFriend.isBot
+                              ? 'Hỏi Gehihi AI (Google Gemini)...'
+                              : chatSenderMode === 'me'
+                              ? (t.typeMessage || 'Nhắn tin bí mật...')
+                              : `Soạn tin từ ${activeChatFriend.displayName}...`
+                          }
+                          placeholderTextColor="#8E8E93"
+                          value={chatInputText}
+                          onChangeText={(val) => {
+                            setChatInputText(val);
+                            notifyTyping();
+                          }}
+                          onFocus={() => {
+                            setShowChatMoreMenu(false);
+                            setShowEmojiPicker(false);
+                            setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 300);
+                            setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 600);
+                          }}
+                          multiline
+                          blurOnSubmit={false}
+                          onSubmitEditing={() => handleSendMessage()}
+                        />
+
+                        {chatInputText.trim().length === 0 ? (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            {/* Nút Micro Ghi Âm Trực Tiếp SVG */}
+                            <TouchableOpacity
+                              style={{
+                                width: 36,
+                                height: 36,
+                                borderRadius: 18,
+                                backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E',
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                              }}
+                              onPress={handleStartVoiceRecording}
+                            >
+                              <ChatSvgIcon name="mic" size={20} color="#FF2D55" />
+                            </TouchableOpacity>
+
+                            {/* Nút Quick Emoji SVG */}
+                            <TouchableOpacity
+                              style={{
+                                width: 36,
+                                height: 36,
+                                borderRadius: 18,
+                                backgroundColor: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.08)',
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                              }}
+                              onPress={() => handleSendMessage(activeQuickEmoji)}
+                            >
+                              <ChatSvgIcon
+                                name={activeQuickEmoji === '👍' ? 'like' : 'heart'}
+                                size={20}
+                                color={activeQuickEmoji === '👍' ? '#0A84FF' : '#FF2D55'}
+                              />
+                            </TouchableOpacity>
+                          </View>
+                        ) : (
+                          /* Nút Gửi Tin Nhắn SVG */
+                          <TouchableOpacity
+                            style={{
+                              width: 36,
+                              height: 36,
+                              borderRadius: 18,
+                              backgroundColor: activeChatFriend.isBot
+                                ? '#BF5AF2'
+                                : (chatSenderMode === 'friend'
+                                ? activeChatFriend.avatarColor
+                                : themeBubbleColor),
+                              justifyContent: 'center',
+                              alignItems: 'center',
+                              shadowColor: themeBubbleColor,
+                              shadowOffset: { width: 0, height: 2 },
+                              shadowOpacity: 0.25,
+                              shadowRadius: 3,
+                            }}
+                            onPress={() => handleSendMessage()}
+                          >
+                            <ChatSvgIcon name="send" size={18} color="#FFFFFF" />
+                          </TouchableOpacity>
+                        )}
+                      </>
                     )}
                   </View>
                 </>
@@ -14256,7 +15635,7 @@ export default function App() {
                         />
                       </View>
                     )}
-                    {viewingFriendProfile.status === 'online' && (
+                    {viewingFriendProfile.status === 'online' && !viewingFriendProfile.isBot && (friendPresenceStatus === 'Đang hoạt động' || friendPresenceStatus.includes('🟢')) && (
                       <View
                         style={{
                           position: 'absolute',
@@ -16950,7 +18329,7 @@ export default function App() {
 
             {/* Scrollable Feature Cards Container */}
             <ScrollView
-              showsVerticalScrollIndicator={true}
+              showsVerticalScrollIndicator={false}
               contentContainerStyle={{ padding: 20, gap: 14 }}
               style={{ flex: 1 }}
             >
