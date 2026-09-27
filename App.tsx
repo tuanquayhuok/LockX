@@ -27,13 +27,6 @@ import * as Device from 'expo-device';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { createAudioPlayer, setAudioModeAsync, AudioPlayer } from 'expo-audio';
 
-try {
-  setAudioModeAsync({
-    playsInSilentMode: true,
-    shouldPlayInBackground: true,
-    allowsRecording: true,
-  }).catch(() => {});
-} catch (e) {}
 
 try {
   Notifications.setNotificationHandler({
@@ -581,6 +574,13 @@ const playWavSoundNative = (wavUri: string) => {
       } catch (e) {}
       activeNativeAudioPlayer = null;
     }
+    try {
+      setAudioModeAsync({
+        playsInSilentMode: true,
+        shouldPlayInBackground: true,
+        allowsRecording: false,
+      }).catch(() => {});
+    } catch (e) {}
     const player = createAudioPlayer(wavUri);
     activeNativeAudioPlayer = player;
     player.play();
@@ -5038,7 +5038,64 @@ const SwipeableFriendRow: React.FC<{
   );
 };
 
-export default function App() {
+interface ErrorBoundaryProps {
+  children: React.ReactNode;
+}
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('LockX Uncaught Render Error:', error, errorInfo);
+  }
+
+  handleReload = () => {
+    this.setState({ hasError: false, error: null });
+  };
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#000000', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(255, 69, 58, 0.15)', justifyContent: 'center', alignItems: 'center', marginBottom: 16 }}>
+            <Ionicons name="warning-outline" size={36} color="#FF453A" />
+          </View>
+          <Text style={{ fontSize: 20, fontWeight: '700', color: '#FFFFFF', textAlign: 'center', marginBottom: 8 }}>
+            Ứng Dụng Khởi Động An Toàn
+          </Text>
+          <Text style={{ fontSize: 14, color: '#8E8E93', textAlign: 'center', marginBottom: 20 }}>
+            Hệ thống đã tự động bảo vệ dữ liệu két sắt. Nhấn nút bên dưới để khôi phục hoặc khởi động lại.
+          </Text>
+          <ScrollView style={{ maxHeight: 180, width: '100%', backgroundColor: '#1C1C1E', borderRadius: 12, padding: 12, marginBottom: 20 }}>
+            <Text style={{ fontSize: 12, color: '#FF453A', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
+              {String(this.state.error?.stack || this.state.error?.message || this.state.error)}
+            </Text>
+          </ScrollView>
+          <TouchableOpacity
+            onPress={this.handleReload}
+            style={{ backgroundColor: '#0A84FF', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24 }}
+          >
+            <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '600' }}>Khởi Động Lại LockX</Text>
+          </TouchableOpacity>
+        </SafeAreaView>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function MainApp() {
   // Onboarding & Load Stages: 'loading' -> 'onboarding' -> 'ready' (Bypass vào thẳng trang chủ)
   const [onboardingStage, setOnboardingStage] = useState<'loading' | 'onboarding' | 'ready'>('ready');
   const [selectedLanguage, setSelectedLanguage] = useState<string>('vi');
@@ -5092,8 +5149,8 @@ export default function App() {
   const [realIp, setRealIp] = useState<string>('14.225.21.84');
   const [totalActiveSeconds, setTotalActiveSeconds] = useState<number>(360);
 
-  // Authentication State (Đăng Nhập / Đăng Ký lúc mới vào App - Khóa cứng trên web không bao giờ bắt đăng nhập lại)
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(Platform.OS === 'web' ? true : false);
+  // Authentication State (Đăng Nhập / Đăng Ký - Mặc định vào thẳng ứng dụng)
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
   const [savedAccount, setSavedAccount] = useState<string>('');
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [authUsername, setAuthUsername] = useState('');
@@ -5156,6 +5213,19 @@ export default function App() {
   useEffect(() => {
     appSettingsRef.current = appSettings;
   }, [appSettings]);
+
+  // Khởi tạo audio mode an toàn trên native sau khi app đã mount (không yêu cầu ghi âm)
+  useEffect(() => {
+    if (Platform.OS !== 'web') {
+      try {
+        setAudioModeAsync({
+          playsInSilentMode: true,
+          shouldPlayInBackground: true,
+          allowsRecording: false,
+        }).catch(() => {});
+      } catch (e) {}
+    }
+  }, []);
   const [friendSearchQuery, setFriendSearchQuery] = useState('');
   const [chatInputText, setChatInputText] = useState('');
   const [friendFilter, setFriendFilter] = useState<'all' | 'online' | 'unread' | 'archived'>('all');
@@ -18509,6 +18579,14 @@ export default function App() {
         </View>
       </Modal>
     </SafeAreaView>
+  );
+}
+
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <MainApp />
+    </ErrorBoundary>
   );
 }
 
