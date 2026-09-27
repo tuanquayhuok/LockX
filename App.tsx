@@ -4862,6 +4862,20 @@ export default function App() {
   const [geminiApiKey, setGeminiApiKey] = useState<string>('');
   const [showGeminiKeyModal, setShowGeminiKeyModal] = useState<boolean>(false);
   const [tempGeminiKey, setTempGeminiKey] = useState<string>('');
+
+  // Onboarding Feature Showcase Popup Modal for New Users
+  const [showOnboardingModal, setShowOnboardingModal] = useState<boolean>(false);
+  const [dontShowOnboardingAgain, setDontShowOnboardingAgain] = useState<boolean>(true);
+
+  const handleCloseOnboardingModal = async () => {
+    setShowOnboardingModal(false);
+    const cleanUser = (userProfile.username || savedAccount || authUsername || 'user').replace(/^@/, '').trim().toLowerCase();
+    if (dontShowOnboardingAgain && cleanUser) {
+      try {
+        await AsyncStorage.setItem(`lockx_onboarding_done_${cleanUser}`, 'true');
+      } catch (e) {}
+    }
+  };
   const [blockedUsers, setBlockedUsers] = useState<string[]>([]);
   const [blockedByUsers, setBlockedByUsers] = useState<string[]>([]);
   const [friendPresenceStatus, setFriendPresenceStatus] = useState<string>('');
@@ -5883,6 +5897,7 @@ export default function App() {
     const newLog = createRealLoginRecord('Passcode', true);
     saveLoginHistory([newLog, ...loginHistory.filter(x => x.id !== 'current-session')]);
     setIsAuthenticated(true);
+    setShowOnboardingModal(true);
     triggerToast(`Tài khoản @${trimmedUser} đã được đăng ký và đồng bộ máy chủ LockX.`, 'Đăng Ký Thành Công', 'success', true);
   };
 
@@ -5910,6 +5925,20 @@ export default function App() {
       triggerToast('Xác thực sinh trắc học Face ID thành công. Két sắt đã mở.', 'Đăng Nhập Thành Công', 'success');
     });
   };
+
+  // Kiểm tra hiển thị Popup Giới thiệu Tính năng Web dành cho người dùng mới
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const cleanUser = (userProfile.username || savedAccount || authUsername || '').replace(/^@/, '').trim().toLowerCase();
+    if (!cleanUser) return;
+
+    const onboardingKey = `lockx_onboarding_done_${cleanUser}`;
+    AsyncStorage.getItem(onboardingKey).then((val) => {
+      if (val !== 'true') {
+        setTimeout(() => setShowOnboardingModal(true), 400);
+      }
+    }).catch(() => {});
+  }, [isAuthenticated, userProfile.username]);
 
   // Giám sát thời gian thực: Nếu đang ở màn hình chính mà trên web admin BAN thì app lập tức hiện thông báo ban và đăng xuất!
   useEffect(() => {
@@ -13973,6 +14002,23 @@ export default function App() {
                   {t.aboutLockX}
                 </Text>
                 <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }]}>
+                  {/* Hướng Dẫn & Tính Năng Web */}
+                  <TouchableOpacity
+                    style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}
+                    activeOpacity={0.7}
+                    onPress={() => setShowOnboardingModal(true)}
+                  >
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: appSettings.accentColor }]}>
+                      <Ionicons name="sparkles" size={18} color="#FFFFFF" />
+                    </View>
+                    <View style={[styles.cellContent, { flex: 1 }]}>
+                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '400' }}>
+                        Hướng Dẫn & Tính Năng Web
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color={isLight ? '#C7C7CC' : '#48484A'} />
+                  </TouchableOpacity>
+
                   {/* Đặt lại tất cả cài đặt */}
                   <TouchableOpacity
                     style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}
@@ -16721,6 +16767,280 @@ export default function App() {
               </View>
             </ScrollView>
           </SafeAreaView>
+        </View>
+      </Modal>
+
+      {/* MODAL FULL TRANG: GIỚI THIỆU TÍNH NĂNG WEB DÀNH CHO USER MỚI */}
+      <Modal
+        visible={showOnboardingModal}
+        animationType="fade"
+        transparent
+        onRequestClose={handleCloseOnboardingModal}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0, 0, 0, 0.82)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            paddingHorizontal: 16,
+            paddingVertical: 20,
+          }}
+        >
+          <View
+            style={{
+              width: '100%',
+              maxWidth: 520,
+              maxHeight: '90%',
+              backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+              borderRadius: 24,
+              overflow: 'hidden',
+              borderWidth: 1,
+              borderColor: isLight ? '#E5E5EA' : 'rgba(255, 255, 255, 0.12)',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.5,
+              shadowRadius: 20,
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            {/* Modal Header */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingHorizontal: 20,
+                paddingVertical: 16,
+                borderBottomWidth: 0.5,
+                borderBottomColor: isLight ? '#E5E5EA' : 'rgba(255, 255, 255, 0.08)',
+                backgroundColor: isLight ? '#F9F9FB' : '#2C2C2E',
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <View
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 20,
+                    backgroundColor: appSettings.accentColor,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    shadowColor: appSettings.accentColor,
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.4,
+                    shadowRadius: 4,
+                  }}
+                >
+                  <Ionicons name="sparkles" size={22} color="#FFFFFF" />
+                </View>
+                <View>
+                  <Text style={{ fontSize: 17, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
+                    Tính Năng LockX Enterprise
+                  </Text>
+                  <Text style={{ fontSize: 12, color: isLight ? '#6C6C70' : '#8E8E93' }}>
+                    Hướng dẫn toàn diện dành cho thành viên mới
+                  </Text>
+                </View>
+              </View>
+
+              {/* Nút đóng Dấu X */}
+              <TouchableOpacity
+                onPress={handleCloseOnboardingModal}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                  backgroundColor: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.12)',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}
+              >
+                <Ionicons name="close" size={20} color={isLight ? '#3C3C43' : '#FFFFFF'} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Scrollable Feature Cards Container */}
+            <ScrollView
+              showsVerticalScrollIndicator={true}
+              contentContainerStyle={{ padding: 20, gap: 14 }}
+              style={{ flex: 1 }}
+            >
+              {/* Banner Chào mừng */}
+              <View
+                style={{
+                  backgroundColor: isLight ? 'rgba(10, 132, 255, 0.08)' : 'rgba(10, 132, 255, 0.15)',
+                  borderRadius: 16,
+                  padding: 14,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 12,
+                  borderWidth: 1,
+                  borderColor: 'rgba(10, 132, 255, 0.25)',
+                }}
+              >
+                <Ionicons name="shield-checkmark" size={28} color={appSettings.accentColor} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: appSettings.accentColor }}>
+                    Chào mừng {userProfile.displayName || 'bạn'} gia nhập LockX!
+                  </Text>
+                  <Text style={{ fontSize: 12, color: isLight ? '#3C3C43' : '#AEAEB2', marginTop: 2 }}>
+                    Dưới đây là tổng hợp các tính năng cao cấp của Web sẵn sàng phục vụ bạn:
+                  </Text>
+                </View>
+              </View>
+
+              {/* Feature 1 */}
+              <View style={{ flexDirection: 'row', gap: 14, alignItems: 'flex-start', backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E', padding: 14, borderRadius: 16 }}>
+                <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: '#0A84FF', justifyContent: 'center', alignItems: 'center' }}>
+                  <Ionicons name="lock-closed" size={20} color="#FFFFFF" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
+                    1. Két Sắt Bảo Mật 256-Bit & Face ID
+                  </Text>
+                  <Text style={{ fontSize: 12.5, color: isLight ? '#6C6C70' : '#8E8E93', marginTop: 3, lineHeight: 17 }}>
+                    Lưu trữ an toàn mật khẩu, thẻ ngân hàng & tài khoản gia đình. Tích hợp mở khóa Face ID sinh trắc học chuẩn Secure Enclave.
+                  </Text>
+                </View>
+              </View>
+
+              {/* Feature 2 */}
+              <View style={{ flexDirection: 'row', gap: 14, alignItems: 'flex-start', backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E', padding: 14, borderRadius: 16 }}>
+                <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: '#30D158', justifyContent: 'center', alignItems: 'center' }}>
+                  <Ionicons name="chatbubbles" size={20} color="#FFFFFF" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
+                    2. Nhắn Tin Mã Hóa Bí Mật iMessage/Messenger
+                  </Text>
+                  <Text style={{ fontSize: 12.5, color: isLight ? '#6C6C70' : '#8E8E93', marginTop: 3, lineHeight: 17 }}>
+                    Nhắn tin P2P real-time với mã hóa đầu cuối. Đổi biệt danh, chủ đề màu sắc, biểu tượng cảm xúc nhanh & trả lời tin nhắn trích dẫn.
+                  </Text>
+                </View>
+              </View>
+
+              {/* Feature 3 */}
+              <View style={{ flexDirection: 'row', gap: 14, alignItems: 'flex-start', backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E', padding: 14, borderRadius: 16 }}>
+                <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: '#FF9500', justifyContent: 'center', alignItems: 'center' }}>
+                  <Ionicons name="call" size={20} color="#FFFFFF" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
+                    3. Cuộc Gọi Thoại Real-Time & 6+ Nhạc Chuông
+                  </Text>
+                  <Text style={{ fontSize: 12.5, color: isLight ? '#6C6C70' : '#8E8E93', marginTop: 3, lineHeight: 17 }}>
+                    Gọi thoại trực tiếp không độ trễ. Tùy chỉnh 6+ bộ nhạc chuông Apple độc quyền (Reflection, Marimba, Opening, Radar, Silk, Twinkle).
+                  </Text>
+                </View>
+              </View>
+
+              {/* Feature 4 */}
+              <View style={{ flexDirection: 'row', gap: 14, alignItems: 'flex-start', backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E', padding: 14, borderRadius: 16 }}>
+                <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: '#BF5AF2', justifyContent: 'center', alignItems: 'center' }}>
+                  <Ionicons name="sparkles" size={20} color="#FFFFFF" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
+                    4. Trợ Lý Gehihi AI (Google Gemini 2.0)
+                  </Text>
+                  <Text style={{ fontSize: 12.5, color: isLight ? '#6C6C70' : '#8E8E93', marginTop: 3, lineHeight: 17 }}>
+                    Trí tuệ nhân tạo thế hệ mới phản hồi thông minh, giải đáp thắc mắc chuyên sâu & phân tích thông tin 24/7 trực tiếp trong chat.
+                  </Text>
+                </View>
+              </View>
+
+              {/* Feature 5 */}
+              <View style={{ flexDirection: 'row', gap: 14, alignItems: 'flex-start', backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E', padding: 14, borderRadius: 16 }}>
+                <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: '#FF2D55', justifyContent: 'center', alignItems: 'center' }}>
+                  <Ionicons name="bar-chart" size={20} color="#FFFFFF" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
+                    5. Giám Sát & Thống Kê Sử Dụng App
+                  </Text>
+                  <Text style={{ fontSize: 12.5, color: isLight ? '#6C6C70' : '#8E8E93', marginTop: 3, lineHeight: 17 }}>
+                    Theo dõi và phân tích thời gian sử dụng ứng dụng di động thực tế theo danh mục Mạng xã hội, Tài chính, Tiện ích & Trò chơi.
+                  </Text>
+                </View>
+              </View>
+
+              {/* Feature 6 */}
+              <View style={{ flexDirection: 'row', gap: 14, alignItems: 'flex-start', backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E', padding: 14, borderRadius: 16 }}>
+                <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: '#5856D6', justifyContent: 'center', alignItems: 'center' }}>
+                  <Ionicons name="color-palette" size={20} color="#FFFFFF" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
+                    6. Tùy Chỉnh Giao Diện & Đa Ngôn Ngữ
+                  </Text>
+                  <Text style={{ fontSize: 12.5, color: isLight ? '#6C6C70' : '#8E8E93', marginTop: 3, lineHeight: 17 }}>
+                    Tùy chỉnh chế độ Sáng/Tối (Light/Dark mode), màu nhấn Accent, cỡ chữ hiển thị & hỗ trợ đa ngôn ngữ quốc tế.
+                  </Text>
+                </View>
+              </View>
+            </ScrollView>
+
+            {/* Modal Footer / Action Bar */}
+            <View
+              style={{
+                paddingHorizontal: 20,
+                paddingVertical: 14,
+                borderTopWidth: 0.5,
+                borderTopColor: isLight ? '#E5E5EA' : 'rgba(255, 255, 255, 0.08)',
+                backgroundColor: isLight ? '#F9F9FB' : '#2C2C2E',
+                gap: 12,
+              }}
+            >
+              {/* Toggle option: Không nhắc lại */}
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => setDontShowOnboardingAgain(!dontShowOnboardingAgain)}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
+              >
+                <View
+                  style={{
+                    width: 20,
+                    height: 20,
+                    borderRadius: 6,
+                    borderWidth: 1.5,
+                    borderColor: dontShowOnboardingAgain ? appSettings.accentColor : '#8E8E93',
+                    backgroundColor: dontShowOnboardingAgain ? appSettings.accentColor : 'transparent',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}
+                >
+                  {dontShowOnboardingAgain && <Ionicons name="checkmark" size={14} color="#FFFFFF" />}
+                </View>
+                <Text style={{ fontSize: 13, color: isLight ? '#3C3C43' : '#AEAEB2', fontWeight: '500' }}>
+                  Không hiển thị lại thông báo này sau khi đóng
+                </Text>
+              </TouchableOpacity>
+
+              {/* Nút Đã hiểu & Bắt đầu */}
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={handleCloseOnboardingModal}
+                style={{
+                  backgroundColor: appSettings.accentColor,
+                  paddingVertical: 13,
+                  borderRadius: 16,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  shadowColor: appSettings.accentColor,
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 8,
+                }}
+              >
+                <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '700' }}>
+                  ĐÃ HIỂU & BẮT ĐẦU SỬ DỤNG
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </Modal>
     </SafeAreaView>
