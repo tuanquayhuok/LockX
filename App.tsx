@@ -12099,13 +12099,13 @@ function MainApp() {
                       Tài khoản lưu
                     </Text>
                     <Text style={{ color: '#0A84FF', fontSize: 10, fontWeight: '600', marginTop: 2 }}>
-                      AES-256 Bit
+                      Bảo Mật
                     </Text>
                   </View>
 
                   <TouchableOpacity
                     activeOpacity={0.75}
-                    onPress={() => setCurrentTab('apps')}
+                    onPress={() => setShowStoragePlansModal(true)}
                     style={{
                       flex: 1,
                       backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
@@ -12116,16 +12116,16 @@ function MainApp() {
                     }}
                   >
                     <View style={{ width: 30, height: 30, borderRadius: 8, backgroundColor: 'rgba(48, 209, 88, 0.15)', justifyContent: 'center', alignItems: 'center', marginBottom: 8 }}>
-                      <Ionicons name="hourglass" size={17} color="#30D158" />
+                      <Ionicons name="cloud-done" size={17} color="#30D158" />
                     </View>
-                    <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 20, fontWeight: '800' }}>
-                      {formatUsageTime(totalScreenTimeMinutes)}
+                    <Text numberOfLines={1} style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 18, fontWeight: '800' }}>
+                      {totalStorageFormatted || '0 KB'}
                     </Text>
                     <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 11, fontWeight: '500', marginTop: 2 }}>
-                      Thời gian dùng
+                      Dung lượng
                     </Text>
-                    <Text style={{ color: '#30D158', fontSize: 10, fontWeight: '600', marginTop: 2 }}>
-                      Hôm nay
+                    <Text numberOfLines={1} style={{ color: '#30D158', fontSize: 10, fontWeight: '600', marginTop: 2 }}>
+                      Gói {currentStorageQuotaLabel}
                     </Text>
                   </TouchableOpacity>
 
@@ -12142,16 +12142,16 @@ function MainApp() {
                     }}
                   >
                     <View style={{ width: 30, height: 30, borderRadius: 8, backgroundColor: 'rgba(255, 159, 10, 0.15)', justifyContent: 'center', alignItems: 'center', marginBottom: 8 }}>
-                      <Ionicons name="apps" size={17} color="#FF9F0A" />
+                      <Ionicons name="folder" size={17} color="#FF9F0A" />
                     </View>
                     <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 20, fontWeight: '800' }}>
-                      {phoneApps.length}
+                      {filesList.length}
                     </Text>
                     <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 11, fontWeight: '500', marginTop: 2 }}>
-                      App iPhone
+                      Tệp lưu trữ
                     </Text>
-                    <Text style={{ color: '#FF9F0A', fontSize: 10, fontWeight: '600', marginTop: 2 }}>
-                      Đang quản lý
+                    <Text numberOfLines={1} style={{ color: '#FF9F0A', fontSize: 10, fontWeight: '600', marginTop: 2 }}>
+                      {totalStorageFormatted || '0 KB'}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -12204,8 +12204,8 @@ function MainApp() {
                       borderColor: isLight ? '#E5E5EA' : 'rgba(255, 255, 255, 0.08)',
                     }}
                   >
-                    <Ionicons name="hourglass-outline" size={16} color="#30D158" />
-                    <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 12, fontWeight: '600' }}>Giới Hạn App</Text>
+                    <Ionicons name="folder-open-outline" size={16} color="#30D158" />
+                    <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 12, fontWeight: '600' }}>Quản Lý Tệp</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
