@@ -3541,9 +3541,9 @@ export const EnterpriseAuthScreen = ({
     }
   }, [authMode, savedAccount, savedDisplayName]);
 
-  // Animations
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(35)).current;
+  // Animations (Mặc định hiển thị 100%, không bị đen màn hình)
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const slideAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const glowAnim = useRef(new Animated.Value(0.35)).current;
   const tabIndicatorAnim = useRef(new Animated.Value(authMode === 'login' ? 0 : 1)).current;
@@ -5355,15 +5355,17 @@ function MainApp() {
   // Khởi tạo Notification Handler an toàn sau khi app đã mount (tránh crash iOS lúc module load)
   useEffect(() => {
     try {
-      Notifications.setNotificationHandler({
-        handleNotification: async () => ({
-          shouldShowAlert: true,
-          shouldPlaySound: true,
-          shouldSetBadge: true,
-          shouldShowBanner: true,
-          shouldShowList: true,
-        }),
-      });
+      if (Platform.OS !== 'web' && Notifications && typeof Notifications.setNotificationHandler === 'function') {
+        Notifications.setNotificationHandler({
+          handleNotification: async () => ({
+            shouldShowAlert: true,
+            shouldPlaySound: true,
+            shouldSetBadge: true,
+            shouldShowBanner: true,
+            shouldShowList: true,
+          }),
+        });
+      }
     } catch (e) {
       console.warn('Failed to set notification handler:', e);
     }
@@ -6224,7 +6226,7 @@ function MainApp() {
     try {
       const backupData = {
         app: 'LockX Pro Vault',
-        version: '2.6.0',
+        version: '2.0.0',
         exportedAt: new Date().toISOString(),
         userProfile,
         appSettings,
@@ -9574,36 +9576,38 @@ function MainApp() {
           await Notification.requestPermission();
         }
       }
-      const { status: existingStatus } = await Notifications.getPermissionsAsync();
-      let finalStatus = existingStatus;
-      if (existingStatus !== 'granted') {
-        const { status } = await Notifications.requestPermissionsAsync();
-        finalStatus = status;
-      }
-      const granted = finalStatus === 'granted';
-      setHasNotifPermission(granted);
-
-      // Đăng ký Expo Push Token lên Web PHP Backend để nhận thông báo đẩy từ Admin
-      if (granted && Platform.OS !== 'web') {
-        try {
-          const tokenData = await Notifications.getExpoPushTokenAsync().catch(() => null);
-          if (tokenData?.data) {
-            await fetch('https://aecongnghe.online/api/notifications/register_device.php', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                username: userProfile.username || 'admin_lockx',
-                device_token: tokenData.data,
-                device_info: `${Platform.OS} • ${Platform.Version}`
-              })
-            }).catch(() => {});
-          }
-        } catch (e) {
-          console.log('Push token registration skipped:', e);
+      if (Platform.OS !== 'web' && Notifications && typeof Notifications.getPermissionsAsync === 'function') {
+        const { status: existingStatus } = await Notifications.getPermissionsAsync().catch(() => ({ status: 'undetermined' } as any));
+        let finalStatus = existingStatus;
+        if (existingStatus !== 'granted' && typeof Notifications.requestPermissionsAsync === 'function') {
+          const { status } = await Notifications.requestPermissionsAsync().catch(() => ({ status: 'undetermined' } as any));
+          finalStatus = status;
         }
-      }
+        const granted = finalStatus === 'granted';
+        setHasNotifPermission(granted);
 
-      return granted;
+        // Đăng ký Expo Push Token lên Web PHP Backend để nhận thông báo đẩy từ Admin
+        if (granted) {
+          try {
+            const tokenData = await Notifications.getExpoPushTokenAsync().catch(() => null);
+            if (tokenData?.data) {
+              await fetch('https://aecongnghe.online/api/notifications/register_device.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  username: userProfile.username || 'admin_lockx',
+                  device_token: tokenData.data,
+                  device_info: `${Platform.OS} • ${Platform.Version}`
+                })
+              }).catch(() => {});
+            }
+          } catch (e) {
+            console.log('Push token registration skipped:', e);
+          }
+        }
+        return granted;
+      }
+      return false;
     } catch (e) {
       console.log('Error requesting notification permissions:', e);
       return false;
@@ -9784,37 +9788,35 @@ function MainApp() {
     }, 300);
   };
 
-  // Luôn vào thẳng trang chủ LockX & Tự động xin cấp quyền thông báo hệ thống
+  // Luôn vào thẳng trang chủ LockX
   useEffect(() => {
     setOnboardingStage('ready');
-    const timer = setTimeout(() => {
-      requestNotificationPermission();
-    }, 1200);
-    return () => clearTimeout(timer);
   }, []);
 
   // Lắng nghe khi người dùng bấm vào thông báo từ Màn hình khóa / Biểu ngữ thông báo hệ thống ngoài
   useEffect(() => {
     let subscription: any = null;
     try {
-      subscription = Notifications.addNotificationResponseReceivedListener((response) => {
-        const data = response?.notification?.request?.content?.data;
-        if (data?.friendId || data?.friendUsername) {
-          setCurrentTab('chat');
-          const targetClean = String(data.friendUsername || '').toLowerCase().replace(/^@/, '');
-          setFriendsList((currentFriends) => {
-            const friend = currentFriends.find(
-              (f) =>
-                f.id === data.friendId ||
-                f.username.toLowerCase().replace(/^@/, '') === targetClean
-            );
-            if (friend) {
-              setActiveChatFriend(friend);
-            }
-            return currentFriends;
-          });
-        }
-      });
+      if (Platform.OS !== 'web' && Notifications && typeof Notifications.addNotificationResponseReceivedListener === 'function') {
+        subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+          const data = response?.notification?.request?.content?.data;
+          if (data?.friendId || data?.friendUsername) {
+            setCurrentTab('chat');
+            const targetClean = String(data.friendUsername || '').toLowerCase().replace(/^@/, '');
+            setFriendsList((currentFriends) => {
+              const friend = currentFriends.find(
+                (f) =>
+                  f.id === data.friendId ||
+                  f.username.toLowerCase().replace(/^@/, '') === targetClean
+              );
+              if (friend) {
+                setActiveChatFriend(friend);
+              }
+              return currentFriends;
+            });
+          }
+        });
+      }
     } catch (e) {}
 
     return () => {
@@ -10346,16 +10348,7 @@ function MainApp() {
       return app.category === appCategoryFilter;
     });
 
-  // =========================================================================
-  // APP LOADING STATE (Checking first-launch AsyncStorage)
-  // =========================================================================
-  if (onboardingStage === 'loading') {
-    return (
-      <View style={{ flex: 1, backgroundColor: '#000000' }}>
-        <StatusBar style="light" />
-      </View>
-    );
-  }
+
 
   // =========================================================================
   // ONBOARDING SCREEN: DEVICE COMPATIBILITY & NOTIFICATION REQUEST
@@ -16812,7 +16805,7 @@ function MainApp() {
                     <View style={[styles.cellContent, { flex: 1 }]}>
                       <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '400' }}>{t.version}</Text>
                     </View>
-                    <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 16 }}>2.6.0 (2026)</Text>
+                    <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 16 }}>2.0.0 (Build 2026)</Text>
                   </View>
                 </View>
               </View>
