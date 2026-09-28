@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#050811" />
+      <stop offset="100%" stop-color="#0A1120" />
+    </linearGradient>
+    <linearGradient id="squircleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0E1B33" />
+      <stop offset="100%" stop-color="#060C17" />
+    </linearGradient>
+    <linearGradient id="bodyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0A84FF" />
+      <stop offset="100%" stop-color="#5E5CE6" />
+    </linearGradient>
+    <filter id="subtleGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#0A84FF" flood-opacity="0.25" />
+    </filter>
+  </defs>
+
+  <!-- Background Canvas -->
+  <rect width="1024" height="1024" fill="url(#bgGrad)" />
+
+  <!-- Superellipse Squircle -->
+  <rect x="70" y="70" width="884" height="884" rx="210" ry="210" fill="url(#squircleGrad)" stroke="#0A84FF" stroke-width="6" stroke-opacity="0.32" />
+
+  <!-- Shackle (Titanium Arc) -->
+  <path d="M 367 480 L 367 380 A 145 145 0 0 1 657 380 L 657 480" fill="none" stroke="#38BDF8" stroke-width="48" stroke-linecap="round" stroke-linejoin="round" />
+
+  <!-- Vault Body -->
+  <rect x="290" y="440" width="444" height="380" rx="75" ry="75" fill="url(#bodyGrad)" stroke="#FFFFFF" stroke-width="4" stroke-opacity="0.45" filter="url(#subtleGlow)" />
+
+  <!-- Modern "X" Emblem -->
+  <line x1="437" y1="550" x2="587" y2="700" stroke="#FFFFFF" stroke-width="40" stroke-linecap="round" />
+  <line x1="587" y1="550" x2="437" y2="700" stroke="#FFFFFF" stroke-width="40" stroke-linecap="round" />
+
+  <!-- Center Core Node -->
+  <circle cx="512" cy="625" r="34" fill="#0A84FF" stroke="#FFFFFF" stroke-width="9" />
+</svg>

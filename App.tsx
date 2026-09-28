@@ -26,7 +26,7 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { createAudioPlayer, setAudioModeAsync, AudioPlayer } from 'expo-audio';
-
+import { LockXLogoSvg, AppleFaceIdSvg, GoogleGeminiSvg } from './components/SvgIcons';
 
 // NOTE: Notifications.setNotificationHandler is called inside MainApp useEffect (not at module level) to avoid iOS startup crash
 
@@ -3837,11 +3837,7 @@ export const EnterpriseAuthScreen = ({
                 overflow: 'hidden',
               }}
             >
-              <Image
-                source={require('./assets/icon.png')}
-                style={{ width: '100%', height: '100%' }}
-                resizeMode="cover"
-              />
+              <LockXLogoSvg size={76} />
             </View>
           </Animated.View>
 
@@ -4102,11 +4098,7 @@ export const EnterpriseAuthScreen = ({
                     activeOpacity={0.75}
                     onPress={onFaceIdLogin}
                   >
-                    <Image
-                      source={useFaceId ? require('./assets/apple_faceid.png') : require('./assets/apple_faceid_white.png')}
-                      style={{ width: 34, height: 34, tintColor: useFaceId ? undefined : '#8E8E93' }}
-                      resizeMode="contain"
-                    />
+                    <AppleFaceIdSvg size={32} color={useFaceId ? '#30D158' : '#8E8E93'} />
                   </TouchableOpacity>
                 )}
               </View>
@@ -10145,11 +10137,7 @@ function MainApp() {
             <View style={styles.loadMainBody}>
               {/* App LockX Logo */}
               <View style={styles.loadLogoWrap}>
-                <Image
-                  source={require('./assets/icon.png')}
-                  style={styles.loadAppLogo}
-                  resizeMode="cover"
-                />
+                <LockXLogoSvg size={58} />
               </View>
 
               {/* Center Squircle Icon */}
@@ -10967,10 +10955,9 @@ function MainApp() {
           ) : (
             /* VAULT MAIN LIST VIEW VỚI LOGO VÀ TÊN APP LOCKX PRO */
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, { paddingHorizontal: 16, paddingTop: 10 }]}>
-              {/* Top Brand & Status Header: Logo, LockX PRO, iOS 18 Badge, Notification & Add Buttons */}
               <View style={styles.homeBrandHeader}>
                 <View style={styles.homeBrandLeft}>
-                  <Image source={require('./assets/icon.png')} style={styles.homeBrandLogo} />
+                  <LockXLogoSvg size={38} style={{ marginRight: 10 }} />
                   <View>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       <Text style={styles.homeBrandTitle}>LockX</Text>
@@ -17766,10 +17753,7 @@ function MainApp() {
                             }}
                           >
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
-                              <Image
-                                source={require('./assets/icon.png')}
-                                style={{ width: 20, height: 20, borderRadius: 5 }}
-                              />
+                              <LockXLogoSvg size={20} />
                               <Text
                                 style={{
                                   fontSize: 11,
