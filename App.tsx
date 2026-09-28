@@ -35,7 +35,16 @@ try {
 } catch (e) {}
 
 
-// NOTE: Notifications.setNotificationHandler is called inside MainApp useEffect (not at module level) to avoid iOS startup crash
+// Global Debug Error Tracker for On-Device Debugging
+let globalStartupError: any = null;
+if (typeof (globalThis as any).ErrorUtils !== 'undefined') {
+  const originalHandler = (globalThis as any).ErrorUtils.getGlobalHandler?.();
+  (globalThis as any).ErrorUtils.setGlobalHandler?.((err: any, isFatal?: boolean) => {
+    globalStartupError = err;
+    console.error('LockX On-Device Global Error:', err, isFatal);
+    if (originalHandler) originalHandler(err, isFatal);
+  });
+}
 
 // Logo Avatar Google Gemini chính thức cho Gehihi AI
 const GEMINI_AVATAR_IMG = require('./assets/gemini_avatar.png');
@@ -5167,29 +5176,49 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   };
 
   render() {
-    if (this.state.hasError) {
+    const activeErr = this.state.error || globalStartupError;
+    if (this.state.hasError || globalStartupError) {
+      const errDetail = String(activeErr?.stack || activeErr?.message || activeErr || 'Lỗi không xác định');
       return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: '#000000', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-          <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(255, 69, 58, 0.15)', justifyContent: 'center', alignItems: 'center', marginBottom: 16 }}>
-            <Ionicons name="warning-outline" size={36} color="#FF453A" />
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#000000', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+          <View style={{ width: 68, height: 68, borderRadius: 34, backgroundColor: 'rgba(255, 69, 58, 0.2)', justifyContent: 'center', alignItems: 'center', marginBottom: 14 }}>
+            <Ionicons name="bug-outline" size={40} color="#FF453A" />
           </View>
-          <Text style={{ fontSize: 20, fontWeight: '700', color: '#FFFFFF', textAlign: 'center', marginBottom: 8 }}>
-            Ứng Dụng Khởi Động An Toàn
+          <Text style={{ fontSize: 20, fontWeight: '800', color: '#FFFFFF', textAlign: 'center', marginBottom: 6 }}>
+            Bảng Chẩn Đoán Lỗi (On-Device Debug)
           </Text>
-          <Text style={{ fontSize: 14, color: '#8E8E93', textAlign: 'center', marginBottom: 20 }}>
-            Hệ thống đã tự động bảo vệ dữ liệu két sắt. Nhấn nút bên dưới để khôi phục hoặc khởi động lại.
+          <Text style={{ fontSize: 13, color: '#8E8E93', textAlign: 'center', marginBottom: 16, lineHeight: 18 }}>
+            Hệ thống phát hiện lỗi runtime. Chi tiết bên dưới giúp định vị chính xác vị trí lỗi để fix triệt để:
           </Text>
-          <ScrollView style={{ maxHeight: 180, width: '100%', backgroundColor: '#1C1C1E', borderRadius: 12, padding: 12, marginBottom: 20 }}>
-            <Text style={{ fontSize: 12, color: '#FF453A', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
-              {String(this.state.error?.stack || this.state.error?.message || this.state.error)}
+          <ScrollView style={{ maxHeight: 240, width: '100%', backgroundColor: '#1C1C1E', borderRadius: 12, padding: 14, marginBottom: 18, borderWidth: 1, borderColor: 'rgba(255,69,58,0.4)' }}>
+            <Text selectable style={{ fontSize: 11.5, color: '#FF453A', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', lineHeight: 17 }}>
+              {errDetail}
             </Text>
           </ScrollView>
-          <TouchableOpacity
-            onPress={this.handleReload}
-            style={{ backgroundColor: '#0A84FF', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24 }}
-          >
-            <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '600' }}>Khởi Động Lại LockX</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 10, width: '100%' }}>
+            <TouchableOpacity
+              onPress={() => {
+                if (ExpoClipboard && ExpoClipboard.setStringAsync) {
+                  ExpoClipboard.setStringAsync(errDetail);
+                } else if (Platform.OS === 'web' && navigator.clipboard) {
+                  navigator.clipboard.writeText(errDetail);
+                }
+                Alert.alert('Đã Sao Chép', 'Đã copy thông tin lỗi vào khay nhớ tạm để gửi lập trình viên!');
+              }}
+              style={{ flex: 1, backgroundColor: '#2C2C2E', paddingVertical: 14, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '700' }}>📋 Copy Mã Lỗi</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                globalStartupError = null;
+                this.handleReload();
+              }}
+              style={{ flex: 1, backgroundColor: '#0A84FF', paddingVertical: 14, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '700' }}>🔄 Thử Lại</Text>
+            </TouchableOpacity>
+          </View>
         </SafeAreaView>
       );
     }
