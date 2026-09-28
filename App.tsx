@@ -28,19 +28,7 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import { createAudioPlayer, setAudioModeAsync, AudioPlayer } from 'expo-audio';
 
 
-try {
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldPlaySound: true,
-      shouldSetBadge: true,
-      shouldShowBanner: true,
-      shouldShowList: true,
-    }),
-  });
-} catch (e) {
-  console.warn('Failed to set notification handler:', e);
-}
+// NOTE: Notifications.setNotificationHandler is called inside MainApp useEffect (not at module level) to avoid iOS startup crash
 
 // Logo Avatar Google Gemini chính thức cho Gehihi AI
 const GEMINI_AVATAR_IMG = require('./assets/gemini_avatar.png');
@@ -5224,6 +5212,23 @@ function MainApp() {
           allowsRecording: false,
         }).catch(() => {});
       } catch (e) {}
+    }
+  }, []);
+
+  // Khởi tạo Notification Handler an toàn sau khi app đã mount (tránh crash iOS lúc module load)
+  useEffect(() => {
+    try {
+      Notifications.setNotificationHandler({
+        handleNotification: async () => ({
+          shouldShowAlert: true,
+          shouldPlaySound: true,
+          shouldSetBadge: true,
+          shouldShowBanner: true,
+          shouldShowList: true,
+        }),
+      });
+    } catch (e) {
+      console.warn('Failed to set notification handler:', e);
     }
   }, []);
   const [friendSearchQuery, setFriendSearchQuery] = useState('');
