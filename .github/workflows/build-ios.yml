@@ -24,7 +24,10 @@ jobs:
         run: npm ci
 
       - name: 🔨 Generate native iOS project
-        run: npx expo prebuild --platform ios --clean
+        run: |
+          npx expo prebuild --platform ios --clean
+          echo "export NODE_BINARY=$(which node)" > ios/.xcode.env.local
+          cat ios/.xcode.env.local
 
       - name: 📲 Install CocoaPods
         run: |
@@ -48,8 +51,30 @@ jobs:
 
       - name: 📦 Create IPA
         run: |
+          APP_DIR="${{ github.workspace }}/build/LockX.xcarchive/Products/Applications/LockX.app"
+          
+          # Đảm bảo main.jsbundle luôn tồn tại trong app
+          if [ ! -f "$APP_DIR/main.jsbundle" ] || [ ! -s "$APP_DIR/main.jsbundle" ]; then
+            echo "⚠️ main.jsbundle chưa có trong LockX.app! Tiến hành đóng gói bundle JavaScript trực tiếp..."
+            npx expo export:embed \
+              --platform ios \
+              --dev false \
+              --reset-cache \
+              --entry-file index.ts \
+              --bundle-output "$APP_DIR/main.jsbundle" \
+              --assets-dest "$APP_DIR"
+          else
+            echo "✅ main.jsbundle đã được tạo bởi xcodebuild."
+          fi
+
+          echo "🔍 Kiểm tra tệp main.jsbundle:"
+          ls -lh "$APP_DIR/main.jsbundle"
+
+          echo "🔏 Thực hiện ký mã Ad-hoc (Ad-hoc signature) để iOS dyld cho phép nạp bộ nhớ..."
+          codesign --force --deep --sign - "$APP_DIR"
+
           mkdir -p build/Payload
-          cp -r build/LockX.xcarchive/Products/Applications/LockX.app build/Payload/
+          cp -r "$APP_DIR" build/Payload/
           cd build
           zip -r -y LockX.ipa Payload
           rm -rf Payload

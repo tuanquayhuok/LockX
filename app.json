@@ -50,7 +50,11 @@
         "NSCameraUsageDescription": "LockX cần quyền camera để chụp ảnh đại diện và quét mã.",
         "NSPhotoLibraryUsageDescription": "LockX cần quyền truy cập thư viện ảnh để đổi ảnh đại diện và lưu tệp.",
         "UIFileSharingEnabled": true,
-        "LSSupportsOpeningDocumentsInPlace": true
+        "LSSupportsOpeningDocumentsInPlace": true,
+        "UIBackgroundModes": [
+          "audio"
+        ],
+        "UIViewControllerBasedStatusBarAppearance": false
       }
     },
     "android": {
