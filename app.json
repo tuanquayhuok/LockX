@@ -48,7 +48,9 @@
         "NSFaceIDUsageDescription": "LockX sử dụng Face ID để xác thực và bảo vệ an toàn cho tài khoản và két sắt của bạn.",
         "NSMicrophoneUsageDescription": "LockX cần quyền micro để thực hiện cuộc gọi thoại bảo mật.",
         "NSCameraUsageDescription": "LockX cần quyền camera để chụp ảnh đại diện và quét mã.",
-        "NSPhotoLibraryUsageDescription": "LockX cần quyền truy cập thư viện ảnh để đổi ảnh đại diện."
+        "NSPhotoLibraryUsageDescription": "LockX cần quyền truy cập thư viện ảnh để đổi ảnh đại diện và lưu tệp.",
+        "UIFileSharingEnabled": true,
+        "LSSupportsOpeningDocumentsInPlace": true
       }
     },
     "android": {
