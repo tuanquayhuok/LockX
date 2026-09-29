@@ -612,7 +612,7 @@ const playWavSoundNative = (wavUri: string) => {
 // Global Web Audio context unlocker cho Safari iOS & Mobile Chrome
 let sharedAudioContext: any = null;
 const getSharedAudioContext = () => {
-  if (typeof window === 'undefined') return null;
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return null;
   const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
   if (!AudioCtx) return null;
   if (!sharedAudioContext) {
@@ -624,7 +624,7 @@ const getSharedAudioContext = () => {
   return sharedAudioContext;
 };
 
-if (typeof window !== 'undefined') {
+if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof (window as any).addEventListener === 'function') {
   const unlock = () => {
     try {
       const ctx = getSharedAudioContext();
@@ -633,9 +633,9 @@ if (typeof window !== 'undefined') {
       }
     } catch (e) {}
   };
-  window.addEventListener('touchstart', unlock, { passive: true });
-  window.addEventListener('touchend', unlock, { passive: true });
-  window.addEventListener('click', unlock, { passive: true });
+  (window as any).addEventListener('touchstart', unlock, { passive: true });
+  (window as any).addEventListener('touchend', unlock, { passive: true });
+  (window as any).addEventListener('click', unlock, { passive: true });
 }
 
 export const playSingleRingtoneCycle = (ringtoneId: string = 'reflection') => {
