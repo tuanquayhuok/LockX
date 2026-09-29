@@ -1953,17 +1953,17 @@ const INITIAL_GACHA: GachaItem[] = [
 ];
 
 export const INITIAL_USER_PROFILE: UserProfile = {
-  displayName: 'Người Dùng LockX',
+  displayName: 'Quảng Trọng Tuấn',
   username: '@lockx_user',
   avatarColor: '#0A84FF',
-  avatarType: 'preset',
-  avatarUri: '',
+  avatarType: 'image',
+  avatarUri: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=300&q=80',
   avatarPresetId: 'av-shield',
-  email: '',
-  phone: '',
-  bio: 'Người dùng LockX Vault',
-  birthday: '',
-  gender: 'Chưa cập nhật',
+  email: 'lockxuser@gmail.com',
+  phone: '+84 987 654 321',
+  bio: 'Sống đơn giản, làm những gì mình thích.',
+  birthday: '12/08/2007',
+  gender: 'Nam',
   joinDate: getFormattedTodayDate(),
   joinTimestamp: Date.now(),
   daysActive: 1,
@@ -5574,9 +5574,11 @@ function MainApp() {
   const [fileSearchQuery, setFileSearchQuery] = useState('');
   const [fileCategoryFilter, setFileCategoryFilter] = useState<'all' | 'document' | 'image' | 'video' | 'audio' | 'archive'>('all');
   const [showFileSearchInput, setShowFileSearchInput] = useState(false);
-  const [foldersList, setFoldersList] = useState<Array<{ id: string; name: string; fileCount: number; sizeFormatted: string; description: string }>>([
-    { id: 'f-1', name: 'Thư mục tài liệu', fileCount: 3, sizeFormatted: '2.4 GB', description: 'Tài liệu học tập, dự án...' }
-  ]);
+  const [foldersList, setFoldersList] = useState<Array<{ id: string; name: string; fileCount: number; sizeFormatted: string; description: string }>>([]);
+  const [activeFileMenu, setActiveFileMenu] = useState<LockXFileItem | null>(null);
+  const [showFileActionModal, setShowFileActionModal] = useState(false);
+  const [showRenameModal, setShowRenameModal] = useState(false);
+  const [renameFileInput, setRenameFileInput] = useState('');
   const [showDownloadModal, setShowDownloadModal] = useState(false);
   const [downloadUrlInput, setDownloadUrlInput] = useState('');
   const [downloadCustomName, setDownloadCustomName] = useState('');
@@ -10515,8 +10517,9 @@ function MainApp() {
   };
 
   const handleSaveAccount = () => {
-    if (!newTitle.trim() || !newUser.trim()) {
-      Alert.alert('Thiếu thông tin', 'Vui lòng nhập Tên gợi nhớ và Tài khoản.');
+    const platName = (newGame || 'Tài khoản').trim();
+    if (!newUser.trim()) {
+      Alert.alert('Thiếu thông tin', 'Vui lòng nhập Tài khoản.');
       return;
     }
 
@@ -10526,7 +10529,7 @@ function MainApp() {
         if (a.id === editingAccountId) {
           const updated: Account = {
             ...a,
-            title: newTitle.trim(),
+            title: platName,
             game: newGame,
             server: newServer,
             category: newCategory,
@@ -10554,7 +10557,7 @@ function MainApp() {
     const now = Date.now();
     const acc: Account = {
       id: String(now),
-      title: newTitle.trim(),
+      title: platName,
       game: newGame,
       server: newServer,
       category: newCategory,
@@ -11325,11 +11328,22 @@ function MainApp() {
     saveFilesToStorage(updated);
   };
 
+  const handleSaveRenameFile = () => {
+    if (!renameFileInput.trim() || !activeFileMenu) return;
+    const updated = filesList.map((f) =>
+      f.id === activeFileMenu.id ? { ...f, name: renameFileInput.trim() } : f
+    );
+    saveFilesToStorage(updated);
+    setShowRenameModal(false);
+    setActiveFileMenu(null);
+    triggerToast('Đã đổi tên tệp thành công');
+  };
+
   const totalFilesCount = filesList.length;
   const totalStorageBytes = useMemo(() => {
     return filesList.reduce((acc, f) => acc + (f.size || 0), 0);
   }, [filesList]);
-  const totalStorageFormatted = formatLockXFileSize(totalStorageBytes);
+  const totalStorageFormatted = totalStorageBytes === 0 ? '0 KB' : formatLockXFileSize(totalStorageBytes);
 
   const currentStorageQuotaLabel = useMemo(() => {
     switch (currentStoragePlan) {
@@ -11350,9 +11364,14 @@ function MainApp() {
   }, [currentStoragePlan]);
 
   const storageUsagePercent = useMemo(() => {
-    if (!currentStorageQuotaBytes || currentStorageQuotaBytes <= 0) return 0;
+    if (!currentStorageQuotaBytes || currentStorageQuotaBytes <= 0 || totalStorageBytes === 0) return 0;
     return Math.min(100, Math.round((totalStorageBytes / currentStorageQuotaBytes) * 100));
   }, [totalStorageBytes, currentStorageQuotaBytes]);
+
+  const freeStorageBytes = useMemo(() => {
+    return Math.max(0, currentStorageQuotaBytes - totalStorageBytes);
+  }, [currentStorageQuotaBytes, totalStorageBytes]);
+  const freeStorageFormatted = formatLockXFileSize(freeStorageBytes);
 
   const categoryBreakdown = useMemo(() => {
     const config = [
@@ -11845,20 +11864,6 @@ function MainApp() {
                     <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 18 }]}>
                       <Text style={styles.sectionCaption}>THÔNG TIN CƠ BẢN</Text>
                       <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }]}>
-                        <View style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}>
-                          <View style={[styles.cellLeadingIcon, { backgroundColor: '#0A84FF' }]}>
-                            <Ionicons name="bookmark" size={17} color="#FFFFFF" />
-                          </View>
-                          <Text style={[styles.formLabel, { width: 95 }, isLight && { color: '#000000' }]}>Tên gợi nhớ</Text>
-                          <TextInput
-                            style={[styles.formInput, { flex: 1, textAlign: 'right' }, isLight && { color: '#000000' }]}
-                            placeholder="VD: Acc chính, Facebook, v.v."
-                            placeholderTextColor="#8E8E93"
-                            value={newTitle}
-                            onChangeText={setNewTitle}
-                          />
-                        </View>
-
                         <TouchableOpacity
                           style={[styles.cellItem, { borderBottomWidth: 0 }]}
                           activeOpacity={0.7}
@@ -11871,7 +11876,7 @@ function MainApp() {
                           {currentPlatInfo.logoUrl ? (
                             <Image
                               source={{ uri: currentPlatInfo.logoUrl }}
-                              style={{ width: 28, height: 28, borderRadius: 7, marginRight: 8, backgroundColor: '#1E293B' }}
+                              style={{ width: 28, height: 28, borderRadius: 7, marginRight: 8, backgroundColor: '#2C2C2E' }}
                               resizeMode="cover"
                             />
                           ) : (
@@ -12164,7 +12169,7 @@ function MainApp() {
                                   height: 40,
                                   borderRadius: 10,
                                   marginRight: 12,
-                                  backgroundColor: '#1E293B',
+                                  backgroundColor: '#2C2C2E',
                                 }}
                                 resizeMode="cover"
                               />
@@ -12215,7 +12220,7 @@ function MainApp() {
                 <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor }]}>Trang Chủ</Text>
               </TouchableOpacity>
               <Text style={[styles.fullScreenNavTitle, isLight && { color: '#000000' }]} numberOfLines={1}>
-                {selectedAccount.title}
+                {getPlatformInfo(selectedAccount.game, selectedAccount.category).name || selectedAccount.game || 'Chi Tiết'}
               </Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                 {/* Nút sửa thông tin kế bên nút xóa trên thanh tiêu đề */}
@@ -12254,7 +12259,7 @@ function MainApp() {
                               height: 72,
                               borderRadius: 20,
                               marginBottom: 10,
-                              backgroundColor: '#1E293B',
+                              backgroundColor: '#2C2C2E',
                               shadowColor: '#000000',
                               shadowOffset: { width: 0, height: 4 },
                               shadowOpacity: 0.35,
@@ -12282,15 +12287,12 @@ function MainApp() {
                           </View>
                         )}
                         <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 21, fontWeight: '700', textAlign: 'center' }}>
-                          {selectedAccount.title}
+                          {detailPlat.name}
                         </Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
                           <View style={[styles.appCustomBadge, { backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E' }]}>
                             <Text style={[styles.appCustomBadgeText, { color: appSettings.accentColor }]}>{selectedAccount.category.toUpperCase()}</Text>
                           </View>
-                          <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 13, fontWeight: '500' }}>
-                            {detailPlat.name}
-                          </Text>
                         </View>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6 }}>
                           <Ionicons name="time-outline" size={13} color="#8E8E93" />
@@ -12309,7 +12311,7 @@ function MainApp() {
                             {detailPlat.logoUrl ? (
                               <Image
                                 source={{ uri: detailPlat.logoUrl }}
-                                style={{ width: 28, height: 28, borderRadius: 7, marginRight: 8, backgroundColor: '#1E293B' }}
+                                style={{ width: 28, height: 28, borderRadius: 7, marginRight: 8, backgroundColor: '#2C2C2E' }}
                                 resizeMode="cover"
                               />
                             ) : (
@@ -12460,7 +12462,7 @@ function MainApp() {
                   paddingHorizontal: 16,
                   paddingTop: 12,
                   paddingBottom: 120,
-                  backgroundColor: isLight ? '#F8FAFC' : '#030712',
+                  backgroundColor: isLight ? '#F2F2F7' : '#000000',
                 },
               ]}
             >
@@ -12481,9 +12483,9 @@ function MainApp() {
                       width: 44,
                       height: 44,
                       borderRadius: 12,
-                      backgroundColor: '#0F172A',
+                      backgroundColor: '#1C1C1E',
                       borderWidth: 1,
-                      borderColor: '#1E293B',
+                      borderColor: '#2C2C2E',
                       justifyContent: 'center',
                       alignItems: 'center',
                       overflow: 'hidden',
@@ -12500,7 +12502,7 @@ function MainApp() {
                   </View>
                   <View>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Text style={{ fontSize: 22, fontWeight: '800', color: isLight ? '#0F172A' : '#FFFFFF', letterSpacing: 0.3 }}>
+                      <Text style={{ fontSize: 22, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF', letterSpacing: 0.3 }}>
                         LockX
                       </Text>
                       <View
@@ -12525,7 +12527,7 @@ function MainApp() {
                 {/* Greeting & Notification Right */}
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                   <Text style={{ fontSize: 13, color: isLight ? '#64748B' : '#94A3B8' }}>
-                    Chào <Text style={{ fontWeight: '700', color: isLight ? '#0F172A' : '#FFFFFF' }}>{userProfile.displayName ? (userProfile.displayName.split(' ').pop() || userProfile.displayName) : 'Tuấn'}</Text> 👋
+                    Chào <Text style={{ fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>{userProfile.displayName ? (userProfile.displayName.split(' ').pop() || userProfile.displayName) : 'Tuấn'}</Text> 👋
                   </Text>
                   <TouchableOpacity
                     activeOpacity={0.75}
@@ -12534,9 +12536,9 @@ function MainApp() {
                       width: 38,
                       height: 38,
                       borderRadius: 19,
-                      backgroundColor: isLight ? '#F1F5F9' : '#0F172A',
+                      backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
                       borderWidth: 1,
-                      borderColor: isLight ? '#E2E8F0' : '#1E293B',
+                      borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
                       justifyContent: 'center',
                       alignItems: 'center',
                       position: 'relative',
@@ -12560,63 +12562,15 @@ function MainApp() {
                 </View>
               </View>
 
-              {/* CARD: KHO BẢO MẬT (ĐÃ MÃ HÓA TRÊN THIẾT BỊ) */}
-              <TouchableOpacity
-                activeOpacity={0.85}
-                onPress={() => triggerToast('Hệ thống mã hóa AES-256 & Keychain đang hoạt động bảo vệ 100% dữ liệu', 'Kho Bảo Mật', 'success', 'shield-checkmark', '#10B981')}
-                style={{
-                  backgroundColor: isLight ? '#F0FDF4' : '#08171E',
-                  borderRadius: 16,
-                  padding: 14,
-                  borderWidth: 1,
-                  borderColor: isLight ? '#BBF7D0' : 'rgba(16, 185, 129, 0.35)',
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  marginBottom: 14,
-                  shadowColor: '#10B981',
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.15,
-                  shadowRadius: 8,
-                }}
-              >
-                <View
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 12,
-                    backgroundColor: 'rgba(16, 185, 129, 0.18)',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    marginRight: 12,
-                    borderWidth: 1,
-                    borderColor: 'rgba(16, 185, 129, 0.3)',
-                  }}
-                >
-                  <Ionicons name="shield-checkmark" size={24} color="#10B981" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 16, fontWeight: '700', color: isLight ? '#065F46' : '#FFFFFF' }}>
-                    Kho bảo mật
-                  </Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }}>
-                    <Ionicons name="phone-portrait-outline" size={13} color="#10B981" />
-                    <Text style={{ fontSize: 12, color: isLight ? '#059669' : '#34D399', fontWeight: '500' }}>
-                      Đã mã hóa trên thiết bị
-                    </Text>
-                  </View>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={isLight ? '#059669' : '#64748B'} />
-              </TouchableOpacity>
-
               {/* SEARCH BAR */}
               <View
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  backgroundColor: isLight ? '#F1F5F9' : '#0F172A',
+                  backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
                   borderRadius: 14,
                   borderWidth: 1,
-                  borderColor: isLight ? '#CBD5E1' : '#1E293B',
+                  borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
                   paddingHorizontal: 14,
                   height: 44,
                   marginBottom: 14,
@@ -12669,13 +12623,13 @@ function MainApp() {
                             ? '#007AFF'
                             : isLight
                             ? '#F1F5F9'
-                            : '#0F172A',
+                            : '#1C1C1E',
                           borderWidth: 1,
                           borderColor: isSel
                             ? '#007AFF'
                             : isLight
                             ? '#E2E8F0'
-                            : '#1E293B',
+                            : '#2C2C2E',
                         }}
                       >
                         <Ionicons
@@ -12712,11 +12666,11 @@ function MainApp() {
                         onPress={() => setSelectedCategory('all')}
                         style={{
                           flex: 1,
-                          backgroundColor: isLight ? '#FFFFFF' : '#0F172A',
+                          backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
                           borderRadius: 16,
                           padding: 14,
                           borderWidth: 1,
-                          borderColor: isLight ? '#E2E8F0' : '#1E293B',
+                          borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
                         }}
                       >
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -12748,11 +12702,11 @@ function MainApp() {
                         onPress={() => setShowPlatformPickerModal(true)}
                         style={{
                           flex: 1,
-                          backgroundColor: isLight ? '#FFFFFF' : '#0F172A',
+                          backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
                           borderRadius: 16,
                           padding: 14,
                           borderWidth: 1,
-                          borderColor: isLight ? '#E2E8F0' : '#1E293B',
+                          borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
                         }}
                       >
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -12787,11 +12741,11 @@ function MainApp() {
                         onPress={() => triggerToast('Đạt chuẩn: ' + strongPwdCount + '/' + accounts.length + ' tài khoản có mật khẩu mạnh (>= 8 ký tự).', 'Kiểm Tra An Toàn', 'info', 'shield-checkmark', '#8B5CF6')}
                         style={{
                           flex: 1,
-                          backgroundColor: isLight ? '#FFFFFF' : '#0F172A',
+                          backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
                           borderRadius: 16,
                           padding: 14,
                           borderWidth: 1,
-                          borderColor: isLight ? '#E2E8F0' : '#1E293B',
+                          borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
                         }}
                       >
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -12823,11 +12777,11 @@ function MainApp() {
                         onPress={() => triggerToast('Dữ liệu đã được đồng bộ an toàn với bộ nhớ mã hóa cục bộ', 'Đồng Bộ', 'success', 'sync', '#14B8A6')}
                         style={{
                           flex: 1,
-                          backgroundColor: isLight ? '#FFFFFF' : '#0F172A',
+                          backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
                           borderRadius: 16,
                           padding: 14,
                           borderWidth: 1,
-                          borderColor: isLight ? '#E2E8F0' : '#1E293B',
+                          borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
                         }}
                       >
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -12899,11 +12853,11 @@ function MainApp() {
                   onPress={() => setActiveToolView('pwd')}
                   style={{
                     flex: 1,
-                    backgroundColor: isLight ? '#FFFFFF' : '#0F172A',
+                    backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
                     paddingVertical: 14,
                     borderRadius: 14,
                     borderWidth: 1,
-                    borderColor: isLight ? '#CBD5E1' : '#1E293B',
+                    borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
                     flexDirection: 'row',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -12911,7 +12865,7 @@ function MainApp() {
                   }}
                 >
                   <Ionicons name="key-outline" size={17} color={isLight ? '#475569' : '#94A3B8'} />
-                  <Text style={{ color: isLight ? '#0F172A' : '#FFFFFF', fontSize: 15, fontWeight: '700' }}>
+                  <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 15, fontWeight: '700' }}>
                     Tạo mật khẩu
                   </Text>
                 </TouchableOpacity>
@@ -12949,10 +12903,10 @@ function MainApp() {
                 {filteredAccounts.length === 0 ? (
                   <View
                     style={{
-                      backgroundColor: isLight ? '#FFFFFF' : '#0F172A',
+                      backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
                       borderRadius: 16,
                       borderWidth: 1,
-                      borderColor: isLight ? '#E2E8F0' : '#1E293B',
+                      borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
                       alignItems: 'center',
                       paddingVertical: 36,
                       paddingHorizontal: 20,
@@ -12963,7 +12917,7 @@ function MainApp() {
                         width: 56,
                         height: 56,
                         borderRadius: 28,
-                        backgroundColor: isLight ? '#F1F5F9' : '#1E293B',
+                        backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E',
                         justifyContent: 'center',
                         alignItems: 'center',
                         marginBottom: 12,
@@ -12994,11 +12948,11 @@ function MainApp() {
                             setVaultSubView('detail');
                           }}
                           style={{
-                            backgroundColor: isLight ? '#FFFFFF' : '#0F172A',
+                            backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
                             borderRadius: 16,
                             padding: 14,
                             borderWidth: 1,
-                            borderColor: isLight ? '#E2E8F0' : '#1E293B',
+                            borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
                             flexDirection: 'row',
                             alignItems: 'center',
                           }}
@@ -13012,7 +12966,7 @@ function MainApp() {
                                 height: 48,
                                 borderRadius: 14,
                                 marginRight: 14,
-                                backgroundColor: '#1E293B',
+                                backgroundColor: '#2C2C2E',
                                 shadowColor: '#000000',
                                 shadowOffset: { width: 0, height: 3 },
                                 shadowOpacity: 0.25,
@@ -13051,7 +13005,7 @@ function MainApp() {
                               }}
                               numberOfLines={1}
                             >
-                              {acc.title || itemPlat.name}
+                              {itemPlat.name || acc.game || 'Tài khoản'}
                             </Text>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 }}>
                               <Ionicons name="person-outline" size={12} color="#94A3B8" />
@@ -13089,7 +13043,7 @@ function MainApp() {
                 paddingHorizontal: 16,
                 paddingTop: 12,
                 paddingBottom: 120,
-                backgroundColor: isLight ? '#F8FAFC' : '#030712',
+                backgroundColor: isLight ? '#F2F2F7' : '#000000',
               },
             ]}
           >
@@ -13112,9 +13066,9 @@ function MainApp() {
                     width: 40,
                     height: 40,
                     borderRadius: 12,
-                    backgroundColor: isLight ? '#F1F5F9' : '#0F172A',
+                    backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
                     borderWidth: 1,
-                    borderColor: isLight ? '#E2E8F0' : '#1E293B',
+                    borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
                     justifyContent: 'center',
                     alignItems: 'center',
                   }}
@@ -13123,7 +13077,7 @@ function MainApp() {
                 </TouchableOpacity>
 
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 20, fontWeight: '800', color: isLight ? '#0F172A' : '#FFFFFF' }}>
+                  <Text style={{ fontSize: 20, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF' }}>
                     Tệp & Tải Về
                   </Text>
                   <Text style={{ fontSize: 11.5, color: '#94A3B8', marginTop: 2 }} numberOfLines={1}>
@@ -13141,9 +13095,9 @@ function MainApp() {
                     width: 38,
                     height: 38,
                     borderRadius: 12,
-                    backgroundColor: isLight ? '#F1F5F9' : '#0F172A',
+                    backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
                     borderWidth: 1,
-                    borderColor: isLight ? '#E2E8F0' : '#1E293B',
+                    borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
                     justifyContent: 'center',
                     alignItems: 'center',
                   }}
@@ -13158,12 +13112,12 @@ function MainApp() {
                     flexDirection: 'row',
                     alignItems: 'center',
                     gap: 8,
-                    backgroundColor: isLight ? '#F1F5F9' : '#0F172A',
+                    backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
                     borderRadius: 14,
                     paddingHorizontal: 10,
                     paddingVertical: 6,
                     borderWidth: 1,
-                    borderColor: isLight ? '#E2E8F0' : '#1E293B',
+                    borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
                   }}
                 >
                   <View
@@ -13179,8 +13133,8 @@ function MainApp() {
                     <Ionicons name="arrow-up" size={13} color="#FFFFFF" />
                   </View>
                   <View>
-                    <Text style={{ fontSize: 11, fontWeight: '800', color: isLight ? '#0F172A' : '#FFFFFF' }}>
-                      {currentStorageQuotaLabel || '5.0 GB'}
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF' }}>
+                      {totalStorageFormatted}
                     </Text>
                     <Text style={{ fontSize: 9.5, color: '#94A3B8' }}>
                       Đã sử dụng
@@ -13197,10 +13151,10 @@ function MainApp() {
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  backgroundColor: isLight ? '#F1F5F9' : '#0F172A',
+                  backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
                   borderRadius: 14,
                   borderWidth: 1,
-                  borderColor: isLight ? '#CBD5E1' : '#1E293B',
+                  borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
                   paddingHorizontal: 12,
                   height: 42,
                   marginBottom: 14,
@@ -13236,11 +13190,11 @@ function MainApp() {
                 onPress={handleOpenDownloadModalWithPaste}
                 style={{
                   flex: 1,
-                  backgroundColor: isLight ? '#FFFFFF' : '#0F172A',
+                  backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
                   borderRadius: 16,
                   padding: 12,
                   borderWidth: 1,
-                  borderColor: isLight ? '#E2E8F0' : '#1E293B',
+                  borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
                   alignItems: 'flex-start',
                 }}
               >
@@ -13261,7 +13215,7 @@ function MainApp() {
                 >
                   <Ionicons name="cloud-download-outline" size={19} color="#FFFFFF" />
                 </View>
-                <Text style={{ fontSize: 13, fontWeight: '700', color: isLight ? '#0F172A' : '#FFFFFF', marginBottom: 2 }}>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF', marginBottom: 2 }}>
                   Dán Link
                 </Text>
                 <Text style={{ fontSize: 10.5, color: '#38BDF8', fontWeight: '500' }}>
@@ -13275,11 +13229,11 @@ function MainApp() {
                 onPress={handlePickDocument}
                 style={{
                   flex: 1,
-                  backgroundColor: isLight ? '#FFFFFF' : '#0F172A',
+                  backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
                   borderRadius: 16,
                   padding: 12,
                   borderWidth: 1,
-                  borderColor: isLight ? '#E2E8F0' : '#1E293B',
+                  borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
                   alignItems: 'flex-start',
                 }}
               >
@@ -13300,7 +13254,7 @@ function MainApp() {
                 >
                   <Ionicons name="add-circle-outline" size={19} color="#FFFFFF" />
                 </View>
-                <Text style={{ fontSize: 13, fontWeight: '700', color: isLight ? '#0F172A' : '#FFFFFF', marginBottom: 2 }}>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF', marginBottom: 2 }}>
                   Nhập Tệp
                 </Text>
                 <Text style={{ fontSize: 10.5, color: '#C084FC', fontWeight: '500' }}>
@@ -13312,15 +13266,15 @@ function MainApp() {
               <TouchableOpacity
                 activeOpacity={0.8}
                 onPress={() => {
-                  triggerToast('Tạo thư mục mới thành công!', 'Thư Mục', 'success', 'folder');
+                  Alert.alert('Thông Báo', 'Chức năng tạo thư mục hiện đang bảo trì và nâng cấp. Vui lòng quay lại sau!');
                 }}
                 style={{
                   flex: 1,
-                  backgroundColor: isLight ? '#FFFFFF' : '#0F172A',
+                  backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
                   borderRadius: 16,
                   padding: 12,
                   borderWidth: 1,
-                  borderColor: isLight ? '#E2E8F0' : '#1E293B',
+                  borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
                   alignItems: 'flex-start',
                 }}
               >
@@ -13341,7 +13295,7 @@ function MainApp() {
                 >
                   <Ionicons name="folder-outline" size={19} color="#FFFFFF" />
                 </View>
-                <Text style={{ fontSize: 13, fontWeight: '700', color: isLight ? '#0F172A' : '#FFFFFF', marginBottom: 2 }}>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF', marginBottom: 2 }}>
                   Thư Mục
                 </Text>
                 <Text style={{ fontSize: 10.5, color: '#34D399', fontWeight: '500' }}>
@@ -13352,14 +13306,16 @@ function MainApp() {
               {/* Card 4: Đám Mây */}
               <TouchableOpacity
                 activeOpacity={0.8}
-                onPress={() => triggerToast('Sao lưu đám mây E2EE tự động kích hoạt với tài khoản LockX+', 'Đám Mây', 'info', 'cloud')}
+                onPress={() => {
+                  Alert.alert('Thông Báo', 'Chức năng đồng bộ Đám mây hiện đang bảo trì và nâng cấp. Vui lòng quay lại sau!');
+                }}
                 style={{
                   flex: 1,
-                  backgroundColor: isLight ? '#FFFFFF' : '#0F172A',
+                  backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
                   borderRadius: 16,
                   padding: 12,
                   borderWidth: 1,
-                  borderColor: isLight ? '#E2E8F0' : '#1E293B',
+                  borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
                   alignItems: 'flex-start',
                 }}
               >
@@ -13380,7 +13336,7 @@ function MainApp() {
                 >
                   <Ionicons name="cloud-outline" size={19} color="#FFFFFF" />
                 </View>
-                <Text style={{ fontSize: 13, fontWeight: '700', color: isLight ? '#0F172A' : '#FFFFFF', marginBottom: 2 }}>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF', marginBottom: 2 }}>
                   Đám Mây
                 </Text>
                 <Text style={{ fontSize: 10.5, color: '#F472B6', fontWeight: '500' }}>
@@ -13391,15 +13347,15 @@ function MainApp() {
 
             {/* STORAGE CAPACITY CARD */}
             {(() => {
-              const usedPercent = Math.min(100, Math.max(15, Math.round((totalStorageBytes / Math.max(1, currentStorageQuotaBytes)) * 100)));
+              const usedPercent = storageUsagePercent;
               return (
                 <View
                   style={{
-                    backgroundColor: isLight ? '#FFFFFF' : '#0F172A',
+                    backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
                     borderRadius: 18,
                     padding: 16,
                     borderWidth: 1,
-                    borderColor: isLight ? '#E2E8F0' : '#1E293B',
+                    borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
                     flexDirection: 'row',
                     alignItems: 'center',
                     marginBottom: 14,
@@ -13412,14 +13368,14 @@ function MainApp() {
                       height: 64,
                       borderRadius: 32,
                       borderWidth: 4,
-                      borderColor: '#007AFF',
+                      borderColor: usedPercent > 0 ? '#007AFF' : (isLight ? '#CBD5E1' : '#334155'),
                       justifyContent: 'center',
                       alignItems: 'center',
                       marginRight: 14,
-                      backgroundColor: 'rgba(0, 122, 255, 0.08)',
+                      backgroundColor: usedPercent > 0 ? 'rgba(0, 122, 255, 0.08)' : 'transparent',
                     }}
                   >
-                    <Text style={{ fontSize: 15, fontWeight: '800', color: isLight ? '#0F172A' : '#FFFFFF' }}>
+                    <Text style={{ fontSize: 15, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF' }}>
                       {usedPercent}%
                     </Text>
                   </View>
@@ -13429,13 +13385,13 @@ function MainApp() {
                     <Text style={{ fontSize: 11, color: '#94A3B8', fontWeight: '600' }}>
                       Dung lượng lưu trữ
                     </Text>
-                    <Text style={{ fontSize: 16, fontWeight: '800', color: isLight ? '#0F172A' : '#FFFFFF', marginVertical: 3 }}>
-                      {totalStorageFormatted || '0.8'} <Text style={{ fontSize: 13, color: '#64748B', fontWeight: '600' }}>/ {currentStorageQuotaLabel || '5.0 GB'}</Text>
+                    <Text style={{ fontSize: 16, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF', marginVertical: 3 }}>
+                      {totalStorageFormatted} <Text style={{ fontSize: 13, color: '#64748B', fontWeight: '600' }}>/ {currentStorageQuotaLabel}</Text>
                     </Text>
                     <View
                       style={{
                         height: 5,
-                        backgroundColor: isLight ? '#E2E8F0' : '#1E293B',
+                        backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E',
                         borderRadius: 3,
                         overflow: 'hidden',
                         marginVertical: 3,
@@ -13451,7 +13407,7 @@ function MainApp() {
                       />
                     </View>
                     <Text style={{ fontSize: 10.5, color: '#94A3B8' }}>
-                      Còn trống 4.2 GB
+                      Còn trống {freeStorageFormatted}
                     </Text>
                   </View>
 
@@ -13490,7 +13446,7 @@ function MainApp() {
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',
-                backgroundColor: isLight ? '#EEF2FF' : '#121838',
+                backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
                 borderRadius: 16,
                 padding: 14,
                 borderWidth: 1,
@@ -13518,7 +13474,7 @@ function MainApp() {
             <View style={{ marginBottom: 14 }}>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
                 {[
-                  { id: 'all', label: 'Tất cả (' + (filteredFiles.length || 2) + ')', icon: 'file-tray-full-outline' },
+                  { id: 'all', label: 'Tất cả (' + filesList.length + ')', icon: 'file-tray-full-outline' },
                   { id: 'document', label: 'Tài liệu', icon: 'document-text-outline' },
                   { id: 'image', label: 'Hình ảnh', icon: 'image-outline' },
                   { id: 'video', label: 'Video', icon: 'videocam-outline' },
@@ -13541,13 +13497,13 @@ function MainApp() {
                           ? '#007AFF'
                           : isLight
                           ? '#F1F5F9'
-                          : '#0F172A',
+                          : '#1C1C1E',
                         borderWidth: 1,
                         borderColor: isActive
                           ? '#007AFF'
                           : isLight
                           ? '#E2E8F0'
-                          : '#1E293B',
+                          : '#2C2C2E',
                       }}
                     >
                       <Ionicons
@@ -13571,227 +13527,175 @@ function MainApp() {
             </View>
 
             {/* FOLDERS & FILES LIST */}
-            <View style={{ gap: 10, marginBottom: 16 }}>
-              {/* Folder Item 1 */}
-              {(fileCategoryFilter === 'all' || fileCategoryFilter === 'document') && (
-                <TouchableOpacity
-                  activeOpacity={0.75}
-                  onPress={() => triggerToast('Thư mục tài liệu chứa 3 tệp tin học tập & dự án.', 'Thư Mục', 'info', 'folder')}
-                  style={{
-                    backgroundColor: isLight ? '#FFFFFF' : '#0F172A',
-                    borderRadius: 16,
-                    padding: 14,
-                    borderWidth: 1,
-                    borderColor: isLight ? '#E2E8F0' : '#1E293B',
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                  }}
-                >
-                  <View
+            {foldersList.length > 0 && (
+              <View style={{ gap: 10, marginBottom: 12 }}>
+                {foldersList.map((folder) => (
+                  <TouchableOpacity
+                    key={folder.id}
+                    activeOpacity={0.75}
                     style={{
-                      width: 48,
-                      height: 48,
-                      borderRadius: 14,
-                      backgroundColor: '#007AFF',
-                      justifyContent: 'center',
+                      backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                      borderRadius: 16,
+                      padding: 14,
+                      borderWidth: 1,
+                      borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                      flexDirection: 'row',
                       alignItems: 'center',
-                      marginRight: 14,
-                      shadowColor: '#007AFF',
-                      shadowOffset: { width: 0, height: 2 },
-                      shadowOpacity: 0.35,
-                      shadowRadius: 5,
                     }}
                   >
-                    <Ionicons name="folder" size={24} color="#FFFFFF" />
-                  </View>
-
-                  <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-                      <Text style={{ fontSize: 15, fontWeight: '700', color: isLight ? '#0F172A' : '#FFFFFF' }}>
-                        Thư mục tài liệu
-                      </Text>
-                      <View
-                        style={{
-                          backgroundColor: isLight ? '#F1F5F9' : '#1E293B',
-                          paddingHorizontal: 6,
-                          paddingVertical: 2,
-                          borderRadius: 6,
-                        }}
-                      >
-                        <Text style={{ fontSize: 10.5, color: '#94A3B8', fontWeight: '600' }}>
-                          3 tệp
-                        </Text>
-                      </View>
-                    </View>
-                    <Text style={{ fontSize: 12, color: '#94A3B8' }} numberOfLines={1}>
-                      Tài liệu học tập, dự án...
-                    </Text>
-                  </View>
-
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                      <Ionicons name="ellipsis-vertical" size={16} color="#64748B" />
-                    </TouchableOpacity>
-                    <Text style={{ fontSize: 12, color: '#94A3B8' }}>2.4 GB</Text>
-                    <Ionicons name="chevron-forward" size={16} color="#475569" />
-                  </View>
-                </TouchableOpacity>
-              )}
-
-              {/* Sample / Real Files List */}
-              {(() => {
-                const sampleFiles = [
-                  {
-                    id: 'sample-1',
-                    name: 'Hình nền LockX.jpg',
-                    sizeFormatted: '1.2 MB',
-                    category: 'image',
-                    typeLabel: 'Ảnh',
-                    timeAgo: '2 giờ trước',
-                    icon: 'image',
-                    color: '#0284C7',
-                    bgUrl: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=200&q=80',
-                  },
-                  {
-                    id: 'sample-2',
-                    name: 'Video hướng dẫn.mp4',
-                    sizeFormatted: '48.7 MB',
-                    category: 'video',
-                    typeLabel: 'Video',
-                    timeAgo: '5 giờ trước',
-                    icon: 'play',
-                    color: '#8B5CF6',
-                  },
-                  {
-                    id: 'sample-3',
-                    name: 'Project_LockX.zip',
-                    sizeFormatted: '124.6 MB',
-                    category: 'archive',
-                    typeLabel: 'Tệp nén',
-                    timeAgo: '1 ngày trước',
-                    icon: 'document-text',
-                    color: '#10B981',
-                  },
-                ];
-
-                const displayFiles = filteredFiles.length > 0 ? filteredFiles : sampleFiles.filter(item => fileCategoryFilter === 'all' || item.category === fileCategoryFilter);
-
-                return displayFiles.map((file: any) => {
-                  return (
-                    <TouchableOpacity
-                      key={file.id}
-                      activeOpacity={0.75}
-                      onPress={() => setSelectedFilePreview(file)}
+                    <View
                       style={{
-                        backgroundColor: isLight ? '#FFFFFF' : '#0F172A',
-                        borderRadius: 16,
-                        padding: 14,
-                        borderWidth: 1,
-                        borderColor: isLight ? '#E2E8F0' : '#1E293B',
-                        flexDirection: 'row',
+                        width: 48,
+                        height: 48,
+                        borderRadius: 14,
+                        backgroundColor: '#007AFF',
+                        justifyContent: 'center',
                         alignItems: 'center',
+                        marginRight: 14,
                       }}
                     >
-                      {/* File Icon / Thumbnail */}
-                      <View
+                      <Ionicons name="folder" size={24} color="#FFFFFF" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
+                        {folder.name}
+                      </Text>
+                      <Text style={{ fontSize: 12, color: '#94A3B8' }} numberOfLines={1}>
+                        {folder.description || 'Thư mục tệp'}
+                      </Text>
+                    </View>
+                    <Text style={{ fontSize: 12, color: '#94A3B8' }}>{folder.sizeFormatted}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            {filteredFiles.length > 0 ? (
+              <View style={{ gap: 10, marginBottom: 16 }}>
+                {filteredFiles.map((file) => (
+                  <TouchableOpacity
+                    key={file.id}
+                    activeOpacity={0.75}
+                    onPress={() => setSelectedFilePreview(file)}
+                    style={{
+                      backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                      borderRadius: 16,
+                      padding: 14,
+                      borderWidth: 1,
+                      borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                    }}
+                  >
+                    {/* File Icon / Thumbnail */}
+                    <View
+                      style={{
+                        width: 48,
+                        height: 48,
+                        borderRadius: 14,
+                        backgroundColor: file.category === 'image' ? '#0284C7' : file.category === 'video' ? '#8B5CF6' : '#10B981',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        marginRight: 14,
+                        overflow: 'hidden',
+                      }}
+                    >
+                      {file.category === 'image' && file.uri ? (
+                        <Image
+                          source={{ uri: file.uri }}
+                          style={{ width: 48, height: 48 }}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <Ionicons
+                          name={(file.category === 'video' ? 'play' : file.category === 'image' ? 'image' : 'document-text') as any}
+                          size={22}
+                          color="#FFFFFF"
+                        />
+                      )}
+                    </View>
+
+                    {/* File Details */}
+                    <View style={{ flex: 1 }}>
+                      <Text
                         style={{
-                          width: 48,
-                          height: 48,
-                          borderRadius: 14,
-                          backgroundColor: file.color || (file.category === 'image' ? '#0284C7' : file.category === 'video' ? '#8B5CF6' : '#10B981'),
-                          justifyContent: 'center',
+                          fontSize: 15,
+                          fontWeight: '700',
+                          color: isLight ? '#000000' : '#FFFFFF',
+                          marginBottom: 3,
+                        }}
+                        numberOfLines={1}
+                      >
+                        {file.name}
+                      </Text>
+                      <Text style={{ fontSize: 12, color: '#94A3B8' }}>
+                        {file.sizeFormatted || '0 B'} • {file.category === 'image' ? 'Hình ảnh' : file.category === 'video' ? 'Video' : file.category === 'archive' ? 'Tệp nén' : 'Tài liệu'}
+                      </Text>
+                    </View>
+
+                    {/* Right Controls: 3-dots Menu button */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      <TouchableOpacity
+                        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          setActiveFileMenu(file);
+                          setShowFileActionModal(true);
+                        }}
+                        style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: 8,
+                          backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E',
                           alignItems: 'center',
-                          marginRight: 14,
-                          overflow: 'hidden',
+                          justifyContent: 'center',
                         }}
                       >
-                        {file.bgUrl ? (
-                          <Image
-                            source={{ uri: file.bgUrl }}
-                            style={{ width: 48, height: 48 }}
-                            resizeMode="cover"
-                          />
-                        ) : (
-                          <Ionicons
-                            name={(file.icon || (file.category === 'video' ? 'play' : file.category === 'image' ? 'image' : 'document-text')) as any}
-                            size={22}
-                            color="#FFFFFF"
-                          />
-                        )}
-                      </View>
-
-                      {/* File Details */}
-                      <View style={{ flex: 1 }}>
-                        <Text
-                          style={{
-                            fontSize: 15,
-                            fontWeight: '700',
-                            color: isLight ? '#0F172A' : '#FFFFFF',
-                            marginBottom: 3,
-                          }}
-                          numberOfLines={1}
-                        >
-                          {file.name}
-                        </Text>
-                        <Text style={{ fontSize: 12, color: '#94A3B8' }}>
-                          {file.sizeFormatted || '1.2 MB'} • {file.typeLabel || (file.category === 'image' ? 'Ảnh' : file.category === 'video' ? 'Video' : 'Tài liệu')}
-                        </Text>
-                      </View>
-
-                      {/* Right Controls */}
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                        <TouchableOpacity
-                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                          onPress={() => handleDeleteFile(file.id)}
-                        >
-                          <Ionicons name="ellipsis-vertical" size={16} color="#64748B" />
-                        </TouchableOpacity>
-                        <Text style={{ fontSize: 12, color: '#94A3B8' }}>
-                          {file.timeAgo || 'Vừa xong'}
-                        </Text>
-                        <Ionicons name="chevron-forward" size={16} color="#475569" />
-                      </View>
-                    </TouchableOpacity>
-                  );
-                });
-              })()}
-            </View>
-
-            {/* DASHED EMPTY / DROPZONE CARD */}
-            <View
-              style={{
-                borderWidth: 1.5,
-                borderColor: isLight ? '#CBD5E1' : '#334155',
-                borderStyle: 'dashed',
-                borderRadius: 18,
-                paddingVertical: 24,
-                paddingHorizontal: 20,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: isLight ? 'rgba(241, 245, 249, 0.6)' : 'rgba(15, 23, 42, 0.4)',
-                marginBottom: 30,
-              }}
-            >
+                        <Ionicons name="ellipsis-vertical" size={16} color={isLight ? '#475569' : '#94A3B8'} />
+                      </TouchableOpacity>
+                      <Ionicons name="chevron-forward" size={16} color="#475569" />
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ) : (
+              /* DASHED EMPTY / DROPZONE CARD */
               <View
                 style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 14,
-                  backgroundColor: isLight ? '#E2E8F0' : '#1E293B',
-                  justifyContent: 'center',
+                  borderWidth: 1.5,
+                  borderColor: isLight ? '#CBD5E1' : '#334155',
+                  borderStyle: 'dashed',
+                  borderRadius: 18,
+                  paddingVertical: 36,
+                  paddingHorizontal: 20,
                   alignItems: 'center',
-                  marginBottom: 10,
+                  justifyContent: 'center',
+                  backgroundColor: isLight ? 'rgba(241, 245, 249, 0.6)' : 'rgba(15, 23, 42, 0.4)',
+                  marginBottom: 30,
+                  marginTop: 8,
                 }}
               >
-                <Ionicons name="folder-outline" size={22} color="#64748B" />
+                <View
+                  style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: 14,
+                    backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginBottom: 12,
+                  }}
+                >
+                  <Ionicons name="folder-outline" size={24} color="#64748B" />
+                </View>
+                <Text style={{ fontSize: 14.5, fontWeight: '700', color: isLight ? '#334155' : '#CBD5E1', marginBottom: 4 }}>
+                  Không có tệp nào được chọn
+                </Text>
+                <Text style={{ fontSize: 12, color: '#64748B', textAlign: 'center' }}>
+                  Hãy thêm tệp hoặc tải từ URL để lưu trữ an toàn.
+                </Text>
               </View>
-              <Text style={{ fontSize: 14, fontWeight: '700', color: isLight ? '#334155' : '#CBD5E1', marginBottom: 4 }}>
-                Không có tệp nào được chọn
-              </Text>
-              <Text style={{ fontSize: 11.5, color: '#64748B', textAlign: 'center' }}>
-                Hãy thêm tệp hoặc tạo thư mục để lưu trữ dữ liệu của bạn.
-              </Text>
-            </View>
+            )}
           </ScrollView>
         )}
 
@@ -14421,7 +14325,7 @@ function MainApp() {
                 <View
                   style={{
                     padding: 22,
-                    backgroundColor: isLight ? '#F2F2F7' : '#1C1C1E',
+                    backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
                     borderTopWidth: 0.5,
                     borderTopColor: isLight ? '#E5E5EA' : '#2C2C2E',
                     alignItems: 'center',
@@ -15606,50 +15510,66 @@ function MainApp() {
               </ScrollView>
             </KeyboardAvoidingView>
           ) : profileSubView === 'edit_profile' ? (
-            /* MÀN HÌNH CHỈNH SỬA HỒ SƠ CHUẨN APPLE */
+            /* MÀN HÌNH CHỈNH SỬA HỒ SƠ (ĐỒNG BỘ DARK CYBER UI THEO MẪU MỚI) */
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: isLight ? '#F2F2F7' : '#000000' }}>
-              <View style={[styles.fullScreenNavBar, isLight && { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E5EA' }]}>
-                <TouchableOpacity onPress={() => setProfileSubView('main')} style={styles.fullScreenNavBtn}>
-                  <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor }]}>{t.cancel}</Text>
+              <View style={[styles.fullScreenNavBar, { backgroundColor: isLight ? '#FFFFFF' : '#000000', borderBottomColor: isLight ? '#E5E5EA' : '#2C2C2E' }]}>
+                <TouchableOpacity onPress={() => setProfileSubView('main')} style={styles.fullScreenNavBtn} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+                  <Text style={[styles.fullScreenNavBtnText, { color: '#007AFF' }]}>Hủy</Text>
                 </TouchableOpacity>
-                <Text style={[styles.fullScreenNavTitle, isLight && { color: '#000000' }]}>{t.editProfile}</Text>
-                <TouchableOpacity onPress={handleSaveEditProfile} style={styles.fullScreenNavBtn}>
-                  <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor, fontWeight: '600' }]}>{t.done}</Text>
+                <Text style={[styles.fullScreenNavTitle, { color: isLight ? '#000000' : '#FFFFFF', fontWeight: '800' }]}>Sửa hồ sơ</Text>
+                <TouchableOpacity onPress={handleSaveEditProfile} style={styles.fullScreenNavBtn} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+                  <Text style={[styles.fullScreenNavBtnText, { color: '#007AFF', fontWeight: '700' }]}>Xong</Text>
                 </TouchableOpacity>
               </View>
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 100 }} keyboardShouldPersistTaps="handled">
-                {/* Avatar Hero Box Chuẩn Apple Settings */}
-                <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 20 }]}>
-                  <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }, { alignItems: 'center', paddingVertical: 22 }]}>
+                {/* Avatar Hero Box */}
+                <View style={{ marginBottom: 20 }}>
+                  <View style={{ backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E', borderRadius: 20, borderWidth: 1, borderColor: isLight ? '#E5E5EA' : '#2C2C2E', alignItems: 'center', paddingVertical: 20 }}>
                     <TouchableOpacity
-                      activeOpacity={0.8}
+                      activeOpacity={0.85}
                       onPress={() => setIsAvatarModalOpen(true)}
                       style={{ position: 'relative', marginBottom: 12 }}
                     >
-                      {renderProfileAvatar(editAvatarType, editAvatarUri, editAvatarPresetId, editDisplayNameInput, editAvatarColor, 96)}
+                      <View
+                        style={{
+                          width: 84,
+                          height: 84,
+                          borderRadius: 42,
+                          borderWidth: 2.5,
+                          borderColor: '#007AFF',
+                          overflow: 'hidden',
+                          backgroundColor: '#2C2C2E',
+                          shadowColor: '#007AFF',
+                          shadowOffset: { width: 0, height: 0 },
+                          shadowOpacity: 0.5,
+                          shadowRadius: 8,
+                        }}
+                      >
+                        {renderProfileAvatar(editAvatarType, editAvatarUri, editAvatarPresetId, editDisplayNameInput, editAvatarColor, 84)}
+                      </View>
                       <View
                         style={{
                           position: 'absolute',
                           bottom: 0,
                           right: 0,
-                          width: 32,
-                          height: 32,
-                          borderRadius: 16,
-                          backgroundColor: appSettings.accentColor,
+                          width: 26,
+                          height: 26,
+                          borderRadius: 13,
+                          backgroundColor: '#1C1C1E',
+                          borderWidth: 1.5,
+                          borderColor: '#007AFF',
                           justifyContent: 'center',
                           alignItems: 'center',
-                          borderWidth: 2.5,
-                          borderColor: isLight ? '#FFFFFF' : '#1C1C1E',
                         }}
                       >
-                        <Ionicons name="camera" size={16} color="#FFFFFF" />
+                        <Ionicons name="camera" size={13} color="#FFFFFF" />
                       </View>
                     </TouchableOpacity>
 
-                    <Text style={{ fontSize: 18, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
-                      {editDisplayNameInput || 'Admin LockX'}
+                    <Text style={{ fontSize: 18, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF' }}>
+                      {editDisplayNameInput || 'Người Dùng LockX'}
                     </Text>
-                    <Text style={{ fontSize: 13, color: isLight ? '#6C6C70' : '#8E8E93', marginTop: 2, marginBottom: 14 }}>
+                    <Text style={{ fontSize: 13, color: '#94A3B8', marginTop: 2, marginBottom: 14 }}>
                       {editUsernameInput.startsWith('@') ? editUsernameInput : `@${editUsernameInput}`}
                     </Text>
 
@@ -15661,14 +15581,14 @@ function MainApp() {
                           flexDirection: 'row',
                           alignItems: 'center',
                           gap: 6,
-                          backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E',
-                          paddingHorizontal: 14,
-                          paddingVertical: 7,
-                          borderRadius: 16,
+                          backgroundColor: '#007AFF',
+                          paddingHorizontal: 16,
+                          paddingVertical: 8,
+                          borderRadius: 12,
                         }}
                       >
-                        <Ionicons name="sparkles" size={15} color={appSettings.accentColor} />
-                        <Text style={{ color: appSettings.accentColor, fontSize: 13.5, fontWeight: '600' }}>
+                        <Ionicons name="sparkles" size={14} color="#FFFFFF" />
+                        <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '700' }}>
                           Đổi ảnh đại diện
                         </Text>
                       </TouchableOpacity>
@@ -15685,14 +15605,16 @@ function MainApp() {
                             flexDirection: 'row',
                             alignItems: 'center',
                             gap: 5,
-                            backgroundColor: 'rgba(255, 59, 48, 0.12)',
-                            paddingHorizontal: 12,
-                            paddingVertical: 7,
-                            borderRadius: 16,
+                            backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                            paddingHorizontal: 14,
+                            paddingVertical: 8,
+                            borderRadius: 12,
+                            borderWidth: 1,
+                            borderColor: 'rgba(239, 68, 68, 0.3)',
                           }}
                         >
-                          <Ionicons name="trash-outline" size={14} color="#FF3B30" />
-                          <Text style={{ color: '#FF3B30', fontSize: 13, fontWeight: '600' }}>
+                          <Ionicons name="trash-outline" size={14} color="#EF4444" />
+                          <Text style={{ color: '#EF4444', fontSize: 13, fontWeight: '700' }}>
                             Xóa ảnh
                           </Text>
                         </TouchableOpacity>
@@ -15702,59 +15624,63 @@ function MainApp() {
                 </View>
 
                 {/* NHÓM 1: THÔNG TIN CƠ BẢN */}
-                <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 18 }]}>
-                  <Text style={styles.sectionCaption}>THÔNG TIN CƠ BẢN</Text>
-                  <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }]}>
+                <View style={{ marginBottom: 18 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', marginBottom: 8, marginLeft: 4 }}>
+                    THÔNG TIN CƠ BẢN
+                  </Text>
+                  <View style={{ backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E', borderRadius: 18, borderWidth: 1, borderColor: isLight ? '#E5E5EA' : '#2C2C2E', overflow: 'hidden' }}>
                     {/* Họ và tên */}
-                    <View style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}>
-                      <View style={[styles.cellLeadingIcon, { backgroundColor: '#007AFF' }]}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', padding: 14, borderBottomWidth: 1, borderBottomColor: isLight ? '#E5E5EA' : '#2C2C2E' }}>
+                      <View style={{ width: 34, height: 34, borderRadius: 9, backgroundColor: '#007AFF', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
                         <Ionicons name="person" size={17} color="#FFFFFF" />
                       </View>
-                      <Text style={[styles.cellTitle, { width: 105 }]}>{t.fullName}</Text>
+                      <Text style={{ width: 110, fontSize: 14.5, fontWeight: '600', color: isLight ? '#000000' : '#FFFFFF' }}>Họ và tên</Text>
                       <TextInput
-                        style={{ flex: 1, textAlign: 'right', fontSize: 16, color: isLight ? '#000000' : '#FFFFFF', paddingVertical: 0 }}
-                        placeholder={t.fullName}
-                        placeholderTextColor="#8E8E93"
+                        style={{ flex: 1, textAlign: 'right', fontSize: 15, color: isLight ? '#000000' : '#FFFFFF', paddingVertical: 0 }}
+                        placeholder="Nhập họ và tên..."
+                        placeholderTextColor="#64748B"
                         value={editDisplayNameInput}
                         onChangeText={setEditDisplayNameInput}
                       />
                     </View>
 
                     {/* Username */}
-                    <View style={[styles.cellItem, { borderBottomWidth: 0 }]}>
-                      <View style={[styles.cellLeadingIcon, { backgroundColor: '#5856D6' }]}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', padding: 14 }}>
+                      <View style={{ width: 34, height: 34, borderRadius: 9, backgroundColor: '#5856D6', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
                         <Ionicons name="at" size={17} color="#FFFFFF" />
                       </View>
-                      <Text style={[styles.cellTitle, { width: 105 }]}>{t.username}</Text>
+                      <Text style={{ width: 110, fontSize: 14.5, fontWeight: '600', color: isLight ? '#000000' : '#FFFFFF' }}>Tên người dùng</Text>
                       <TextInput
-                        style={{ flex: 1, textAlign: 'right', fontSize: 16, color: isLight ? '#000000' : '#FFFFFF', paddingVertical: 0 }}
+                        style={{ flex: 1, textAlign: 'right', fontSize: 15, color: isLight ? '#000000' : '#FFFFFF', paddingVertical: 0 }}
                         placeholder="@username"
-                        placeholderTextColor="#8E8E93"
+                        placeholderTextColor="#64748B"
                         value={editUsernameInput}
                         onChangeText={setEditUsernameInput}
                         autoCapitalize="none"
                       />
                     </View>
                   </View>
-                  <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 12, marginTop: 6, marginLeft: 16 }}>
+                  <Text style={{ color: '#64748B', fontSize: 11.5, marginTop: 6, marginLeft: 6 }}>
                     Họ tên có thể đổi bất kỳ lúc nào. Tên người dùng (@username) chỉ được đổi 1 lần mỗi 7 ngày.
                   </Text>
                 </View>
 
                 {/* NHÓM 2: LIÊN HỆ & BẢO MẬT */}
-                <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 18 }]}>
-                  <Text style={styles.sectionCaption}>LIÊN HỆ & BẢO MẬT</Text>
-                  <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }]}>
+                <View style={{ marginBottom: 18 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', marginBottom: 8, marginLeft: 4 }}>
+                    LIÊN HỆ & BẢO MẬT
+                  </Text>
+                  <View style={{ backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E', borderRadius: 18, borderWidth: 1, borderColor: isLight ? '#E5E5EA' : '#2C2C2E', overflow: 'hidden' }}>
                     {/* Email */}
-                    <View style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}>
-                      <View style={[styles.cellLeadingIcon, { backgroundColor: '#34C759' }]}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', padding: 14, borderBottomWidth: 1, borderBottomColor: isLight ? '#E5E5EA' : '#2C2C2E' }}>
+                      <View style={{ width: 34, height: 34, borderRadius: 9, backgroundColor: '#10B981', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
                         <Ionicons name="mail" size={17} color="#FFFFFF" />
                       </View>
-                      <Text style={[styles.cellTitle, { width: 105 }]}>{t.email}</Text>
+                      <Text style={{ width: 110, fontSize: 14.5, fontWeight: '600', color: isLight ? '#000000' : '#FFFFFF' }}>Email</Text>
                       <TextInput
-                        style={{ flex: 1, textAlign: 'right', fontSize: 16, color: isLight ? '#000000' : '#FFFFFF', paddingVertical: 0 }}
-                        placeholder={t.notUpdated}
-                        placeholderTextColor="#8E8E93"
+                        style={{ flex: 1, textAlign: 'right', fontSize: 15, color: isLight ? '#000000' : '#FFFFFF', paddingVertical: 0 }}
+                        placeholder="Chưa cập nhật"
+                        placeholderTextColor="#64748B"
                         value={editEmailInput}
                         onChangeText={setEditEmailInput}
                         keyboardType="email-address"
@@ -15763,15 +15689,15 @@ function MainApp() {
                     </View>
 
                     {/* Số điện thoại */}
-                    <View style={[styles.cellItem, { borderBottomWidth: 0 }]}>
-                      <View style={[styles.cellLeadingIcon, { backgroundColor: '#30B0C7' }]}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', padding: 14 }}>
+                      <View style={{ width: 34, height: 34, borderRadius: 9, backgroundColor: '#34C759', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
                         <Ionicons name="call" size={17} color="#FFFFFF" />
                       </View>
-                      <Text style={[styles.cellTitle, { width: 105 }]}>{t.phone}</Text>
+                      <Text style={{ width: 110, fontSize: 14.5, fontWeight: '600', color: isLight ? '#000000' : '#FFFFFF' }}>Số điện thoại</Text>
                       <TextInput
-                        style={{ flex: 1, textAlign: 'right', fontSize: 16, color: isLight ? '#000000' : '#FFFFFF', paddingVertical: 0 }}
-                        placeholder={t.notUpdated}
-                        placeholderTextColor="#8E8E93"
+                        style={{ flex: 1, textAlign: 'right', fontSize: 15, color: isLight ? '#000000' : '#FFFFFF', paddingVertical: 0 }}
+                        placeholder="Chưa cập nhật"
+                        placeholderTextColor="#64748B"
                         value={editPhoneInput}
                         onChangeText={setEditPhoneInput}
                         keyboardType="phone-pad"
@@ -15781,56 +15707,48 @@ function MainApp() {
                 </View>
 
                 {/* NHÓM 3: CÁ NHÂN & TIỂU SỬ */}
-                <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 18 }]}>
-                  <Text style={styles.sectionCaption}>CÁ NHÂN & TIỂU SỬ</Text>
-                  <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }]}>
+                <View style={{ marginBottom: 18 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', marginBottom: 8, marginLeft: 4 }}>
+                    CÁ NHÂN & TIỂU SỬ
+                  </Text>
+                  <View style={{ backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E', borderRadius: 18, borderWidth: 1, borderColor: isLight ? '#E5E5EA' : '#2C2C2E', overflow: 'hidden' }}>
                     {/* Ngày sinh */}
-                    <View style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}>
-                      <View style={[styles.cellLeadingIcon, { backgroundColor: '#AF52DE' }]}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', padding: 14, borderBottomWidth: 1, borderBottomColor: isLight ? '#E5E5EA' : '#2C2C2E' }}>
+                      <View style={{ width: 34, height: 34, borderRadius: 9, backgroundColor: '#FF9500', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
                         <Ionicons name="calendar" size={17} color="#FFFFFF" />
                       </View>
-                      <Text style={[styles.cellTitle, { width: 105 }]}>{t.birthday}</Text>
+                      <Text style={{ width: 110, fontSize: 14.5, fontWeight: '600', color: isLight ? '#000000' : '#FFFFFF' }}>Ngày sinh</Text>
                       <TextInput
-                        style={{ flex: 1, textAlign: 'right', fontSize: 16, color: isLight ? '#000000' : '#FFFFFF', paddingVertical: 0 }}
-                        placeholder={t.notUpdated}
-                        placeholderTextColor="#8E8E93"
+                        style={{ flex: 1, textAlign: 'right', fontSize: 15, color: isLight ? '#000000' : '#FFFFFF', paddingVertical: 0 }}
+                        placeholder="Chưa cập nhật"
+                        placeholderTextColor="#64748B"
                         value={editBirthdayInput}
                         onChangeText={setEditBirthdayInput}
                       />
                     </View>
 
                     {/* Giới tính */}
-                    <View style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}>
-                      <View style={[styles.cellLeadingIcon, { backgroundColor: '#FF2D55' }]}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', padding: 14, borderBottomWidth: 1, borderBottomColor: isLight ? '#E5E5EA' : '#2C2C2E' }}>
+                      <View style={{ width: 34, height: 34, borderRadius: 9, backgroundColor: '#AF52DE', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
                         <Ionicons name="people" size={17} color="#FFFFFF" />
                       </View>
-                      <Text style={[styles.cellTitle, { width: 105 }]}>{t.gender}</Text>
+                      <Text style={{ width: 90, fontSize: 14.5, fontWeight: '600', color: isLight ? '#000000' : '#FFFFFF' }}>Giới tính</Text>
                       <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'flex-end', gap: 6 }}>
-                        {[
-                          { key: 'Nam', label: t.male },
-                          { key: 'Nữ', label: t.female },
-                          { key: 'Chưa cập nhật', label: t.notUpdated },
-                        ].map((g) => {
-                          const isSel = editGenderInput === g.key;
+                        {(['Nam', 'Nữ', 'Chưa cập nhật'] as const).map((g) => {
+                          const isSel = editGenderInput === g;
                           return (
                             <TouchableOpacity
-                              key={g.key}
-                              onPress={() => setEditGenderInput(g.key as any)}
+                              key={g}
+                              onPress={() => setEditGenderInput(g)}
                               style={{
                                 paddingHorizontal: 10,
-                                paddingVertical: 4,
+                                paddingVertical: 5,
                                 borderRadius: 8,
-                                backgroundColor: isSel ? appSettings.accentColor : (isLight ? '#E5E5EA' : '#2C2C2E'),
+                                backgroundColor: isSel ? '#007AFF' : (isLight ? '#F1F5F9' : '#2C2C2E'),
                               }}
                             >
-                              <Text
-                                style={{
-                                  fontSize: 12.5,
-                                  fontWeight: isSel ? '700' : '500',
-                                  color: isSel ? '#FFFFFF' : (isLight ? '#000000' : '#8E8E93'),
-                                }}
-                              >
-                                {g.label}
+                              <Text style={{ fontSize: 12, fontWeight: isSel ? '700' : '500', color: isSel ? '#FFFFFF' : (isLight ? '#475569' : '#94A3B8') }}>
+                                {g}
                               </Text>
                             </TouchableOpacity>
                           );
@@ -15839,54 +15757,33 @@ function MainApp() {
                     </View>
 
                     {/* Tiểu sử */}
-                    <View style={[styles.cellItem, { borderBottomWidth: 0, flexDirection: 'column', alignItems: 'stretch', paddingVertical: 12 }]}>
+                    <View style={{ padding: 14 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                        <View style={[styles.cellLeadingIcon, { backgroundColor: '#8E8E93' }]}>
+                        <View style={{ width: 34, height: 34, borderRadius: 9, backgroundColor: '#FF2D55', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
                           <Ionicons name="document-text" size={17} color="#FFFFFF" />
                         </View>
-                        <Text style={styles.cellTitle}>{t.bio}</Text>
+                        <Text style={{ fontSize: 14.5, fontWeight: '600', color: isLight ? '#000000' : '#FFFFFF' }}>Tiểu sử</Text>
                       </View>
                       <TextInput
                         style={{
-                          width: '100%',
-                          minHeight: 70,
+                          backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                          borderRadius: 12,
+                          padding: 12,
                           color: isLight ? '#000000' : '#FFFFFF',
-                          backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E',
-                          borderRadius: 10,
-                          padding: 10,
                           fontSize: 14,
+                          minHeight: 80,
+                          textAlignVertical: 'top',
+                          borderWidth: 1,
+                          borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
                         }}
-                        multiline
-                        placeholder={t.notUpdated}
-                        placeholderTextColor="#8E8E93"
+                        placeholder="Nhập tiểu sử ngắn..."
+                        placeholderTextColor="#64748B"
                         value={editBioInput}
                         onChangeText={setEditBioInput}
+                        multiline
                       />
                     </View>
                   </View>
-                </View>
-
-                {/* Nút Lưu Hồ Sơ To Rõ Chuẩn Apple */}
-                <View style={[styles.sectionWrap, { marginTop: 8, marginBottom: 36 }]}>
-                  <TouchableOpacity
-                    onPress={handleSaveEditProfile}
-                    activeOpacity={0.8}
-                    style={{
-                      backgroundColor: appSettings.accentColor,
-                      paddingVertical: 14,
-                      borderRadius: 12,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      shadowColor: appSettings.accentColor,
-                      shadowOffset: { width: 0, height: 4 },
-                      shadowOpacity: 0.3,
-                      shadowRadius: 8,
-                    }}
-                  >
-                    <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '700' }}>
-                      {t.saveChanges}
-                    </Text>
-                  </TouchableOpacity>
                 </View>
               </ScrollView>
             </KeyboardAvoidingView>
@@ -16286,276 +16183,608 @@ function MainApp() {
               </ScrollView>
             </KeyboardAvoidingView>
           ) : (
-            /* MÀN HÌNH CÁ NHÂN CHÍNH (CHUẨN APPLE ID VÀ ĐỒNG BỘ SETTINGS) */
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, { paddingHorizontal: 16, paddingTop: 10 }]}>
-              {/* Apple Large Title */}
-              <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 12 }]}>
-                <Text style={{ fontSize: 34, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF', letterSpacing: 0.36 }}>
-                  {t.tabProfile}
+            /* MÀN HÌNH CÁ NHÂN (DARK MODERN CYBER UI - THEO MẪU THIẾT KẾ MỚI) */
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={[
+                styles.scrollContent,
+                {
+                  paddingHorizontal: 16,
+                  paddingTop: 10,
+                  paddingBottom: 120,
+                  backgroundColor: isLight ? '#F2F2F7' : '#000000',
+                },
+              ]}
+            >
+              {/* TOP HEADER: CÁ NHÂN TITLE, SETTINGS & NOTIFICATIONS ICONS */}
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: 16,
+                  paddingTop: 6,
+                }}
+              >
+                <Text style={{ fontSize: 28, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF', letterSpacing: -0.5 }}>
+                  Cá nhân
                 </Text>
-              </View>
-
-              {/* Apple ID Header Card (Box Admin căn bằng chuẩn với các box ở dưới) */}
-              <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 18 }]}>
-                <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }, { padding: 16 }]}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <TouchableOpacity
-                      onPress={handleOpenEditProfile}
-                      activeOpacity={0.8}
-                      style={{ position: 'relative', marginRight: 14 }}
-                    >
-                      {renderProfileAvatar(userProfile.avatarType, userProfile.avatarUri, userProfile.avatarPresetId, userProfile.displayName, userProfile.avatarColor, 66)}
-                      <View
-                        style={{
-                          position: 'absolute',
-                          bottom: -2,
-                          right: -2,
-                          width: 22,
-                          height: 22,
-                          borderRadius: 11,
-                          backgroundColor: appSettings.accentColor,
-                          justifyContent: 'center',
-                          alignItems: 'center',
-                          borderWidth: 2,
-                          borderColor: isLight ? '#FFFFFF' : '#1C1C1E',
-                        }}
-                      >
-                        <Ionicons name="camera" size={11} color="#FFFFFF" />
-                      </View>
-                    </TouchableOpacity>
-
-                    <View style={{ flex: 1 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                        <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 19, fontWeight: '700' }} numberOfLines={1}>
-                          {userProfile.displayName}
-                        </Text>
-                        {userProfile.isVerified && (
-                          <View style={{ backgroundColor: '#0A84FF', borderRadius: 9, width: 18, height: 18, justifyContent: 'center', alignItems: 'center' }}>
-                            <Ionicons name="checkmark" size={12} color="#FFFFFF" />
-                          </View>
-                        )}
-                      </View>
-                      <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 13.5, marginTop: 2 }}>
-                        {userProfile.username}
-                      </Text>
-                    </View>
-
-                    <TouchableOpacity
-                      onPress={handleOpenEditProfile}
-                      style={{
-                        paddingHorizontal: 12,
-                        paddingVertical: 6,
-                        borderRadius: 14,
-                        backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E',
-                      }}
-                    >
-                      <Text style={{ color: appSettings.accentColor, fontSize: 13, fontWeight: '600' }}>{t.editProfile}</Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  {/* Sub Action Buttons Bar */}
-                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 14, paddingTop: 12, borderTopWidth: 0.5, borderTopColor: isLight ? '#E5E5EA' : '#2C2C2E' }}>
-                    <TouchableOpacity
-                      onPress={handleOpenEditProfile}
-                      style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, borderRadius: 10, backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E' }}
-                    >
-                      <Ionicons name="create-outline" size={15} color={appSettings.accentColor} />
-                      <Text style={{ color: appSettings.accentColor, fontSize: 12.5, fontWeight: '600' }}>{t.editProfile}</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      onPress={() => {
-                        handleOpenEditProfile();
-                        setTimeout(() => setIsAvatarModalOpen(true), 250);
-                      }}
-                      style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, borderRadius: 10, backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E' }}
-                    >
-                      <Ionicons name="sparkles-outline" size={15} color={appSettings.accentColor} />
-                      <Text style={{ color: appSettings.accentColor, fontSize: 12.5, fontWeight: '600' }}>Avatar</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      onPress={() => {
-                        setCurrentPassInput('');
-                        setNewPassInput('');
-                        setConfirmNewPassInput('');
-                        setProfileSubView('change_password');
-                      }}
-                      style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, borderRadius: 10, backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E' }}
-                    >
-                      <Ionicons name="key-outline" size={15} color={appSettings.accentColor} />
-                      <Text style={{ color: appSettings.accentColor, fontSize: 12.5, fontWeight: '600' }}>{t.changePassword}</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
-
-              {/* NHÓM XÁC MINH DANH TÍNH (LOCKX VERIFIED) */}
-              <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 18 }]}>
-                <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 12.5, fontWeight: '500', textTransform: 'uppercase', marginBottom: 6, marginLeft: 16 }}>
-                  Xác minh danh tính
-                </Text>
-                <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  {/* Settings Icon Button */}
                   <TouchableOpacity
-                    style={[styles.cellItem, { borderBottomWidth: 0, paddingVertical: 12 }]}
-                    activeOpacity={0.7}
-                    onPress={() => setProfileSubView('verify_id')}
+                    activeOpacity={0.75}
+                    onPress={() => setCurrentTab('settings')}
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 20,
+                      backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                      borderWidth: 1,
+                      borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
                   >
-                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#0A84FF' }]}>
-                      <Ionicons name="shield-checkmark" size={18} color="#FFFFFF" />
-                    </View>
-                    <View style={[styles.cellContent, { flex: 1 }]}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                        <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '500' }}>
-                          LockX Verified
-                        </Text>
-                        {userProfile.isVerified && (
-                          <View style={{ backgroundColor: '#0A84FF', borderRadius: 8, width: 16, height: 16, justifyContent: 'center', alignItems: 'center' }}>
-                            <Ionicons name="checkmark" size={11} color="#FFFFFF" />
-                          </View>
-                        )}
-                      </View>
-                      <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 12.5, marginTop: 1 }}>
-                        {userProfile.isVerified ? 'Tài khoản đã có Tích Xanh chính chủ' : 'Chưa xác minh • Nhấn để nhận Tích Xanh'}
-                      </Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <View
-                        style={{
-                          backgroundColor: userProfile.isVerified ? 'rgba(52, 199, 89, 0.15)' : 'rgba(255, 159, 10, 0.15)',
-                          paddingHorizontal: 8,
-                          paddingVertical: 3,
-                          borderRadius: 6,
-                        }}
-                      >
-                        <Text
-                          style={{
-                            color: userProfile.isVerified ? '#34C759' : '#FF9F0A',
-                            fontSize: 11.5,
-                            fontWeight: '700',
-                          }}
-                        >
-                          {userProfile.isVerified ? 'ĐÃ XÁC MINH' : 'CHƯA XÁC MINH'}
-                        </Text>
-                      </View>
-                      <Ionicons name="chevron-forward" size={16} color={isLight ? '#C7C7CC' : '#48484A'} />
-                    </View>
+                    <Ionicons name="settings-outline" size={20} color={isLight ? '#0F172A' : '#94A3B8'} />
+                  </TouchableOpacity>
+
+                  {/* Bell Notification Icon Button with red dot */}
+                  <TouchableOpacity
+                    activeOpacity={0.75}
+                    onPress={() => setShowNotificationCenter(true)}
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 20,
+                      backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                      borderWidth: 1,
+                      borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      position: 'relative',
+                    }}
+                  >
+                    <Ionicons name="notifications-outline" size={20} color={isLight ? '#0F172A' : '#94A3B8'} />
+                    <View
+                      style={{
+                        position: 'absolute',
+                        top: 8,
+                        right: 9,
+                        width: 8,
+                        height: 8,
+                        borderRadius: 4,
+                        backgroundColor: '#FF3B30',
+                        borderWidth: 1.5,
+                        borderColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                      }}
+                    />
                   </TouchableOpacity>
                 </View>
               </View>
 
-              {/* NHÓM THÔNG TIN CÁ NHÂN (HIỂN THỊ CHƯA CẬP NHẬT KHI ĐỂ TRỐNG) */}
-              <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 18 }]}>
-                <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 12.5, fontWeight: '500', textTransform: 'uppercase', marginBottom: 6, marginLeft: 16 }}>
-                  {t.profileTitle}
-                </Text>
-                <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }]}>
-                  {/* Email */}
-                  <View style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}>
-                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#34C759' }]}>
-                      <Ionicons name="mail-outline" size={17} color="#FFFFFF" />
+              {/* USER PROFILE CARD */}
+              <View
+                style={{
+                  backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                  borderRadius: 22,
+                  padding: 18,
+                  borderWidth: 1,
+                  borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                  marginBottom: 16,
+                  shadowColor: '#007AFF',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.12,
+                  shadowRadius: 12,
+                }}
+              >
+                {/* Top Row: Avatar + Info + Chỉnh sửa Button */}
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
+                  {/* Left Avatar with Neon Glow and Camera Overlay */}
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    onPress={() => {
+                      handleOpenEditProfile();
+                      setTimeout(() => setIsAvatarModalOpen(true), 250);
+                    }}
+                    style={{ position: 'relative', marginRight: 14 }}
+                  >
+                    <View
+                      style={{
+                        width: 72,
+                        height: 72,
+                        borderRadius: 36,
+                        borderWidth: 2.5,
+                        borderColor: '#007AFF',
+                        overflow: 'hidden',
+                        backgroundColor: '#2C2C2E',
+                        shadowColor: '#007AFF',
+                        shadowOffset: { width: 0, height: 0 },
+                        shadowOpacity: 0.6,
+                        shadowRadius: 8,
+                      }}
+                    >
+                      {userProfile.avatarUri ? (
+                        <Image
+                          source={{ uri: userProfile.avatarUri }}
+                          style={{ width: '100%', height: '100%' }}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        renderProfileAvatar(userProfile.avatarType, userProfile.avatarUri, userProfile.avatarPresetId, userProfile.displayName, userProfile.avatarColor, 68)
+                      )}
                     </View>
-                    <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '400' }}>{t.email}</Text>
+                    <View
+                      style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        right: 0,
+                        width: 24,
+                        height: 24,
+                        borderRadius: 12,
+                        backgroundColor: '#1C1C1E',
+                        borderWidth: 1.5,
+                        borderColor: '#007AFF',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Ionicons name="camera" size={12} color="#FFFFFF" />
                     </View>
-                    <Text style={{ color: userProfile.email ? (isLight ? '#000000' : '#FFFFFF') : '#8E8E93', fontSize: 15, fontStyle: userProfile.email ? 'normal' : 'italic' }}>
-                      {userProfile.email || t.notUpdated}
+                  </TouchableOpacity>
+
+                  {/* Middle Info */}
+                  <View style={{ flex: 1, marginRight: 8, paddingTop: 2 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <Text style={{ fontSize: 18, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF' }}>
+                        {userProfile.displayName || 'Quảng Trọng Tuấn'}
+                      </Text>
+                      <Ionicons name="checkmark-circle" size={17} color="#007AFF" />
+                    </View>
+                    <Text style={{ fontSize: 13, color: '#94A3B8', marginTop: 3 }}>
+                      {userProfile.username || '@lockx_user'}
                     </Text>
+                    <TouchableOpacity
+                      onPress={handleOpenEditProfile}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}
+                    >
+                      <Text style={{ fontSize: 12, color: isLight ? '#6C6C70' : '#CBD5E1' }} numberOfLines={1}>
+                        {userProfile.bio || 'Người dùng LockX Vault'}
+                      </Text>
+                      <Ionicons name="create-outline" size={12} color="#007AFF" />
+                    </TouchableOpacity>
                   </View>
 
-                  {/* Điện thoại */}
-                  <View style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}>
-                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#30B0C7' }]}>
-                      <Ionicons name="call-outline" size={17} color="#FFFFFF" />
-                    </View>
-                    <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '400' }}>{t.phone}</Text>
-                    </View>
-                    <Text style={{ color: userProfile.phone ? (isLight ? '#000000' : '#FFFFFF') : '#8E8E93', fontSize: 15, fontStyle: userProfile.phone ? 'normal' : 'italic' }}>
-                      {userProfile.phone || t.notUpdated}
+                  {/* Right: Chỉnh sửa Button (using SVG icon) */}
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={handleOpenEditProfile}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 5,
+                      backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                      borderWidth: 1,
+                      borderColor: isLight ? '#E2E8F0' : '#334155',
+                      paddingHorizontal: 12,
+                      paddingVertical: 7,
+                      borderRadius: 12,
+                    }}
+                  >
+                    <Ionicons name="create-outline" size={15} color="#38BDF8" />
+                    <Text style={{ fontSize: 12.5, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
+                      Chỉnh sửa
                     </Text>
-                  </View>
+                  </TouchableOpacity>
+                </View>
 
-                  {/* Ngày sinh */}
-                  <View style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}>
-                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#AF52DE' }]}>
-                      <Ionicons name="calendar-outline" size={17} color="#FFFFFF" />
+                {/* Bottom Row: 3 Quick Action Buttons */}
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingTop: 14,
+                    borderTopWidth: 1,
+                    borderTopColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                  }}
+                >
+                  <TouchableOpacity
+                    activeOpacity={0.75}
+                    onPress={() => {
+                      handleOpenEditProfile();
+                      setTimeout(() => setIsAvatarModalOpen(true), 250);
+                    }}
+                    style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                  >
+                    <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: 'rgba(175, 82, 222, 0.15)', justifyContent: 'center', alignItems: 'center' }}>
+                      <Ionicons name="camera-outline" size={15} color="#AF52DE" />
                     </View>
-                    <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '400' }}>{t.birthday}</Text>
-                    </View>
-                    <Text style={{ color: userProfile.birthday ? (isLight ? '#000000' : '#FFFFFF') : '#8E8E93', fontSize: 15, fontStyle: userProfile.birthday ? 'normal' : 'italic' }}>
-                      {userProfile.birthday || t.notUpdated}
+                    <Text style={{ fontSize: 11.5, fontWeight: '600', color: isLight ? '#6C6C70' : '#CBD5E1' }}>
+                      Đổi ảnh đại diện
                     </Text>
-                  </View>
+                  </TouchableOpacity>
 
-                  {/* Giới tính */}
-                  <View style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}>
-                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#FF2D55' }]}>
-                      <Ionicons name="people-outline" size={17} color="#FFFFFF" />
-                    </View>
-                    <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '400' }}>{t.gender}</Text>
-                    </View>
-                    <Text style={{ color: (userProfile.gender && userProfile.gender !== 'Chưa cập nhật') ? (isLight ? '#000000' : '#FFFFFF') : '#8E8E93', fontSize: 15, fontStyle: (userProfile.gender && userProfile.gender !== 'Chưa cập nhật') ? 'normal' : 'italic' }}>
-                      {(userProfile.gender && userProfile.gender !== 'Chưa cập nhật') ? (userProfile.gender === 'Nam' ? t.male : userProfile.gender === 'Nữ' ? t.female : userProfile.gender) : t.notUpdated}
-                    </Text>
-                  </View>
+                  <View style={{ width: 1, height: 18, backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E' }} />
 
-                  {/* Tiểu sử */}
-                  <View style={[styles.cellItem, { borderBottomWidth: 0, flexDirection: 'column', alignItems: 'stretch', paddingVertical: 12 }]}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-                      <View style={[styles.cellLeadingIcon, { backgroundColor: '#8E8E93' }]}>
-                        <Ionicons name="document-text-outline" size={17} color="#FFFFFF" />
-                      </View>
-                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '400' }}>{t.bio}</Text>
+                  <TouchableOpacity
+                    activeOpacity={0.75}
+                    onPress={handleOpenEditProfile}
+                    style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                  >
+                    <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: 'rgba(0, 122, 255, 0.15)', justifyContent: 'center', alignItems: 'center' }}>
+                      <Ionicons name="person-outline" size={15} color="#007AFF" />
                     </View>
-                    <Text style={{ color: userProfile.bio ? (isLight ? '#3C3C43' : '#D1D1D6') : '#8E8E93', fontSize: 14, fontStyle: userProfile.bio ? 'normal' : 'italic', lineHeight: 20, paddingLeft: 38 }}>
-                      {userProfile.bio || t.notUpdated}
+                    <Text style={{ fontSize: 11.5, fontWeight: '600', color: isLight ? '#6C6C70' : '#CBD5E1' }}>
+                      Đổi tên hiển thị
                     </Text>
-                  </View>
+                  </TouchableOpacity>
+
+                  <View style={{ width: 1, height: 18, backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E' }} />
+
+                  <TouchableOpacity
+                    activeOpacity={0.75}
+                    onPress={() => {
+                      setCurrentPassInput('');
+                      setNewPassInput('');
+                      setConfirmNewPassInput('');
+                      setProfileSubView('change_password');
+                    }}
+                    style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                  >
+                    <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: 'rgba(52, 199, 89, 0.15)', justifyContent: 'center', alignItems: 'center' }}>
+                      <Ionicons name="shield-outline" size={15} color="#34C759" />
+                    </View>
+                    <Text style={{ fontSize: 11.5, fontWeight: '600', color: isLight ? '#6C6C70' : '#CBD5E1' }}>
+                      Cài đặt bảo mật
+                    </Text>
+                  </TouchableOpacity>
                 </View>
               </View>
 
-              {/* NHÓM 1: HOẠT ĐỘNG & THỜI GIAN THỰC TẾ */}
-              <View style={[styles.sectionWrap, { marginTop: 12, marginBottom: 18 }]}>
-                <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 12.5, fontWeight: '500', textTransform: 'uppercase', marginBottom: 6, marginLeft: 16 }}>
-                  Hoạt động
-                </Text>
-                <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }]}>
-                  {/* Ngày tham gia thực tế */}
-                  <View style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}>
-                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#34C759' }]}>
-                      <Ionicons name="calendar-outline" size={18} color="#FFFFFF" />
-                    </View>
-                    <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Ngày tham gia</Text>
-                    </View>
-                    <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 16 }}>{userProfile.joinDate}</Text>
+              {/* LOCKX VERIFIED CARD */}
+              <View
+                style={{
+                  backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                  borderRadius: 20,
+                  padding: 16,
+                  borderWidth: 1,
+                  borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  marginBottom: 20,
+                  shadowColor: '#007AFF',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.15,
+                  shadowRadius: 8,
+                }}
+              >
+                <View
+                  style={{
+                    width: 50,
+                    height: 50,
+                    borderRadius: 15,
+                    backgroundColor: 'rgba(0, 122, 255, 0.2)',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginRight: 14,
+                    borderWidth: 1,
+                    borderColor: 'rgba(0, 122, 255, 0.4)',
+                  }}
+                >
+                  <Ionicons name="shield-checkmark" size={28} color="#007AFF" />
+                </View>
+
+                <View style={{ flex: 1, marginRight: 10 }}>
+                  <Text style={{ fontSize: 16, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF' }}>
+                    LockX Verified
+                  </Text>
+                  <Text style={{ fontSize: 11.5, color: '#94A3B8', marginTop: 2, lineHeight: 16 }}>
+                    Tăng độ tin cậy, bảo vệ tài khoản và mở khóa nhiều tính năng cao cấp hơn.
+                  </Text>
+                </View>
+
+                <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 4,
+                      backgroundColor: userProfile.isVerified ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                      paddingHorizontal: 8,
+                      paddingVertical: 3,
+                      borderRadius: 10,
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: 3,
+                        backgroundColor: userProfile.isVerified ? '#10B981' : '#F59E0B',
+                      }}
+                    />
+                    <Text style={{ fontSize: 10.5, fontWeight: '700', color: userProfile.isVerified ? '#10B981' : '#F59E0B' }}>
+                      {userProfile.isVerified ? 'Đã xác minh' : 'Chưa xác minh'}
+                    </Text>
                   </View>
 
-                  {/* Thời gian sử dụng thực tế */}
-                  <View style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}>
-                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#AF52DE' }]}>
-                      <Ionicons name="time-outline" size={18} color="#FFFFFF" />
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => setProfileSubView('verify_id')}
+                    style={{
+                      backgroundColor: '#007AFF',
+                      paddingHorizontal: 12,
+                      paddingVertical: 7,
+                      borderRadius: 12,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 2,
+                    }}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFFFFF' }}>
+                      {userProfile.isVerified ? 'Xem chi tiết >' : 'Xác minh ngay >'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* SECTION: THÔNG TIN CÁ NHÂN */}
+              <View style={{ marginBottom: 20 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, paddingHorizontal: 4 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Ionicons name="person-outline" size={18} color="#007AFF" />
+                    <Text style={{ fontSize: 16, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF' }}>
+                      Thông tin cá nhân
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={handleOpenEditProfile}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                  >
+                    <Ionicons name="create-outline" size={14} color="#007AFF" />
+                    <Text style={{ fontSize: 13.5, fontWeight: '600', color: '#007AFF' }}>
+                      Chỉnh sửa
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View
+                  style={{
+                    backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                    borderRadius: 20,
+                    borderWidth: 1,
+                    borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                    overflow: 'hidden',
+                  }}
+                >
+                  {/* Row 1: Email */}
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={handleOpenEditProfile}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      padding: 14,
+                      borderBottomWidth: 1,
+                      borderBottomColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                    }}
+                  >
+                    <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: '#007AFF', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                      <Ionicons name="mail" size={19} color="#FFFFFF" />
                     </View>
-                    <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Thời gian sử dụng</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 14.5, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
+                        Email
+                      </Text>
+                      <Text style={{ fontSize: 12.5, color: userProfile.email ? (isLight ? '#0F172A' : '#FFFFFF') : '#94A3B8', marginTop: 2 }}>
+                        {userProfile.email || 'Chưa cập nhật'}
+                      </Text>
                     </View>
-                    <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 16 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      {!!userProfile.email && (
+                        <View style={{ backgroundColor: 'rgba(16, 185, 129, 0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <Ionicons name="checkmark" size={12} color="#10B981" />
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#10B981' }}>Đã xác thực</Text>
+                        </View>
+                      )}
+                      <Ionicons name="chevron-forward" size={16} color="#64748B" />
+                    </View>
+                  </TouchableOpacity>
+
+                  {/* Row 2: Số điện thoại */}
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={handleOpenEditProfile}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      padding: 14,
+                      borderBottomWidth: 1,
+                      borderBottomColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                    }}
+                  >
+                    <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: '#34C759', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                      <Ionicons name="call" size={19} color="#FFFFFF" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 14.5, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
+                        Số điện thoại
+                      </Text>
+                      <Text style={{ fontSize: 12.5, color: userProfile.phone ? (isLight ? '#0F172A' : '#FFFFFF') : '#94A3B8', marginTop: 2 }}>
+                        {userProfile.phone || 'Chưa cập nhật'}
+                      </Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      {!!userProfile.phone && (
+                        <View style={{ backgroundColor: 'rgba(16, 185, 129, 0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <Ionicons name="checkmark" size={12} color="#10B981" />
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#10B981' }}>Đã xác thực</Text>
+                        </View>
+                      )}
+                      <Ionicons name="chevron-forward" size={16} color="#64748B" />
+                    </View>
+                  </TouchableOpacity>
+
+                  {/* Row 3: Ngày sinh */}
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={handleOpenEditProfile}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      padding: 14,
+                      borderBottomWidth: 1,
+                      borderBottomColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                    }}
+                  >
+                    <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: '#FF9500', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                      <Ionicons name="calendar" size={19} color="#FFFFFF" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 14.5, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
+                        Ngày sinh
+                      </Text>
+                      <Text style={{ fontSize: 12.5, color: '#94A3B8', marginTop: 2 }}>
+                        {userProfile.birthday || 'Chưa cập nhật'}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color="#64748B" />
+                  </TouchableOpacity>
+
+                  {/* Row 4: Giới tính */}
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={handleOpenEditProfile}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      padding: 14,
+                      borderBottomWidth: 1,
+                      borderBottomColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                    }}
+                  >
+                    <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: '#AF52DE', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                      <Ionicons name="male" size={19} color="#FFFFFF" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 14.5, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
+                        Giới tính
+                      </Text>
+                      <Text style={{ fontSize: 12.5, color: '#94A3B8', marginTop: 2 }}>
+                        {userProfile.gender || 'Chưa cập nhật'}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color="#64748B" />
+                  </TouchableOpacity>
+
+                  {/* Row 5: Tiểu sử */}
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={handleOpenEditProfile}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      padding: 14,
+                    }}
+                  >
+                    <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: '#FF2D55', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                      <Ionicons name="document-text" size={19} color="#FFFFFF" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 14.5, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
+                        Tiểu sử
+                      </Text>
+                      <Text style={{ fontSize: 12.5, color: '#94A3B8', marginTop: 2 }}>
+                        {userProfile.bio || 'Chưa cập nhật'}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color="#64748B" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* SECTION: HOẠT ĐỘNG (GIỮ LẠI ĐẦY ĐỦ NHƯ YÊU CẦU) */}
+              <View style={{ marginBottom: 20 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10, paddingHorizontal: 4 }}>
+                  <Ionicons name="pulse-outline" size={18} color="#007AFF" />
+                  <Text style={{ fontSize: 16, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF' }}>
+                    Hoạt động
+                  </Text>
+                </View>
+
+                <View
+                  style={{
+                    backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                    borderRadius: 20,
+                    borderWidth: 1,
+                    borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                    overflow: 'hidden',
+                  }}
+                >
+                  {/* Ngày tham gia */}
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      padding: 14,
+                      borderBottomWidth: 1,
+                      borderBottomColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                    }}
+                  >
+                    <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: '#10B981', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                      <Ionicons name="calendar-outline" size={19} color="#FFFFFF" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 14.5, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
+                        Ngày tham gia
+                      </Text>
+                    </View>
+                    <Text style={{ fontSize: 14, color: isLight ? '#6C6C70' : '#CBD5E1', fontWeight: '500' }}>
+                      {userProfile.joinDate || getFormattedTodayDate()}
+                    </Text>
+                  </View>
+
+                  {/* Thời gian sử dụng */}
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      padding: 14,
+                      borderBottomWidth: 1,
+                      borderBottomColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                    }}
+                  >
+                    <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: '#8B5CF6', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                      <Ionicons name="time-outline" size={19} color="#FFFFFF" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 14.5, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
+                        Thời gian sử dụng
+                      </Text>
+                    </View>
+                    <Text style={{ fontSize: 14, color: isLight ? '#6C6C70' : '#CBD5E1', fontWeight: '500' }}>
                       {userProfile.daysActive <= 1 ? 'Hôm nay (1 ngày)' : `${userProfile.daysActive} ngày`}
                     </Text>
                   </View>
 
-                  {/* Tổng giờ hoạt động tích lũy thực tế */}
-                  <View style={[styles.cellItem, { borderBottomWidth: 0 }]}>
-                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#007AFF' }]}>
-                      <Ionicons name="hourglass-outline" size={18} color="#FFFFFF" />
+                  {/* Tổng giờ hoạt động */}
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      padding: 14,
+                    }}
+                  >
+                    <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: '#007AFF', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                      <Ionicons name="hourglass-outline" size={19} color="#FFFFFF" />
                     </View>
-                    <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Tổng giờ hoạt động</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 14.5, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
+                        Tổng giờ hoạt động
+                      </Text>
                     </View>
-                    <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 16 }}>
+                    <Text style={{ fontSize: 14, color: isLight ? '#6C6C70' : '#CBD5E1', fontWeight: '500' }}>
                       {totalActiveSeconds < 3600
                         ? `${Math.max(1, Math.floor(totalActiveSeconds / 60))} phút (${(totalActiveSeconds / 3600).toFixed(1)}h)`
                         : `${(totalActiveSeconds / 3600).toFixed(1)}h`}
@@ -16564,15 +16793,26 @@ function MainApp() {
                 </View>
               </View>
 
-              {/* NHÓM 2: ĐĂNG NHẬP & BẢO MẬT */}
-              <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 18 }]}>
-                <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 12.5, fontWeight: '500', textTransform: 'uppercase', marginBottom: 6, marginLeft: 16 }}>
-                  Đăng nhập & Bảo mật
-                </Text>
-                <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }]}>
-                  {/* Đổi mật khẩu */}
+              {/* SECTION: ĐĂNG NHẬP & BẢO MẬT (GIỮ LẠI ĐẦY ĐỦ CÁC CHỨC NĂNG CŨ) */}
+              <View style={{ marginBottom: 20 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10, paddingHorizontal: 4 }}>
+                  <Ionicons name="shield-outline" size={18} color="#007AFF" />
+                  <Text style={{ fontSize: 16, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF' }}>
+                    Đăng nhập & Bảo mật
+                  </Text>
+                </View>
+
+                <View
+                  style={{
+                    backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                    borderRadius: 20,
+                    borderWidth: 1,
+                    borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                    overflow: 'hidden',
+                  }}
+                >
+                  {/* Đổi mật khẩu két sắt */}
                   <TouchableOpacity
-                    style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}
                     activeOpacity={0.7}
                     onPress={() => {
                       setCurrentPassInput('');
@@ -16580,52 +16820,140 @@ function MainApp() {
                       setConfirmNewPassInput('');
                       setProfileSubView('change_password');
                     }}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      padding: 14,
+                      borderBottomWidth: 1,
+                      borderBottomColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                    }}
                   >
-                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#FF9500' }]}>
-                      <Ionicons name="key-outline" size={18} color="#FFFFFF" />
+                    <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: '#F59E0B', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                      <Ionicons name="key" size={19} color="#FFFFFF" />
                     </View>
-                    <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '400' }}>{t.changePassword}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 14.5, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
+                        Đổi mật khẩu két sắt
+                      </Text>
+                      <Text style={{ fontSize: 12, color: '#94A3B8', marginTop: 2 }}>
+                        Thay đổi mã khóa bảo vệ tài khoản LockX
+                      </Text>
                     </View>
-                    <Ionicons name="chevron-forward" size={16} color={isLight ? '#C7C7CC' : '#48484A'} />
+                    <Ionicons name="chevron-forward" size={16} color="#64748B" />
                   </TouchableOpacity>
 
-                  {/* Face ID Status */}
-                  <View style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}>
-                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#34C759' }]}>
-                      <Ionicons name="scan-outline" size={18} color="#FFFFFF" />
+                  {/* Xác thực Face ID */}
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      const next = !appSettings.useFaceId;
+                      const updated = { ...appSettings, useFaceId: next };
+                      setAppSettings(updated);
+                      AsyncStorage.setItem('lockx_app_settings', JSON.stringify(updated)).catch(() => {});
+                      triggerToast(next ? 'Đã kích hoạt Face ID bảo mật' : 'Đã tắt Face ID');
+                    }}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      padding: 14,
+                      borderBottomWidth: 1,
+                      borderBottomColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                    }}
+                  >
+                    <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: '#10B981', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                      <Ionicons name="scan" size={19} color="#FFFFFF" />
                     </View>
-                    <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '400' }}>Xác thực Face ID</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 14.5, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
+                        Xác thực Face ID
+                      </Text>
+                      <Text style={{ fontSize: 12, color: '#94A3B8', marginTop: 2 }}>
+                        Mở khóa nhanh bằng nhận diện sinh trắc học
+                      </Text>
                     </View>
-                    <Text style={{ color: appSettings.useFaceId ? '#34C759' : '#8E8E93', fontSize: 16 }}>
-                      {appSettings.useFaceId ? 'Đã bật' : 'Tắt'}
-                    </Text>
-                  </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: appSettings.useFaceId ? '#10B981' : '#94A3B8' }}>
+                        {appSettings.useFaceId ? 'Đã bật' : 'Tắt'}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+
+                  {/* Xác thực 2 lớp (2FA) */}
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      Alert.alert(
+                        'Xác Thực 2 Lớp (2FA)',
+                        'Tính năng xác thực 2 lớp (2FA qua TOTP Authenticator / SMS) hiện đang được kích hoạt và bảo vệ tự động bằng khóa an toàn LockX.',
+                        [{ text: 'Đã hiểu' }]
+                      );
+                    }}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      padding: 14,
+                      borderBottomWidth: 1,
+                      borderBottomColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                    }}
+                  >
+                    <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: '#007AFF', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                      <Ionicons name="shield-checkmark" size={19} color="#FFFFFF" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 14.5, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
+                        Xác thực 2 lớp (2FA)
+                      </Text>
+                      <Text style={{ fontSize: 12, color: '#94A3B8', marginTop: 2 }}>
+                        Tăng cường bảo mật với mã xác thực
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color="#64748B" />
+                  </TouchableOpacity>
 
                   {/* Đăng xuất thiết bị khác */}
                   <TouchableOpacity
-                    style={[styles.cellItem, { borderBottomWidth: 0 }]}
                     activeOpacity={0.7}
                     onPress={handleClearOtherSessions}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      padding: 14,
+                    }}
                   >
-                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#FF3B30' }]}>
-                      <Ionicons name="log-out-outline" size={18} color="#FFFFFF" />
+                    <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: '#EF4444', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                      <Ionicons name="log-out" size={19} color="#FFFFFF" />
                     </View>
-                    <View style={[styles.cellContent, { flex: 1 }]}>
-                      <Text style={{ color: '#FF3B30', fontSize: 16, fontWeight: '400' }}>{t.logoutOtherSessions}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 14.5, fontWeight: '700', color: '#EF4444' }}>
+                        Đăng xuất thiết bị khác
+                      </Text>
+                      <Text style={{ fontSize: 12, color: '#F87171', marginTop: 2 }}>
+                        Thu hồi quyền truy cập từ các phiên đăng nhập khác
+                      </Text>
                     </View>
-                    <Ionicons name="chevron-forward" size={16} color={isLight ? '#C7C7CC' : '#48484A'} />
+                    <Ionicons name="chevron-forward" size={16} color="#EF4444" />
                   </TouchableOpacity>
                 </View>
               </View>
 
-              {/* NHÓM 3: CÁC THIẾT BỊ ĐÃ ĐĂNG NHẬP (THÔNG TIN THIẾT BỊ THẬT) */}
-              <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 32 }]}>
-                <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 12.5, fontWeight: '500', textTransform: 'uppercase', marginBottom: 6, marginLeft: 16 }}>
-                  {t.deviceInfo} ({loginHistory.length})
-                </Text>
-                <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }]}>
+              {/* SECTION: THÔNG TIN THIẾT BỊ */}
+              <View style={{ marginBottom: 24 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10, paddingHorizontal: 4 }}>
+                  <Ionicons name="hardware-chip-outline" size={18} color="#007AFF" />
+                  <Text style={{ fontSize: 16, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF' }}>
+                    Thông tin thiết bị ({loginHistory.length})
+                  </Text>
+                </View>
+
+                <View
+                  style={{
+                    backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                    borderRadius: 20,
+                    borderWidth: 1,
+                    borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                    overflow: 'hidden',
+                  }}
+                >
                   {loginHistory.slice(0, 5).map((log, idx, arr) => {
                     const devLower = log.device.toLowerCase();
                     const isComputer = devLower.includes('mac') || devLower.includes('windows') || devLower.includes('pc');
@@ -16634,41 +16962,34 @@ function MainApp() {
 
                     return (
                       <View
-                        key={log.id}
-                        style={[
-                          styles.cellItem,
-                          isLight && { borderBottomColor: '#E5E5EA' },
-                          idx === arr.length - 1 && { borderBottomWidth: 0 },
-                        ]}
+                        key={log.id || idx}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          padding: 14,
+                          borderBottomWidth: idx === arr.length - 1 ? 0 : 1,
+                          borderBottomColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                        }}
                       >
-                        <View style={[styles.cellLeadingIcon, { backgroundColor: log.isCurrent ? '#34C759' : (isLight ? '#E5E5EA' : '#3A3A3C') }]}>
-                          <Ionicons
-                            name={iconName as any}
-                            size={18}
-                            color={log.isCurrent ? '#FFFFFF' : (isLight ? '#000000' : '#FFFFFF')}
-                          />
+                        <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: '#10B981', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                          <Ionicons name={iconName as any} size={19} color="#FFFFFF" />
                         </View>
-                        <View style={[styles.cellContent, { flex: 1 }]}>
+                        <View style={{ flex: 1 }}>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: log.isCurrent ? '600' : '400' }} numberOfLines={1}>
+                            <Text style={{ fontSize: 14.5, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }} numberOfLines={1}>
                               {log.device}
                             </Text>
                             {log.isCurrent && (
-                              <View style={{ backgroundColor: 'rgba(52, 199, 89, 0.15)', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#34C759' }} />
-                                <Text style={{ color: '#34C759', fontSize: 11, fontWeight: '700' }}>Thiết bị này</Text>
+                              <View style={{ backgroundColor: 'rgba(16, 185, 129, 0.15)', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#10B981' }} />
+                                <Text style={{ color: '#10B981', fontSize: 10.5, fontWeight: '700' }}>Thiết bị này</Text>
                               </View>
                             )}
                           </View>
-                          <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 12, marginTop: 2 }}>
-                            {log.timestamp} • {log.location} • {log.os}
+                          <Text style={{ fontSize: 12, color: '#94A3B8', marginTop: 2 }}>
+                            {log.timestamp || 'Hiện tại (Đang hoạt động)'} • {log.location || 'Hà Nội, Việt Nam'} • {log.os || 'Windows 11'}
                           </Text>
                         </View>
-                        {!log.isCurrent && (
-                          <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 13 }}>
-                            {log.method}
-                          </Text>
-                        )}
                       </View>
                     );
                   })}
@@ -16676,25 +16997,23 @@ function MainApp() {
               </View>
 
               {/* Nút Đăng Xuất Nhanh trong Hồ Sơ */}
-              <View style={[styles.sectionWrap, { marginTop: 10, marginBottom: 36 }]}>
+              <View style={{ marginBottom: 36 }}>
                 <TouchableOpacity
-                  style={[
-                    styles.groupedList,
-                    {
-                      backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
-                      paddingVertical: 14,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      borderWidth: 0.5,
-                      borderColor: isLight ? 'rgba(255, 59, 48, 0.25)' : 'rgba(255, 69, 58, 0.25)',
-                    },
-                  ]}
+                  style={{
+                    backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                    paddingVertical: 14,
+                    borderRadius: 16,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderWidth: 1,
+                    borderColor: isLight ? '#FEE2E2' : 'rgba(239, 68, 68, 0.25)',
+                  }}
                   activeOpacity={0.7}
                   onPress={handleLogout}
                 >
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                     <Ionicons name="log-out-outline" size={18} color="#FF3B30" />
-                    <Text style={{ color: '#FF3B30', fontSize: 16, fontWeight: '600' }}>Đăng Xuất</Text>
+                    <Text style={{ color: '#FF3B30', fontSize: 15.5, fontWeight: '700' }}>Đăng Xuất</Text>
                   </View>
                 </TouchableOpacity>
               </View>
@@ -17680,11 +17999,11 @@ function MainApp() {
       {!(currentTab === 'chat' && activeChatFriend) && (
         <View style={styles.tabBar}>
           {[
-            { key: 'vault', label: t.tabVault, icon: 'home' },
+            { key: 'vault', label: 'Trang chủ', icon: 'home' },
             { key: 'apps', label: 'Tệp', icon: 'folder' },
-            { key: 'chat', label: t.tabFriends, icon: 'chatbubbles' },
-            { key: 'profile', label: t.tabProfile, icon: 'person' },
-            { key: 'settings', label: t.tabSettings, icon: 'settings' },
+            { key: 'chat', label: 'Bạn Bè', icon: 'people' },
+            { key: 'profile', label: 'Cá Nhân', icon: 'shield-checkmark' },
+            { key: 'settings', label: 'Cài đặt', icon: 'settings' },
           ].map((tab) => (
             <TouchableOpacity
               key={tab.key}
@@ -19106,7 +19425,7 @@ function MainApp() {
 
               <View
                 style={{
-                  backgroundColor: isLight ? '#F2F2F7' : '#1C1C1E',
+                  backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
                   borderRadius: 16,
                   padding: 14,
                   marginBottom: 18,
@@ -19147,7 +19466,7 @@ function MainApp() {
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
-                    backgroundColor: isLight ? '#F2F2F7' : '#1C1C1E',
+                    backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
                     padding: 14,
                     borderRadius: 16,
                     gap: 12,
@@ -19185,7 +19504,7 @@ function MainApp() {
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
-                    backgroundColor: isLight ? '#F2F2F7' : '#1C1C1E',
+                    backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
                     padding: 14,
                     borderRadius: 16,
                     gap: 12,
@@ -19230,7 +19549,7 @@ function MainApp() {
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
-                    backgroundColor: isLight ? '#F2F2F7' : '#1C1C1E',
+                    backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
                     padding: 14,
                     borderRadius: 16,
                     gap: 12,
@@ -19312,6 +19631,276 @@ function MainApp() {
       </Modal>
 
       {/* ========================================================================= */}
+      {/* MODAL: THAO TÁC TỆP (SỬA & XÓA CHO NÚT 3 CHẤM) */}
+      {/* ========================================================================= */}
+      <Modal visible={showFileActionModal && !!activeFileMenu} animationType="fade" transparent>
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={() => setShowFileActionModal(false)}
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0, 0, 0, 0.65)',
+            justifyContent: 'flex-end',
+          }}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              padding: 20,
+              paddingBottom: 36,
+              borderWidth: 1,
+              borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+            }}
+          >
+            {/* Header info */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 18, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: isLight ? '#E5E5EA' : '#2C2C2E' }}>
+              <View
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 12,
+                  backgroundColor: '#007AFF',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Ionicons name="document-text" size={22} color="#FFFFFF" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }} numberOfLines={1}>
+                  {activeFileMenu?.name}
+                </Text>
+                <Text style={{ fontSize: 12, color: '#94A3B8', marginTop: 2 }}>
+                  {activeFileMenu?.sizeFormatted} • {activeFileMenu?.category?.toUpperCase()}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowFileActionModal(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close-circle" size={24} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Action 1: Sửa (Đổi tên) */}
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => {
+                if (activeFileMenu) {
+                  setRenameFileInput(activeFileMenu.name);
+                  setShowFileActionModal(false);
+                  setShowRenameModal(true);
+                }
+              }}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 12,
+                backgroundColor: isLight ? '#F8FAFC' : '#1E293B',
+                paddingVertical: 14,
+                paddingHorizontal: 16,
+                borderRadius: 14,
+                marginBottom: 10,
+              }}
+            >
+              <View
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 10,
+                  backgroundColor: '#007AFF',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Ionicons name="create-outline" size={19} color="#FFFFFF" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 15, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
+                  Sửa tên tệp
+                </Text>
+                <Text style={{ fontSize: 12, color: '#94A3B8' }}>
+                  Đổi lại tên hiển thị của tài liệu
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="#64748B" />
+            </TouchableOpacity>
+
+            {/* Action 2: Xóa */}
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => {
+                if (activeFileMenu) {
+                  const idToDelete = activeFileMenu.id;
+                  setShowFileActionModal(false);
+                  setActiveFileMenu(null);
+                  handleDeleteFile(idToDelete);
+                }
+              }}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 12,
+                backgroundColor: isLight ? '#FEF2F2' : 'rgba(239, 68, 68, 0.1)',
+                paddingVertical: 14,
+                paddingHorizontal: 16,
+                borderRadius: 14,
+                marginBottom: 14,
+                borderWidth: 1,
+                borderColor: isLight ? '#FEE2E2' : 'rgba(239, 68, 68, 0.25)',
+              }}
+            >
+              <View
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 10,
+                  backgroundColor: '#EF4444',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Ionicons name="trash-outline" size={19} color="#FFFFFF" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 15, fontWeight: '700', color: '#EF4444' }}>
+                  Xóa tệp vĩnh viễn
+                </Text>
+                <Text style={{ fontSize: 12, color: '#F87171' }}>
+                  Gỡ tệp này khỏi Két Sắt LockX
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="#EF4444" />
+            </TouchableOpacity>
+
+            {/* Cancel Button */}
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => setShowFileActionModal(false)}
+              style={{
+                backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                paddingVertical: 14,
+                borderRadius: 14,
+                alignItems: 'center',
+              }}
+            >
+              <Text style={{ fontSize: 15, fontWeight: '700', color: isLight ? '#6C6C70' : '#CBD5E1' }}>
+                Hủy
+              </Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* MODAL: ĐỔI TÊN TỆP */}
+      <Modal visible={showRenameModal} animationType="fade" transparent>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0, 0, 0, 0.65)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 24,
+          }}
+        >
+          <View
+            style={{
+              width: '100%',
+              maxWidth: 380,
+              backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+              borderRadius: 20,
+              padding: 20,
+              borderWidth: 1,
+              borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+              shadowColor: '#000000',
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.3,
+              shadowRadius: 20,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+              <View
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 10,
+                  backgroundColor: '#007AFF',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Ionicons name="create-outline" size={20} color="#FFFFFF" />
+              </View>
+              <Text style={{ fontSize: 17, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF' }}>
+                Đổi Tên Tệp
+              </Text>
+            </View>
+
+            <Text style={{ fontSize: 13, color: '#94A3B8', marginBottom: 12 }}>
+              Nhập tên mới cho tệp tin của bạn:
+            </Text>
+
+            <TextInput
+              value={renameFileInput}
+              onChangeText={setRenameFileInput}
+              autoFocus
+              selectTextOnFocus
+              style={{
+                backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                color: isLight ? '#000000' : '#FFFFFF',
+                borderRadius: 12,
+                paddingHorizontal: 14,
+                paddingVertical: 12,
+                fontSize: 14.5,
+                borderWidth: 1,
+                borderColor: '#007AFF',
+                marginBottom: 18,
+              }}
+              placeholder="Tên tệp..."
+              placeholderTextColor="#64748B"
+            />
+
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowRenameModal(false);
+                  setActiveFileMenu(null);
+                }}
+                style={{
+                  flex: 1,
+                  backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                  paddingVertical: 12,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '700', color: isLight ? '#6C6C70' : '#94A3B8' }}>
+                  Hủy
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={handleSaveRenameFile}
+                style={{
+                  flex: 1,
+                  backgroundColor: '#007AFF',
+                  paddingVertical: 12,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFFFFF' }}>
+                  Lưu Thay Đổi
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* ========================================================================= */}
       {/* MODAL: MUA DUNG LƯỢNG KÉT SẮT LOCKX (CHUẨN APPLE ICLOUD+ HIG) */}
       {/* ========================================================================= */}
       <Modal visible={showStoragePlansModal} animationType="slide" transparent>
@@ -19357,7 +19946,7 @@ function MainApp() {
                   flexDirection: 'row',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  backgroundColor: isLight ? '#F2F2F7' : '#1C1C1E',
+                  backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
                   padding: 12,
                   borderRadius: 14,
                   marginBottom: 16,
@@ -19540,7 +20129,7 @@ function MainApp() {
                 {/* Order Summary Card */}
                 <View
                   style={{
-                    backgroundColor: isLight ? '#F2F2F7' : '#1C1C1E',
+                    backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
                     borderRadius: 16,
                     padding: 16,
                     marginBottom: 16,
@@ -19602,7 +20191,7 @@ function MainApp() {
                 {/* Bank Transfer Details Table */}
                 <View
                   style={{
-                    backgroundColor: isLight ? '#F2F2F7' : '#1C1C1E',
+                    backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
                     borderRadius: 16,
                     padding: 14,
                     marginBottom: 16,
@@ -19754,7 +20343,7 @@ function MainApp() {
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
-                    backgroundColor: isLight ? '#F2F2F7' : '#1C1C1E',
+                    backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
                     borderRadius: 12,
                     borderWidth: 1,
                     borderColor: isLight ? '#E5E5EA' : 'rgba(255,255,255,0.1)',
@@ -19799,7 +20388,7 @@ function MainApp() {
               {isDownloading && (
                 <View
                   style={{
-                    backgroundColor: isLight ? '#F2F2F7' : '#1C1C1E',
+                    backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
                     borderRadius: 14,
                     padding: 14,
                     marginBottom: 16,
@@ -19950,7 +20539,7 @@ function MainApp() {
                     key={item.step}
                     style={{
                       flexDirection: 'row',
-                      backgroundColor: isLight ? '#F2F2F7' : '#1C1C1E',
+                      backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
                       padding: 14,
                       borderRadius: 16,
                       borderWidth: 1,
@@ -20090,7 +20679,7 @@ function MainApp() {
                 {/* Encryption Security Status Card */}
                 <View
                   style={{
-                    backgroundColor: isLight ? '#F2F2F7' : '#1C1C1E',
+                    backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
                     borderRadius: 16,
                     padding: 14,
                     marginBottom: 14,
@@ -20146,7 +20735,7 @@ function MainApp() {
                 {/* Metadata Details */}
                 <View
                   style={{
-                    backgroundColor: isLight ? '#F2F2F7' : '#1C1C1E',
+                    backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
                     borderRadius: 16,
                     padding: 14,
                     marginBottom: 16,
@@ -23187,9 +23776,9 @@ const getStyles = (
   tabBar: {
     flexDirection: 'row',
     height: 64,
-    backgroundColor: isLight ? 'rgba(248, 248, 248, 0.96)' : 'rgba(20,20,22,0.95)',
+    backgroundColor: isLight ? 'rgba(248, 248, 248, 0.96)' : '#000000',
     borderTopWidth: 0.5,
-    borderTopColor: isLight ? 'rgba(0, 0, 0, 0.12)' : 'rgba(255,255,255,0.1)',
+    borderTopColor: isLight ? 'rgba(0, 0, 0, 0.12)' : '#2C2C2E',
     justifyContent: 'space-around',
     alignItems: 'center',
     paddingBottom: 8,
