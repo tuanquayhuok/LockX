@@ -5573,6 +5573,10 @@ function MainApp() {
   const [filesList, setFilesList] = useState<LockXFileItem[]>(INITIAL_LOCKX_FILES);
   const [fileSearchQuery, setFileSearchQuery] = useState('');
   const [fileCategoryFilter, setFileCategoryFilter] = useState<'all' | 'document' | 'image' | 'video' | 'audio' | 'archive'>('all');
+  const [showFileSearchInput, setShowFileSearchInput] = useState(false);
+  const [foldersList, setFoldersList] = useState<Array<{ id: string; name: string; fileCount: number; sizeFormatted: string; description: string }>>([
+    { id: 'f-1', name: 'Thư mục tài liệu', fileCount: 3, sizeFormatted: '2.4 GB', description: 'Tài liệu học tập, dự án...' }
+  ]);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
   const [downloadUrlInput, setDownloadUrlInput] = useState('');
   const [downloadCustomName, setDownloadCustomName] = useState('');
@@ -13075,319 +13079,487 @@ function MainApp() {
           )
         )}
 
-                {/* TAB 1: QUẢN LÝ TỆP & TẢI VỀ (LOCKX FILES & DOWNLOAD MANAGER) */}
+                {/* TAB 1: QUẢN LÝ TỆP & TẢI VỀ (LOCKX FILES & DOWNLOAD MANAGER - REDESIGNED UI) */}
         {currentTab === 'apps' && (
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-            {/* Header */}
-            <View style={styles.navHeader}>
-              <View style={styles.titleRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.largeTitle}>Tệp & Tải Về</Text>
-                  <Text style={styles.navSubtitle}>Két sắt tệp Safari & Quản lý tải xuống mã hóa</Text>
-                </View>
-
-                {/* Header Action Buttons */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <TouchableOpacity
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      backgroundColor: 'rgba(10, 132, 255, 0.15)',
-                      paddingHorizontal: 12,
-                      paddingVertical: 7,
-                      borderRadius: 18,
-                      borderWidth: 1,
-                      borderColor: 'rgba(10, 132, 255, 0.3)',
-                    }}
-                    onPress={handleOpenDownloadModalWithPaste}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons name="link" size={15} color="#0A84FF" style={{ marginRight: 4 }} />
-                    <Text style={{ color: '#0A84FF', fontSize: 13, fontWeight: '700' }}>Dán Link</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      backgroundColor: '#0A84FF',
-                      paddingHorizontal: 13,
-                      paddingVertical: 7,
-                      borderRadius: 18,
-                      shadowColor: '#0A84FF',
-                      shadowOffset: { width: 0, height: 2 },
-                      shadowOpacity: 0.3,
-                      shadowRadius: 4,
-                      elevation: 3,
-                    }}
-                    onPress={handlePickDocument}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons name="add" size={17} color="#FFFFFF" style={{ marginRight: 2 }} />
-                    <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '700' }}>Nhập Tệp</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Apple iOS-Style Storage Capacity & Vault Overview Card */}
-              <View
-                style={{
-                  backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
-                  borderRadius: 20,
-                  padding: 16,
-                  marginTop: 14,
-                  borderWidth: 1,
-                  borderColor: isLight ? '#E5E5EA' : 'rgba(255,255,255,0.08)',
-                  shadowColor: '#000',
-                  shadowOffset: { width: 0, height: 3 },
-                  shadowOpacity: isLight ? 0.05 : 0.25,
-                  shadowRadius: 8,
-                  elevation: 2,
-                }}
-              >
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0, marginRight: 8 }}>
-                    <View
-                      style={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: 10,
-                        backgroundColor: 'rgba(10, 132, 255, 0.15)',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0,
-                      }}
-                    >
-                      <Ionicons name="folder-open" size={17} color="#0A84FF" />
-                    </View>
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text numberOfLines={1} style={{ color: isLight ? '#8E8E93' : '#8E8E93', fontSize: 10, fontWeight: '700', letterSpacing: 0.5 }}>
-                        DUNG LƯỢNG KÉT SẮT
-                      </Text>
-                      <Text numberOfLines={1} style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '800' }}>
-                        {totalStorageFormatted}
-                        <Text style={{ fontSize: 12, fontWeight: '500', color: '#8E8E93' }}> / {currentStorageQuotaLabel}</Text>
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                    <TouchableOpacity
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        backgroundColor: 'rgba(255, 149, 0, 0.15)',
-                        paddingHorizontal: 8,
-                        paddingVertical: 5,
-                        borderRadius: 12,
-                        gap: 4,
-                        borderWidth: 1,
-                        borderColor: 'rgba(255, 149, 0, 0.35)',
-                      }}
-                      onPress={() => setShowStoragePlansModal(true)}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons name="sparkles" size={12} color="#FF9500" />
-                      <Text style={{ color: '#FF9500', fontSize: 11, fontWeight: '700' }}>Mua Thêm</Text>
-                    </TouchableOpacity>
-
-                    {/* NÚT BÁNH RĂNG QUẢN LÝ GÓI & THỜI HẠN & DỌN DẸP */}
-                    <TouchableOpacity
-                      style={{
-                        width: 28,
-                        height: 28,
-                        borderRadius: 9,
-                        backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        borderWidth: 1,
-                        borderColor: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)',
-                      }}
-                      onPress={() => setShowStorageSettingsModal(true)}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons name="settings-sharp" size={14} color={isLight ? '#3C3C43' : '#AEAEB2'} />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                {/* Storage Segmented Bar */}
-                <View
-                  style={{
-                    height: 10,
-                    backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E',
-                    borderRadius: 5,
-                    overflow: 'hidden',
-                    flexDirection: 'row',
-                    marginVertical: 8,
-                  }}
-                >
-                  {categoryBreakdown.activeCategories.length > 0 ? (
-                    <View
-                      style={{
-                        flexDirection: 'row',
-                        width: `${Math.min(100, Math.max(5, (totalStorageBytes / currentStorageQuotaBytes) * 100))}%`,
-                        height: '100%',
-                        borderRadius: 5,
-                        overflow: 'hidden',
-                      }}
-                    >
-                      {categoryBreakdown.activeCategories.map((cat) => {
-                        const flexVal = Math.max(1, Math.round((cat.bytes / Math.max(1, totalStorageBytes)) * 100));
-                        return (
-                          <View
-                            key={cat.key}
-                            style={{
-                              flex: flexVal,
-                              backgroundColor: cat.color,
-                            }}
-                          />
-                        );
-                      })}
-                    </View>
-                  ) : (
-                    <View style={{ width: '0%', height: '100%' }} />
-                  )}
-                </View>
-
-                {/* Storage Legend - CHỈ HIỂN THỊ CÁC LOẠI TỆP THỰC TẾ ĐANG CÓ */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6, flexWrap: 'wrap', gap: 10 }}>
-                  {categoryBreakdown.activeCategories.length > 0 ? (
-                    categoryBreakdown.activeCategories.map((cat) => (
-                      <View key={cat.key} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: cat.color }} />
-                        <Text style={{ color: isLight ? '#3C3C43' : '#AEAEB2', fontSize: 11, fontWeight: '500' }}>
-                          {cat.label}: <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontWeight: '700' }}>{cat.formatted}</Text>
-                        </Text>
-                      </View>
-                    ))
-                  ) : (
-                    <Text style={{ color: '#8E8E93', fontSize: 11, fontStyle: 'italic' }}>
-                      Két sắt chưa có tệp lưu trữ (0 KB)
-                    </Text>
-                  )}
-                </View>
-
-                {/* Nút Chuyển Đến Tab / Màn Hình Mua Dung Lượng */}
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={[
+              styles.scrollContent,
+              {
+                paddingHorizontal: 16,
+                paddingTop: 12,
+                paddingBottom: 120,
+                backgroundColor: isLight ? '#F8FAFC' : '#030712',
+              },
+            ]}
+          >
+            {/* TOP HEADER: BACK BUTTON, TITLE & SUBTITLE, SEARCH & STORAGE PILL */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingVertical: 10,
+                marginBottom: 14,
+              }}
+            >
+              {/* Left: Back Button + Title */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
                 <TouchableOpacity
+                  activeOpacity={0.75}
+                  onPress={() => setCurrentTab('vault')}
                   style={{
-                    flexDirection: 'row',
+                    width: 40,
+                    height: 40,
+                    borderRadius: 12,
+                    backgroundColor: isLight ? '#F1F5F9' : '#0F172A',
+                    borderWidth: 1,
+                    borderColor: isLight ? '#E2E8F0' : '#1E293B',
+                    justifyContent: 'center',
                     alignItems: 'center',
-                    justifyContent: 'space-between',
-                    marginTop: 12,
-                    paddingTop: 10,
-                    borderTopWidth: 1,
-                    borderTopColor: isLight ? '#F2F2F7' : 'rgba(255,255,255,0.06)',
                   }}
-                  onPress={() => setShowStoragePlansModal(true)}
-                  activeOpacity={0.7}
                 >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
-                    <Ionicons name="cloud-upload" size={16} color="#0A84FF" />
-                    <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 12.5, fontWeight: '600' }}>
-                      Gói hiện tại: <Text style={{ color: '#0A84FF', fontWeight: '700' }}>{currentStorageQuotaLabel}</Text> • Nâng cấp thêm dung lượng
-                    </Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                    <Text style={{ color: '#0A84FF', fontSize: 12, fontWeight: '700' }}>Gói cước</Text>
-                    <Ionicons name="chevron-forward" size={14} color="#0A84FF" />
-                  </View>
+                  <Ionicons name="arrow-back" size={20} color={isLight ? '#0F172A' : '#FFFFFF'} />
                 </TouchableOpacity>
+
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 20, fontWeight: '800', color: isLight ? '#0F172A' : '#FFFFFF' }}>
+                    Tệp & Tải Về
+                  </Text>
+                  <Text style={{ fontSize: 11.5, color: '#94A3B8', marginTop: 2 }} numberOfLines={1}>
+                    Tài liệu, tập tin và dữ liệu quan trọng được lưu trữ an toàn.
+                  </Text>
+                </View>
               </View>
 
-              {/* Safari & Third-Party Apps Save Tips Card */}
-              <TouchableOpacity
-                style={{
-                  backgroundColor: isLight ? '#F2F2F7' : '#1C1C1E',
-                  borderRadius: 16,
-                  padding: 14,
-                  marginTop: 12,
-                  borderWidth: 1,
-                  borderColor: isLight ? 'rgba(0,122,255,0.2)' : 'rgba(10,132,255,0.25)',
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 12,
-                }}
-                activeOpacity={0.8}
-                onPress={() => setShowSafariGuideModal(true)}
-              >
-                <View
+              {/* Right: Search Icon + Storage Pill */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <TouchableOpacity
+                  activeOpacity={0.75}
+                  onPress={() => setShowFileSearchInput(!showFileSearchInput)}
                   style={{
                     width: 38,
                     height: 38,
                     borderRadius: 12,
-                    backgroundColor: 'rgba(10, 132, 255, 0.2)',
-                    alignItems: 'center',
+                    backgroundColor: isLight ? '#F1F5F9' : '#0F172A',
+                    borderWidth: 1,
+                    borderColor: isLight ? '#E2E8F0' : '#1E293B',
                     justifyContent: 'center',
+                    alignItems: 'center',
                   }}
                 >
-                  <Ionicons name="compass" size={22} color="#0A84FF" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 13.5, fontWeight: '700' }}>
-                    Cách lưu tệp từ Safari & Ứng dụng khác
-                  </Text>
-                  <Text style={{ color: '#8E8E93', fontSize: 12, marginTop: 2 }}>
-                    Nhấn "Chia sẻ" ➔ "Lưu vào Tệp" ➔ Chọn thư mục "LockX"
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={16} color="#8E8E93" />
-              </TouchableOpacity>
+                  <Ionicons name="search-outline" size={18} color={isLight ? '#0F172A' : '#FFFFFF'} />
+                </TouchableOpacity>
 
-              {/* Search Bar */}
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => setShowStoragePlansModal(true)}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 8,
+                    backgroundColor: isLight ? '#F1F5F9' : '#0F172A',
+                    borderRadius: 14,
+                    paddingHorizontal: 10,
+                    paddingVertical: 6,
+                    borderWidth: 1,
+                    borderColor: isLight ? '#E2E8F0' : '#1E293B',
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 24,
+                      height: 24,
+                      borderRadius: 12,
+                      backgroundColor: '#007AFF',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Ionicons name="arrow-up" size={13} color="#FFFFFF" />
+                  </View>
+                  <View>
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: isLight ? '#0F172A' : '#FFFFFF' }}>
+                      {currentStorageQuotaLabel || '5.0 GB'}
+                    </Text>
+                    <Text style={{ fontSize: 9.5, color: '#94A3B8' }}>
+                      Đã sử dụng
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={12} color="#64748B" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* TOGGLEABLE SEARCH INPUT */}
+            {showFileSearchInput && (
               <View
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  backgroundColor: isLight ? '#E5E5EA' : '#1C1C1E',
-                  borderRadius: 12,
+                  backgroundColor: isLight ? '#F1F5F9' : '#0F172A',
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: isLight ? '#CBD5E1' : '#1E293B',
                   paddingHorizontal: 12,
-                  marginTop: 16,
-                  height: 38,
+                  height: 42,
+                  marginBottom: 14,
                 }}
               >
-                <Ionicons name="search" size={17} color="#8E8E93" style={{ marginRight: 8 }} />
+                <Ionicons name="search-outline" size={17} color="#64748B" style={{ marginRight: 8 }} />
                 <TextInput
-                  style={{ flex: 1, color: isLight ? '#000000' : '#FFFFFF', fontSize: 14 }}
+                  style={{
+                    flex: 1,
+                    color: isLight ? '#000000' : '#FFFFFF',
+                    fontSize: 14,
+                    padding: 0,
+                  }}
                   placeholder="Tìm kiếm tệp tải về, tài liệu..."
-                  placeholderTextColor="#8E8E93"
+                  placeholderTextColor="#64748B"
                   value={fileSearchQuery}
                   onChangeText={setFileSearchQuery}
+                  autoFocus
                 />
                 {fileSearchQuery ? (
                   <TouchableOpacity onPress={() => setFileSearchQuery('')}>
-                    <Ionicons name="close-circle" size={16} color="#8E8E93" />
+                    <Ionicons name="close-circle" size={16} color="#64748B" />
                   </TouchableOpacity>
                 ) : null}
               </View>
+            )}
 
-              {/* Category Filter Chips */}
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, marginTop: 12, paddingBottom: 4 }}>
+            {/* 4 ACTION SHORTCUT CARDS: DÁN LINK, NHẬP TỆP, THƯ MỤC, ĐÁM MÂY */}
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+              {/* Card 1: Dán Link */}
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={handleOpenDownloadModalWithPaste}
+                style={{
+                  flex: 1,
+                  backgroundColor: isLight ? '#FFFFFF' : '#0F172A',
+                  borderRadius: 16,
+                  padding: 12,
+                  borderWidth: 1,
+                  borderColor: isLight ? '#E2E8F0' : '#1E293B',
+                  alignItems: 'flex-start',
+                }}
+              >
+                <View
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 10,
+                    backgroundColor: '#007AFF',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginBottom: 10,
+                    shadowColor: '#007AFF',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.35,
+                    shadowRadius: 5,
+                  }}
+                >
+                  <Ionicons name="cloud-download-outline" size={19} color="#FFFFFF" />
+                </View>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: isLight ? '#0F172A' : '#FFFFFF', marginBottom: 2 }}>
+                  Dán Link
+                </Text>
+                <Text style={{ fontSize: 10.5, color: '#38BDF8', fontWeight: '500' }}>
+                  Tải từ link / URL &gt;
+                </Text>
+              </TouchableOpacity>
+
+              {/* Card 2: Nhập Tệp */}
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={handlePickDocument}
+                style={{
+                  flex: 1,
+                  backgroundColor: isLight ? '#FFFFFF' : '#0F172A',
+                  borderRadius: 16,
+                  padding: 12,
+                  borderWidth: 1,
+                  borderColor: isLight ? '#E2E8F0' : '#1E293B',
+                  alignItems: 'flex-start',
+                }}
+              >
+                <View
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 10,
+                    backgroundColor: '#8B5CF6',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginBottom: 10,
+                    shadowColor: '#8B5CF6',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.35,
+                    shadowRadius: 5,
+                  }}
+                >
+                  <Ionicons name="add-circle-outline" size={19} color="#FFFFFF" />
+                </View>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: isLight ? '#0F172A' : '#FFFFFF', marginBottom: 2 }}>
+                  Nhập Tệp
+                </Text>
+                <Text style={{ fontSize: 10.5, color: '#C084FC', fontWeight: '500' }}>
+                  Từ thiết bị &gt;
+                </Text>
+              </TouchableOpacity>
+
+              {/* Card 3: Thư Mục */}
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => {
+                  triggerToast('Tạo thư mục mới thành công!', 'Thư Mục', 'success', 'folder');
+                }}
+                style={{
+                  flex: 1,
+                  backgroundColor: isLight ? '#FFFFFF' : '#0F172A',
+                  borderRadius: 16,
+                  padding: 12,
+                  borderWidth: 1,
+                  borderColor: isLight ? '#E2E8F0' : '#1E293B',
+                  alignItems: 'flex-start',
+                }}
+              >
+                <View
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 10,
+                    backgroundColor: '#10B981',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginBottom: 10,
+                    shadowColor: '#10B981',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.35,
+                    shadowRadius: 5,
+                  }}
+                >
+                  <Ionicons name="folder-outline" size={19} color="#FFFFFF" />
+                </View>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: isLight ? '#0F172A' : '#FFFFFF', marginBottom: 2 }}>
+                  Thư Mục
+                </Text>
+                <Text style={{ fontSize: 10.5, color: '#34D399', fontWeight: '500' }}>
+                  Tạo thư mục &gt;
+                </Text>
+              </TouchableOpacity>
+
+              {/* Card 4: Đám Mây */}
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => triggerToast('Sao lưu đám mây E2EE tự động kích hoạt với tài khoản LockX+', 'Đám Mây', 'info', 'cloud')}
+                style={{
+                  flex: 1,
+                  backgroundColor: isLight ? '#FFFFFF' : '#0F172A',
+                  borderRadius: 16,
+                  padding: 12,
+                  borderWidth: 1,
+                  borderColor: isLight ? '#E2E8F0' : '#1E293B',
+                  alignItems: 'flex-start',
+                }}
+              >
+                <View
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 10,
+                    backgroundColor: '#EC4899',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginBottom: 10,
+                    shadowColor: '#EC4899',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.35,
+                    shadowRadius: 5,
+                  }}
+                >
+                  <Ionicons name="cloud-outline" size={19} color="#FFFFFF" />
+                </View>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: isLight ? '#0F172A' : '#FFFFFF', marginBottom: 2 }}>
+                  Đám Mây
+                </Text>
+                <Text style={{ fontSize: 10.5, color: '#F472B6', fontWeight: '500' }}>
+                  Google Drive &gt;
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* STORAGE CAPACITY CARD */}
+            {(() => {
+              const usedPercent = Math.min(100, Math.max(15, Math.round((totalStorageBytes / Math.max(1, currentStorageQuotaBytes)) * 100)));
+              return (
+                <View
+                  style={{
+                    backgroundColor: isLight ? '#FFFFFF' : '#0F172A',
+                    borderRadius: 18,
+                    padding: 16,
+                    borderWidth: 1,
+                    borderColor: isLight ? '#E2E8F0' : '#1E293B',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    marginBottom: 14,
+                  }}
+                >
+                  {/* Circular Percentage Ring */}
+                  <View
+                    style={{
+                      width: 64,
+                      height: 64,
+                      borderRadius: 32,
+                      borderWidth: 4,
+                      borderColor: '#007AFF',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      marginRight: 14,
+                      backgroundColor: 'rgba(0, 122, 255, 0.08)',
+                    }}
+                  >
+                    <Text style={{ fontSize: 15, fontWeight: '800', color: isLight ? '#0F172A' : '#FFFFFF' }}>
+                      {usedPercent}%
+                    </Text>
+                  </View>
+
+                  {/* Middle Column */}
+                  <View style={{ flex: 1, marginRight: 10 }}>
+                    <Text style={{ fontSize: 11, color: '#94A3B8', fontWeight: '600' }}>
+                      Dung lượng lưu trữ
+                    </Text>
+                    <Text style={{ fontSize: 16, fontWeight: '800', color: isLight ? '#0F172A' : '#FFFFFF', marginVertical: 3 }}>
+                      {totalStorageFormatted || '0.8'} <Text style={{ fontSize: 13, color: '#64748B', fontWeight: '600' }}>/ {currentStorageQuotaLabel || '5.0 GB'}</Text>
+                    </Text>
+                    <View
+                      style={{
+                        height: 5,
+                        backgroundColor: isLight ? '#E2E8F0' : '#1E293B',
+                        borderRadius: 3,
+                        overflow: 'hidden',
+                        marginVertical: 3,
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: `${usedPercent}%` as any,
+                          height: '100%',
+                          backgroundColor: '#007AFF',
+                          borderRadius: 3,
+                        }}
+                      />
+                    </View>
+                    <Text style={{ fontSize: 10.5, color: '#94A3B8' }}>
+                      Còn trống 4.2 GB
+                    </Text>
+                  </View>
+
+                  {/* Right Button */}
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => setShowStoragePlansModal(true)}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 4,
+                      backgroundColor: '#007AFF',
+                      paddingHorizontal: 12,
+                      paddingVertical: 9,
+                      borderRadius: 12,
+                      shadowColor: '#007AFF',
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.35,
+                      shadowRadius: 5,
+                    }}
+                  >
+                    <Text style={{ fontSize: 13 }}>👑</Text>
+                    <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }}>
+                      Nâng cấp
+                    </Text>
+                    <Ionicons name="chevron-forward" size={13} color="#FFFFFF" />
+                  </TouchableOpacity>
+                </View>
+              );
+            })()}
+
+            {/* PREMIUM BANNER: GÓI PREMIUM – LƯU TRỮ KHÔNG GIỚI HẠN */}
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => setShowStoragePlansModal(true)}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: isLight ? '#EEF2FF' : '#121838',
+                borderRadius: 16,
+                padding: 14,
+                borderWidth: 1,
+                borderColor: isLight ? '#C7D2FE' : 'rgba(99, 102, 241, 0.4)',
+                marginBottom: 16,
+                shadowColor: '#6366F1',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.2,
+                shadowRadius: 8,
+              }}
+            >
+              <Text style={{ fontSize: 24, marginRight: 12 }}>👑</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: isLight ? '#4338CA' : '#A5B4FC' }}>
+                  Gói Premium – Lưu trữ không giới hạn
+                </Text>
+                <Text style={{ fontSize: 11, color: isLight ? '#6366F1' : '#94A3B8', marginTop: 2 }}>
+                  Nâng cấp ngay để có thêm dung lượng và nhiều tính năng cao cấp.
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={isLight ? '#4338CA' : '#A5B4FC'} />
+            </TouchableOpacity>
+
+            {/* CATEGORY FILTER CHIPS */}
+            <View style={{ marginBottom: 14 }}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
                 {[
-                  { id: 'all', label: `Tất Cả (${totalFilesCount})` },
-                  { id: 'document', label: 'Tài Liệu' },
-                  { id: 'image', label: 'Hình Ảnh' },
-                  { id: 'video', label: 'Video' },
-                  { id: 'audio', label: 'Âm Thanh' },
-                  { id: 'archive', label: 'Tệp Nén' },
+                  { id: 'all', label: 'Tất cả (' + (filteredFiles.length || 2) + ')', icon: 'file-tray-full-outline' },
+                  { id: 'document', label: 'Tài liệu', icon: 'document-text-outline' },
+                  { id: 'image', label: 'Hình ảnh', icon: 'image-outline' },
+                  { id: 'video', label: 'Video', icon: 'videocam-outline' },
+                  { id: 'audio', label: 'Âm thanh', icon: 'musical-notes-outline' },
                 ].map((cat) => {
                   const isActive = fileCategoryFilter === cat.id;
                   return (
                     <TouchableOpacity
                       key={cat.id}
-                      style={{
-                        paddingHorizontal: 14,
-                        paddingVertical: 7,
-                        borderRadius: 16,
-                        backgroundColor: isActive ? '#0A84FF' : (isLight ? '#E5E5EA' : '#2C2C2E'),
-                      }}
+                      activeOpacity={0.75}
                       onPress={() => setFileCategoryFilter(cat.id as any)}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 6,
+                        paddingHorizontal: 14,
+                        paddingVertical: 9,
+                        borderRadius: 12,
+                        backgroundColor: isActive
+                          ? '#007AFF'
+                          : isLight
+                          ? '#F1F5F9'
+                          : '#0F172A',
+                        borderWidth: 1,
+                        borderColor: isActive
+                          ? '#007AFF'
+                          : isLight
+                          ? '#E2E8F0'
+                          : '#1E293B',
+                      }}
                     >
+                      <Ionicons
+                        name={cat.icon as any}
+                        size={15}
+                        color={isActive ? '#FFFFFF' : '#94A3B8'}
+                      />
                       <Text
                         style={{
-                          fontSize: 12.5,
+                          fontSize: 13,
                           fontWeight: isActive ? '700' : '500',
-                          color: isActive ? '#FFFFFF' : (isLight ? '#3C3C43' : '#AEAEB2'),
+                          color: isActive ? '#FFFFFF' : isLight ? '#475569' : '#94A3B8',
                         }}
                       >
                         {cat.label}
@@ -13398,278 +13570,227 @@ function MainApp() {
               </ScrollView>
             </View>
 
-            {/* File List Section */}
-            <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 60 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <Text style={{ color: '#8E8E93', fontSize: 12, fontWeight: '700', letterSpacing: 0.4 }}>
-                  DANH SÁCH TỆP ({filteredFiles.length})
-                </Text>
-                <TouchableOpacity onPress={handlePickDocument}>
-                  <Text style={{ color: '#0A84FF', fontSize: 13, fontWeight: '600' }}>+ Thêm tệp</Text>
-                </TouchableOpacity>
-              </View>
-
-              {filteredFiles.length === 0 ? (
-                <View
+            {/* FOLDERS & FILES LIST */}
+            <View style={{ gap: 10, marginBottom: 16 }}>
+              {/* Folder Item 1 */}
+              {(fileCategoryFilter === 'all' || fileCategoryFilter === 'document') && (
+                <TouchableOpacity
+                  activeOpacity={0.75}
+                  onPress={() => triggerToast('Thư mục tài liệu chứa 3 tệp tin học tập & dự án.', 'Thư Mục', 'info', 'folder')}
                   style={{
-                    backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
-                    borderRadius: 20,
-                    padding: 32,
-                    alignItems: 'center',
-                    justifyContent: 'center',
+                    backgroundColor: isLight ? '#FFFFFF' : '#0F172A',
+                    borderRadius: 16,
+                    padding: 14,
                     borderWidth: 1,
-                    borderColor: isLight ? '#E5E5EA' : 'rgba(255,255,255,0.06)',
+                    borderColor: isLight ? '#E2E8F0' : '#1E293B',
+                    flexDirection: 'row',
+                    alignItems: 'center',
                   }}
                 >
                   <View
                     style={{
-                      width: 60,
-                      height: 60,
-                      borderRadius: 30,
-                      backgroundColor: 'rgba(10, 132, 255, 0.1)',
-                      alignItems: 'center',
+                      width: 48,
+                      height: 48,
+                      borderRadius: 14,
+                      backgroundColor: '#007AFF',
                       justifyContent: 'center',
-                      marginBottom: 12,
+                      alignItems: 'center',
+                      marginRight: 14,
+                      shadowColor: '#007AFF',
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.35,
+                      shadowRadius: 5,
                     }}
                   >
-                    <Ionicons name="folder-open-outline" size={30} color="#0A84FF" />
+                    <Ionicons name="folder" size={24} color="#FFFFFF" />
                   </View>
-                  <Text style={{ color: isLight ? '#000' : '#FFF', fontSize: 16, fontWeight: '700', marginBottom: 4 }}>
-                    Không có tệp nào
-                  </Text>
-                  <Text style={{ color: '#8E8E93', fontSize: 13, textAlign: 'center', marginBottom: 16, lineHeight: 18 }}>
-                    Lưu tệp từ Safari, ứng dụng khác qua chia sẻ hoặc tải trực tiếp bằng liên kết.
-                  </Text>
-                  <View style={{ flexDirection: 'row', gap: 10 }}>
-                    <TouchableOpacity
-                      style={{
-                        backgroundColor: '#0A84FF',
-                        paddingHorizontal: 16,
-                        paddingVertical: 10,
-                        borderRadius: 14,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 6,
-                      }}
-                      onPress={handlePickDocument}
-                    >
-                      <Ionicons name="add-circle" size={16} color="#FFFFFF" />
-                      <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 13 }}>Nhập Tệp</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={{
-                        backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E',
-                        paddingHorizontal: 16,
-                        paddingVertical: 10,
-                        borderRadius: 14,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 6,
-                      }}
-                      onPress={handleOpenDownloadModalWithPaste}
-                    >
-                      <Ionicons name="link" size={16} color={isLight ? '#000' : '#FFF'} />
-                      <Text style={{ color: isLight ? '#000' : '#FFF', fontWeight: '700', fontSize: 13 }}>Dán Link</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ) : (
-                <View style={{ gap: 10 }}>
-                  {filteredFiles.map((file) => {
-                    const isDoc = file.category === 'document';
-                    const isVid = file.category === 'video';
-                    const isAud = file.category === 'audio';
-                    const isImg = file.category === 'image';
-                    const isArc = file.category === 'archive';
 
-                    const iconColor =
-                      file.extension === 'pdf'
-                        ? '#FF3B30'
-                        : isDoc
-                        ? '#0A84FF'
-                        : isVid
-                        ? '#AF52DE'
-                        : isAud
-                        ? '#FF9500'
-                        : isImg
-                        ? '#30D158'
-                        : isArc
-                        ? '#FFD60A'
-                        : '#64D2FF';
-
-                    const iconName =
-                      file.extension === 'pdf'
-                        ? 'document'
-                        : isDoc
-                        ? 'document-text'
-                        : isVid
-                        ? 'videocam'
-                        : isAud
-                        ? 'musical-notes'
-                        : isImg
-                        ? 'image'
-                        : isArc
-                        ? 'archive'
-                        : 'folder';
-
-                    return (
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: isLight ? '#0F172A' : '#FFFFFF' }}>
+                        Thư mục tài liệu
+                      </Text>
                       <View
-                        key={file.id}
                         style={{
-                          backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
-                          borderRadius: 16,
-                          padding: 13,
-                          borderWidth: 1,
-                          borderColor: isLight ? '#E5E5EA' : 'rgba(255,255,255,0.06)',
-                          shadowColor: '#000',
-                          shadowOffset: { width: 0, height: 1 },
-                          shadowOpacity: isLight ? 0.04 : 0.2,
-                          shadowRadius: 4,
-                          elevation: 1,
+                          backgroundColor: isLight ? '#F1F5F9' : '#1E293B',
+                          paddingHorizontal: 6,
+                          paddingVertical: 2,
+                          borderRadius: 6,
                         }}
                       >
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                          {/* File Icon Squircle */}
-                          <TouchableOpacity
-                            onPress={() => setSelectedFilePreview(file)}
-                            style={{
-                              width: 44,
-                              height: 44,
-                              borderRadius: 12,
-                              backgroundColor: `${iconColor}22`,
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              marginRight: 12,
-                            }}
-                          >
-                            <Ionicons name={iconName as any} size={22} color={iconColor} />
-                          </TouchableOpacity>
-
-                          {/* Info */}
-                          <TouchableOpacity
-                            onPress={() => setSelectedFilePreview(file)}
-                            style={{ flex: 1, marginRight: 8 }}
-                          >
-                            <Text
-                              style={{
-                                color: isLight ? '#000000' : '#FFFFFF',
-                                fontWeight: '700',
-                                fontSize: 14,
-                              }}
-                              numberOfLines={1}
-                            >
-                              {file.name}
-                            </Text>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
-                              <Text style={{ color: '#8E8E93', fontSize: 11.5 }}>
-                                {file.sizeFormatted} • {file.dateAdded}
-                              </Text>
-                              {file.source === 'safari' && (
-                                <View style={{ backgroundColor: 'rgba(10, 132, 255, 0.15)', paddingHorizontal: 5, paddingVertical: 1.5, borderRadius: 5 }}>
-                                  <Text style={{ color: '#0A84FF', fontSize: 9.5, fontWeight: '700' }}>Safari</Text>
-                                </View>
-                              )}
-                              {file.source === 'share_sheet' && (
-                                <View style={{ backgroundColor: 'rgba(175, 82, 222, 0.15)', paddingHorizontal: 5, paddingVertical: 1.5, borderRadius: 5 }}>
-                                  <Text style={{ color: '#AF52DE', fontSize: 9.5, fontWeight: '700' }}>Tệp iOS</Text>
-                                </View>
-                              )}
-                            </View>
-                          </TouchableOpacity>
-
-                          {/* Quick Encryption Badge */}
-                          <TouchableOpacity
-                            onPress={() => handleToggleFileEncryption(file.id)}
-                            style={{
-                              flexDirection: 'row',
-                              alignItems: 'center',
-                              gap: 3,
-                              paddingHorizontal: 7,
-                              paddingVertical: 4,
-                              borderRadius: 8,
-                              backgroundColor: file.isEncrypted ? 'rgba(48, 209, 88, 0.15)' : (isLight ? '#E5E5EA' : '#2C2C2E'),
-                              marginRight: 4,
-                            }}
-                          >
-                            <Ionicons
-                              name={file.isEncrypted ? 'lock-closed' : 'lock-open-outline'}
-                              size={12}
-                              color={file.isEncrypted ? '#30D158' : '#8E8E93'}
-                            />
-                            <Text
-                              style={{
-                                fontSize: 10,
-                                fontWeight: '700',
-                                color: file.isEncrypted ? '#30D158' : '#8E8E93',
-                              }}
-                            >
-                              {file.isEncrypted ? 'ĐÃ KHÓA' : 'MỞ'}
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
-
-                        {/* File Action Toolbar */}
-                        <View
-                          style={{
-                            flexDirection: 'row',
-                            justifyContent: 'flex-end',
-                            alignItems: 'center',
-                            gap: 8,
-                            marginTop: 10,
-                            paddingTop: 8,
-                            borderTopWidth: 1,
-                            borderTopColor: isLight ? '#F2F2F7' : 'rgba(255,255,255,0.06)',
-                          }}
-                        >
-                          <TouchableOpacity
-                            style={{
-                              flexDirection: 'row',
-                              alignItems: 'center',
-                              gap: 4,
-                              paddingHorizontal: 10,
-                              paddingVertical: 5,
-                              borderRadius: 8,
-                              backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E',
-                            }}
-                            onPress={() => setSelectedFilePreview(file)}
-                          >
-                            <Ionicons name="eye-outline" size={14} color="#0A84FF" />
-                            <Text style={{ fontSize: 12, fontWeight: '600', color: '#0A84FF' }}>Xem</Text>
-                          </TouchableOpacity>
-
-                          <TouchableOpacity
-                            style={{
-                              flexDirection: 'row',
-                              alignItems: 'center',
-                              gap: 4,
-                              paddingHorizontal: 10,
-                              paddingVertical: 5,
-                              borderRadius: 8,
-                              backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E',
-                            }}
-                            onPress={() => handleShareFile(file)}
-                          >
-                            <Ionicons name="share-outline" size={14} color={isLight ? '#000' : '#FFF'} />
-                            <Text style={{ fontSize: 12, fontWeight: '600', color: isLight ? '#000' : '#FFF' }}>Chia sẻ</Text>
-                          </TouchableOpacity>
-
-                          <TouchableOpacity
-                            style={{
-                              paddingHorizontal: 8,
-                              paddingVertical: 5,
-                              borderRadius: 8,
-                              backgroundColor: 'rgba(255, 59, 48, 0.1)',
-                            }}
-                            onPress={() => handleDeleteFile(file.id)}
-                          >
-                            <Ionicons name="trash-outline" size={14} color="#FF3B30" />
-                          </TouchableOpacity>
-                        </View>
+                        <Text style={{ fontSize: 10.5, color: '#94A3B8', fontWeight: '600' }}>
+                          3 tệp
+                        </Text>
                       </View>
-                    );
-                  })}
-                </View>
+                    </View>
+                    <Text style={{ fontSize: 12, color: '#94A3B8' }} numberOfLines={1}>
+                      Tài liệu học tập, dự án...
+                    </Text>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                      <Ionicons name="ellipsis-vertical" size={16} color="#64748B" />
+                    </TouchableOpacity>
+                    <Text style={{ fontSize: 12, color: '#94A3B8' }}>2.4 GB</Text>
+                    <Ionicons name="chevron-forward" size={16} color="#475569" />
+                  </View>
+                </TouchableOpacity>
               )}
+
+              {/* Sample / Real Files List */}
+              {(() => {
+                const sampleFiles = [
+                  {
+                    id: 'sample-1',
+                    name: 'Hình nền LockX.jpg',
+                    sizeFormatted: '1.2 MB',
+                    category: 'image',
+                    typeLabel: 'Ảnh',
+                    timeAgo: '2 giờ trước',
+                    icon: 'image',
+                    color: '#0284C7',
+                    bgUrl: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=200&q=80',
+                  },
+                  {
+                    id: 'sample-2',
+                    name: 'Video hướng dẫn.mp4',
+                    sizeFormatted: '48.7 MB',
+                    category: 'video',
+                    typeLabel: 'Video',
+                    timeAgo: '5 giờ trước',
+                    icon: 'play',
+                    color: '#8B5CF6',
+                  },
+                  {
+                    id: 'sample-3',
+                    name: 'Project_LockX.zip',
+                    sizeFormatted: '124.6 MB',
+                    category: 'archive',
+                    typeLabel: 'Tệp nén',
+                    timeAgo: '1 ngày trước',
+                    icon: 'document-text',
+                    color: '#10B981',
+                  },
+                ];
+
+                const displayFiles = filteredFiles.length > 0 ? filteredFiles : sampleFiles.filter(item => fileCategoryFilter === 'all' || item.category === fileCategoryFilter);
+
+                return displayFiles.map((file: any) => {
+                  return (
+                    <TouchableOpacity
+                      key={file.id}
+                      activeOpacity={0.75}
+                      onPress={() => setSelectedFilePreview(file)}
+                      style={{
+                        backgroundColor: isLight ? '#FFFFFF' : '#0F172A',
+                        borderRadius: 16,
+                        padding: 14,
+                        borderWidth: 1,
+                        borderColor: isLight ? '#E2E8F0' : '#1E293B',
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                      }}
+                    >
+                      {/* File Icon / Thumbnail */}
+                      <View
+                        style={{
+                          width: 48,
+                          height: 48,
+                          borderRadius: 14,
+                          backgroundColor: file.color || (file.category === 'image' ? '#0284C7' : file.category === 'video' ? '#8B5CF6' : '#10B981'),
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          marginRight: 14,
+                          overflow: 'hidden',
+                        }}
+                      >
+                        {file.bgUrl ? (
+                          <Image
+                            source={{ uri: file.bgUrl }}
+                            style={{ width: 48, height: 48 }}
+                            resizeMode="cover"
+                          />
+                        ) : (
+                          <Ionicons
+                            name={(file.icon || (file.category === 'video' ? 'play' : file.category === 'image' ? 'image' : 'document-text')) as any}
+                            size={22}
+                            color="#FFFFFF"
+                          />
+                        )}
+                      </View>
+
+                      {/* File Details */}
+                      <View style={{ flex: 1 }}>
+                        <Text
+                          style={{
+                            fontSize: 15,
+                            fontWeight: '700',
+                            color: isLight ? '#0F172A' : '#FFFFFF',
+                            marginBottom: 3,
+                          }}
+                          numberOfLines={1}
+                        >
+                          {file.name}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: '#94A3B8' }}>
+                          {file.sizeFormatted || '1.2 MB'} • {file.typeLabel || (file.category === 'image' ? 'Ảnh' : file.category === 'video' ? 'Video' : 'Tài liệu')}
+                        </Text>
+                      </View>
+
+                      {/* Right Controls */}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        <TouchableOpacity
+                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                          onPress={() => handleDeleteFile(file.id)}
+                        >
+                          <Ionicons name="ellipsis-vertical" size={16} color="#64748B" />
+                        </TouchableOpacity>
+                        <Text style={{ fontSize: 12, color: '#94A3B8' }}>
+                          {file.timeAgo || 'Vừa xong'}
+                        </Text>
+                        <Ionicons name="chevron-forward" size={16} color="#475569" />
+                      </View>
+                    </TouchableOpacity>
+                  );
+                });
+              })()}
+            </View>
+
+            {/* DASHED EMPTY / DROPZONE CARD */}
+            <View
+              style={{
+                borderWidth: 1.5,
+                borderColor: isLight ? '#CBD5E1' : '#334155',
+                borderStyle: 'dashed',
+                borderRadius: 18,
+                paddingVertical: 24,
+                paddingHorizontal: 20,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: isLight ? 'rgba(241, 245, 249, 0.6)' : 'rgba(15, 23, 42, 0.4)',
+                marginBottom: 30,
+              }}
+            >
+              <View
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 14,
+                  backgroundColor: isLight ? '#E2E8F0' : '#1E293B',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  marginBottom: 10,
+                }}
+              >
+                <Ionicons name="folder-outline" size={22} color="#64748B" />
+              </View>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: isLight ? '#334155' : '#CBD5E1', marginBottom: 4 }}>
+                Không có tệp nào được chọn
+              </Text>
+              <Text style={{ fontSize: 11.5, color: '#64748B', textAlign: 'center' }}>
+                Hãy thêm tệp hoặc tạo thư mục để lưu trữ dữ liệu của bạn.
+              </Text>
             </View>
           </ScrollView>
         )}
