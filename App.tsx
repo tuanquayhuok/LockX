@@ -5562,6 +5562,79 @@ function MainApp() {
   const [hasNotifPermission, setHasNotifPermission] = useState(false);
 
   const [currentTab, setCurrentTab] = useState<'vault' | 'apps' | 'chat' | 'profile' | 'settings'>('vault');
+  // Offline & Wi-Fi Access Gate for Tệp and Bạn Bè
+  const [isOfflineOnlyMode, setIsOfflineOnlyMode] = useState<boolean>(true);
+  const [showOfflineNoticeModal, setShowOfflineNoticeModal] = useState<boolean>(false);
+  const [isCheckingConnection, setIsCheckingConnection] = useState<boolean>(false);
+  const [pendingOfflineTab, setPendingOfflineTab] = useState<'apps' | 'chat' | null>(null);
+  // OFFLINE & WI-FI GATE HANDLERS
+  const handleCheckConnection = async () => {
+    setIsCheckingConnection(true);
+    try {
+      let isConnected = true;
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        isConnected = false;
+      } else {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 3000);
+        try {
+          await fetch('https://www.google.com/favicon.ico', { mode: 'no-cors', cache: 'no-store', signal: controller.signal });
+          clearTimeout(timeout);
+          isConnected = true;
+        } catch {
+          isConnected = false;
+        }
+      }
+
+      setIsCheckingConnection(false);
+      if (isConnected) {
+        setIsOfflineOnlyMode(false);
+        AsyncStorage.setItem('lockx_offline_only_mode', 'false').catch(() => {});
+        setShowOfflineNoticeModal(false);
+        triggerToast('✓ Đã kết nối Internet thành công! Tệp và Bạn Bè đã sẵn sàng.', 'Trực Tuyến', 'success', 'wifi', '#10B981');
+        if (pendingOfflineTab) {
+          setCurrentTab(pendingOfflineTab);
+          setPendingOfflineTab(null);
+        }
+      } else {
+        triggerToast('Không có kết nối Internet / Wi-Fi. Vui lòng kiểm tra lại đường truyền.', 'Mất Kết Nối', 'warning', 'cloud-offline', '#FF3B30');
+      }
+    } catch {
+      setIsCheckingConnection(false);
+      triggerToast('Không có kết nối Internet / Wi-Fi. Vui lòng kiểm tra lại đường truyền.', 'Mất Kết Nối', 'warning', 'cloud-offline', '#FF3B30');
+    }
+  };
+
+  const handleUseWithoutInternet = () => {
+    setIsOfflineOnlyMode(true);
+    AsyncStorage.setItem('lockx_offline_only_mode', 'true').catch(() => {});
+    setShowOfflineNoticeModal(false);
+    setPendingOfflineTab(null);
+    setCurrentTab('vault');
+    triggerToast('Đã bật Chế độ Ngoại Tuyến. Trang chủ, Cá nhân và Cài đặt hoạt động bình thường.', 'Chế Độ Offline', 'info', 'cloud-offline', '#FF9500');
+  };
+
+  const handleNavigateTab = (tabKey: 'vault' | 'apps' | 'chat' | 'profile' | 'settings') => {
+    if (tabKey === 'apps' || tabKey === 'chat') {
+      if (isOfflineOnlyMode || (typeof navigator !== 'undefined' && navigator.onLine === false)) {
+        setPendingOfflineTab(tabKey);
+        setShowOfflineNoticeModal(true);
+        return;
+      }
+    }
+    if (tabKey === 'vault' && currentTab === 'vault') {
+      setVaultSubView('list');
+      setSelectedAccount(null);
+    }
+    if (tabKey === 'profile' && currentTab === 'profile') {
+      setProfileSubView('main');
+    }
+    if (tabKey === 'chat' && currentTab === 'chat') {
+      setActiveChatFriend(null);
+    }
+    setCurrentTab(tabKey);
+  };
+
   const [accounts, setAccounts] = useState<Account[]>(INITIAL_ACCOUNTS);
   const [phoneApps, setPhoneApps] = useState<PhoneAppItem[]>(INITIAL_IPHONE_APPS);
   const [appSearchQuery, setAppSearchQuery] = useState('');
@@ -6212,7 +6285,12 @@ function MainApp() {
       .catch(() => {});
 
     // 5. Cài đặt hệ thống
-    AsyncStorage.getItem('lockx_app_settings')
+    AsyncStorage.getItem('lockx_offline_only_mode').then((val) => {
+          if (val !== null) {
+            setIsOfflineOnlyMode(val === 'true');
+          }
+        }).catch(() => {});
+        AsyncStorage.getItem('lockx_app_settings')
       .then((s) => {
         if (s) {
           try {
@@ -18004,43 +18082,225 @@ function MainApp() {
             { key: 'chat', label: 'Bạn Bè', icon: 'people' },
             { key: 'profile', label: 'Cá Nhân', icon: 'shield-checkmark' },
             { key: 'settings', label: 'Cài đặt', icon: 'settings' },
-          ].map((tab) => (
-            <TouchableOpacity
-              key={tab.key}
-              style={styles.tabItem}
-              onPress={() => {
-                if (tab.key === 'vault' && currentTab === 'vault') {
-                  setVaultSubView('list');
-                  setSelectedAccount(null);
-                }
-                if (tab.key === 'profile' && currentTab === 'profile') {
-                  setProfileSubView('main');
-                }
-                if (tab.key === 'chat' && currentTab === 'chat') {
-                  setActiveChatFriend(null);
-                }
-                setCurrentTab(tab.key as any);
-              }}
-            >
-              <Ionicons
-                name={(tab.icon + (currentTab === tab.key ? '' : '-outline')) as any}
-                size={22}
-                color={currentTab === tab.key ? appSettings.accentColor : '#8E8E93'}
-              />
-              <Text
-                style={[
-                  styles.tabLabel,
-                  currentTab === tab.key && { color: appSettings.accentColor, fontWeight: '700' },
-                ]}
+          ].map((tab) => {
+            const isLocked = isOfflineOnlyMode && (tab.key === 'apps' || tab.key === 'chat');
+            const isActive = currentTab === tab.key;
+            return (
+              <TouchableOpacity
+                key={tab.key}
+                style={[styles.tabItem, isLocked && { opacity: 0.45 }]}
+                activeOpacity={0.7}
+                onPress={() => handleNavigateTab(tab.key as any)}
               >
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
+                <View style={{ position: 'relative' }}>
+                  <Ionicons
+                    name={(tab.icon + (isActive ? '' : '-outline')) as any}
+                    size={22}
+                    color={isActive ? appSettings.accentColor : '#8E8E93'}
+                  />
+                  {isLocked && (
+                    <View
+                      style={{
+                        position: 'absolute',
+                        top: -3,
+                        right: -6,
+                        backgroundColor: '#FF3B30',
+                        borderRadius: 6,
+                        width: 13,
+                        height: 13,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        borderWidth: 1,
+                        borderColor: isLight ? '#FFFFFF' : '#000000',
+                      }}
+                    >
+                      <Ionicons name="lock-closed" size={7.5} color="#FFFFFF" />
+                    </View>
+                  )}
+                </View>
+                <Text
+                  style={[
+                    styles.tabLabel,
+                    isActive && { color: appSettings.accentColor, fontWeight: '700' },
+                    isLocked && { color: '#8E8E93' },
+                  ]}
+                >
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       )}
         </>
       )}
+
+      {/* ========================================================================= */}
+      {/* POPUP MODAL: THÔNG BÁO OFFLINE (CẦN KẾT NỐI INTERNET / WI-FI CHO TỆP & BẠN BÈ) */}
+      {/* ========================================================================= */}
+      <Modal visible={showOfflineNoticeModal} animationType="fade" transparent onRequestClose={() => setShowOfflineNoticeModal(false)}>
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0, 0, 0, 0.72)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 24,
+            zIndex: 999999,
+          }}
+        >
+          <View
+            style={{
+              width: '100%',
+              maxWidth: 340,
+              backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+              borderRadius: 24,
+              padding: 22,
+              alignItems: 'center',
+              borderWidth: 1,
+              borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+              shadowColor: '#000000',
+              shadowOffset: { width: 0, height: 16 },
+              shadowOpacity: 0.45,
+              shadowRadius: 28,
+              elevation: 20,
+            }}
+          >
+            {/* Offline Icon Badge with Pulsing Glow */}
+            <View
+              style={{
+                width: 68,
+                height: 68,
+                borderRadius: 34,
+                backgroundColor: 'rgba(255, 149, 0, 0.14)',
+                borderWidth: 2,
+                borderColor: 'rgba(255, 149, 0, 0.35)',
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginBottom: 14,
+              }}
+            >
+              <Ionicons name="cloud-offline" size={34} color="#FF9500" />
+            </View>
+
+            {/* Title */}
+            <Text
+              style={{
+                fontSize: 20,
+                fontWeight: '800',
+                color: isLight ? '#000000' : '#FFFFFF',
+                textAlign: 'center',
+                marginBottom: 6,
+                letterSpacing: -0.3,
+              }}
+            >
+              Oops! Bạn đang offline
+            </Text>
+
+            {/* Description */}
+            <Text
+              style={{
+                fontSize: 13.5,
+                color: isLight ? '#6C6C70' : '#8E8E93',
+                textAlign: 'center',
+                lineHeight: 20,
+                marginBottom: 16,
+              }}
+            >
+              Tính năng {pendingOfflineTab === 'apps' ? 'Tệp' : pendingOfflineTab === 'chat' ? 'Bạn Bè' : 'Tệp & Bạn Bè'} yêu cầu kết nối Wi-Fi hoặc Internet để đồng bộ và truy cập.
+            </Text>
+
+            {/* Status Note Pill */}
+            <View
+              style={{
+                width: '100%',
+                backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E',
+                borderRadius: 12,
+                paddingVertical: 10,
+                paddingHorizontal: 12,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+                marginBottom: 20,
+              }}
+            >
+              <Ionicons name="checkmark-circle" size={17} color="#34C759" />
+              <Text
+                style={{
+                  flex: 1,
+                  fontSize: 12,
+                  color: isLight ? '#3C3C43' : '#E5E5EA',
+                  fontWeight: '500',
+                  lineHeight: 16,
+                }}
+              >
+                Trang chủ, Cá nhân và Cài đặt vẫn hoạt động 100% không cần mạng.
+              </Text>
+            </View>
+
+            {/* 2 Action Buttons */}
+            <View style={{ width: '100%', gap: 10 }}>
+              {/* Button 1: Kiểm tra lại */}
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={handleCheckConnection}
+                disabled={isCheckingConnection}
+                style={{
+                  backgroundColor: '#007AFF',
+                  paddingVertical: 13,
+                  borderRadius: 14,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  shadowColor: '#007AFF',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 8,
+                }}
+              >
+                {isCheckingConnection ? (
+                  <>
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                    <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '700' }}>
+                      Đang kiểm tra kết nối...
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Ionicons name="refresh" size={18} color="#FFFFFF" />
+                    <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '700' }}>
+                      Kiểm tra lại
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              {/* Button 2: Sử dụng không cần internet */}
+              <TouchableOpacity
+                activeOpacity={0.75}
+                onPress={handleUseWithoutInternet}
+                style={{
+                  backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E',
+                  borderWidth: 1,
+                  borderColor: isLight ? '#E5E5EA' : '#3A3A3C',
+                  paddingVertical: 13,
+                  borderRadius: 14,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                }}
+              >
+                <Ionicons name="phone-portrait-outline" size={17} color={isLight ? '#000000' : '#FFFFFF'} />
+                <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 14.5, fontWeight: '600' }}>
+                  Sử dụng không cần internet
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* MODAL: TRANG CÁ NHÂN NGƯỜI DÙNG KHÁC (VIEW OTHER USER'S PROFILE) */}
       <Modal visible={!!viewingFriendProfile} animationType="slide" transparent>
