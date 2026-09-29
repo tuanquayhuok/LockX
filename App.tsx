@@ -429,77 +429,295 @@ export interface PlatformPreset {
   color: string;
   category: 'Social' | 'Game' | 'Work' | 'Clone';
   subText?: string;
+  logoUrl?: string;
 }
 
 export const PLATFORM_PRESETS: PlatformPreset[] = [
   // Mạng xã hội & Tin nhắn
-  { id: 'facebook', name: 'Facebook', icon: 'logo-facebook', color: '#1877F2', category: 'Social', subText: 'Mạng xã hội Meta' },
-  { id: 'google', name: 'Google / Gmail', icon: 'logo-google', color: '#EA4335', category: 'Work', subText: 'Email & Dịch vụ Google' },
-  { id: 'tiktok', name: 'TikTok', icon: 'logo-tiktok', color: '#FE2C55', category: 'Social', subText: 'Video ngắn TikTok' },
-  { id: 'telegram', name: 'Telegram', icon: 'paper-plane', color: '#24A1DE', category: 'Social', subText: 'Tin nhắn bảo mật' },
-  { id: 'discord', name: 'Discord', icon: 'logo-discord', color: '#5865F2', category: 'Social', subText: 'Cộng đồng & Trò chuyện' },
-  { id: 'zalo', name: 'Zalo', icon: 'chatbubble-ellipses', color: '#0068FF', category: 'Social', subText: 'Tin nhắn Zalo' },
-  { id: 'instagram', name: 'Instagram', icon: 'logo-instagram', color: '#E4405F', category: 'Social', subText: 'Ảnh & Video Meta' },
-  { id: 'x_twitter', name: 'X (Twitter)', icon: 'logo-twitter', color: '#1DA1F2', category: 'Social', subText: 'Mạng xã hội tin tức' },
-  { id: 'apple', name: 'Apple ID', icon: 'logo-apple', color: '#8E8E93', category: 'Work', subText: 'iCloud & Dịch vụ Apple' },
-  { id: 'youtube', name: 'YouTube', icon: 'logo-youtube', color: '#FF0000', category: 'Social', subText: 'Nền tảng video' },
-  { id: 'microsoft', name: 'Microsoft', icon: 'logo-windows', color: '#00A4EF', category: 'Work', subText: 'Outlook, Xbox & Office' },
+  {
+    id: 'facebook',
+    name: 'Facebook',
+    icon: 'logo-facebook',
+    color: '#1877F2',
+    category: 'Social',
+    subText: 'Mạng xã hội Meta',
+    logoUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/4a/d2/9f/4ad29fa6-ac86-66b9-3c9e-2c9950173431/Icon-Production-0-0-1x_U007epad-0-1-0-sRGB-85-220.png/512x512bb.jpg',
+  },
+  {
+    id: 'google',
+    name: 'Google / Gmail',
+    icon: 'logo-google',
+    color: '#EA4335',
+    category: 'Work',
+    subText: 'Email & Dịch vụ Google',
+    logoUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/4f/d3/5b/4fd35b53-e6d3-ee49-342a-8a7ace6fe960/SuperG_ios26-0-0-1x_U007epad-0-0-0-1-0-0-sRGB-0-0-0-85-220.png/512x512bb.jpg',
+  },
+  {
+    id: 'tiktok',
+    name: 'TikTok',
+    icon: 'logo-tiktok',
+    color: '#000000',
+    category: 'Social',
+    subText: 'Video ngắn TikTok',
+    logoUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/b0/7c/88/b07c88d8-0314-7b8b-7ab0-788e7059074b/TikTok_AppIcon26-0-0-1x_U007epad-0-1-0-85-220.png/512x512bb.jpg',
+  },
+  {
+    id: 'telegram',
+    name: 'Telegram',
+    icon: 'paper-plane',
+    color: '#24A1DE',
+    category: 'Social',
+    subText: 'Tin nhắn bảo mật',
+    logoUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/01/b6/99/01b699a0-d264-d1c3-c798-50aedd0be3db/Telegram-0-0-1x_U007epad-0-1-0-sRGB-85-220.png/512x512bb.jpg',
+  },
+  {
+    id: 'discord',
+    name: 'Discord',
+    icon: 'logo-discord',
+    color: '#5865F2',
+    category: 'Social',
+    subText: 'Cộng đồng & Trò chuyện',
+    logoUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/6d/62/89/6d628952-77a9-1995-09af-470a21fd53bd/AppIcon-0-0-1x_U007epad-0-1-0-sRGB-85-220.png/512x512bb.jpg',
+  },
+  {
+    id: 'zalo',
+    name: 'Zalo',
+    icon: 'chatbubble-ellipses',
+    color: '#0068FF',
+    category: 'Social',
+    subText: 'Tin nhắn Zalo',
+    logoUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/e1/96/c0/e196c09e-a475-316a-da00-fcacb2d7853e/AppIcon-0-0-1x_U007emarketing-0-8-0-85-220.png/512x512bb.jpg',
+  },
+  {
+    id: 'instagram',
+    name: 'Instagram',
+    icon: 'logo-instagram',
+    color: '#E4405F',
+    category: 'Social',
+    subText: 'Ảnh & Video Meta',
+    logoUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/f5/7f/2c/f57f2c00-2dff-4704-501b-ab6849c6277d/Prod-0-0-1x_U007epad-0-1-0-sRGB-85-220.png/512x512bb.jpg',
+  },
+  {
+    id: 'x_twitter',
+    name: 'X (Twitter)',
+    icon: 'logo-twitter',
+    color: '#000000',
+    category: 'Social',
+    subText: 'Mạng xã hội tin tức',
+    logoUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/ac/ad/3b/acad3b41-25dd-c82d-39e9-e39ddf0b9877/ProductionAppIcon-0-0-1x_U007emarketing-0-8-0-0-0-85-220.png/512x512bb.jpg',
+  },
+  {
+    id: 'apple',
+    name: 'Apple ID',
+    icon: 'logo-apple',
+    color: '#000000',
+    category: 'Work',
+    subText: 'iCloud & Dịch vụ Apple',
+    logoUrl: 'https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/apple.png',
+  },
+  {
+    id: 'youtube',
+    name: 'YouTube',
+    icon: 'logo-youtube',
+    color: '#FF0000',
+    category: 'Social',
+    subText: 'Nền tảng video',
+    logoUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/77/86/1c/77861cb6-0f87-5220-d6a5-5f11c8fcad7f/logo_youtube_2024_q4_color-0-0-1x_U007emarketing-0-0-0-7-0-0-0-85-220.png/512x512bb.jpg',
+  },
+  {
+    id: 'microsoft',
+    name: 'Microsoft',
+    icon: 'logo-windows',
+    color: '#00A4EF',
+    category: 'Work',
+    subText: 'Outlook, Xbox & Office',
+    logoUrl: 'https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/microsoft.png',
+  },
 
   // Game Phổ Biến
-  { id: 'genshin', name: 'Genshin Impact', icon: 'sparkles', color: '#2563EB', category: 'Game', subText: 'HoYoverse RPG' },
-  { id: 'hsr', name: 'Honkai: Star Rail', icon: 'train', color: '#7C3AED', category: 'Game', subText: 'HoYoverse Vũ Trụ' },
-  { id: 'lienquan', name: 'Liên Quân Mobile', icon: 'shield-checkmark', color: '#FF9F0A', category: 'Game', subText: 'Garena MOBA' },
-  { id: 'freefire', name: 'Free Fire', icon: 'flame', color: '#FF375F', category: 'Game', subText: 'Garena Battle Royale' },
-  { id: 'riot', name: 'Riot Games / LMHT', icon: 'hardware-chip', color: '#D32936', category: 'Game', subText: 'LMHT, Tốc Chiến, Valorant' },
-  { id: 'steam', name: 'Steam', icon: 'logo-steam', color: '#171A21', category: 'Game', subText: 'Valve Gaming Store' },
-  { id: 'roblox', name: 'Roblox', icon: 'cube', color: '#E02424', category: 'Game', subText: 'Roblox Metaverse' },
-  { id: 'wuwa', name: 'Wuthering Waves', icon: 'cloudy-night', color: '#30B0C7', category: 'Game', subText: 'Kuro Games Action RPG' },
-  { id: 'minecraft', name: 'Minecraft', icon: 'grid', color: '#5B8C5A', category: 'Game', subText: 'Mojang Sandbox' },
+  {
+    id: 'genshin',
+    name: 'Genshin Impact',
+    icon: 'sparkles',
+    color: '#2563EB',
+    category: 'Game',
+    subText: 'HoYoverse RPG',
+    logoUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/5c/e2/13/5ce21317-a08a-24ac-cc5f-2b25a4d71fa6/AppIcon-0-0-1x_U007epad-0-1-85-220.png/512x512bb.jpg',
+  },
+  {
+    id: 'hsr',
+    name: 'Honkai: Star Rail',
+    icon: 'train',
+    color: '#7C3AED',
+    category: 'Game',
+    subText: 'HoYoverse Vũ Trụ',
+    logoUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/fd/65/dc/fd65dc18-c4b6-7b64-8266-a423f3f113e0/AppIcon-0-0-1x_U007emarketing-0-8-0-85-220.png/512x512bb.jpg',
+  },
+  {
+    id: 'lienquan',
+    name: 'Liên Quân Mobile',
+    icon: 'shield-checkmark',
+    color: '#FF9F0A',
+    category: 'Game',
+    subText: 'Garena MOBA',
+    logoUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/da/e2/03/dae203c6-752a-2b1f-6e1b-d15e4567a883/AppIcon-1x_U007emarketing-0-11-0-85-220-0.png/512x512bb.jpg',
+  },
+  {
+    id: 'freefire',
+    name: 'Free Fire',
+    icon: 'flame',
+    color: '#FF375F',
+    category: 'Game',
+    subText: 'Garena Battle Royale',
+    logoUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/ef/16/6b/ef166bba-1d69-85f5-ed84-6b7c6e73b55c/AppIcon-1788350393-0-0-1x_U007emarketing-0-8-0-85-220.png/512x512bb.jpg',
+  },
+  {
+    id: 'riot',
+    name: 'Riot Games / LMHT',
+    icon: 'hardware-chip',
+    color: '#D32936',
+    category: 'Game',
+    subText: 'LMHT, Tốc Chiến, Valorant',
+    logoUrl: 'https://img.icons8.com/color/144/riot-games.png',
+  },
+  {
+    id: 'steam',
+    name: 'Steam',
+    icon: 'logo-steam',
+    color: '#171A21',
+    category: 'Game',
+    subText: 'Valve Gaming Store',
+    logoUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/1d/e1/8d/1de18df0-9f13-4bdb-728a-ddc7ecaf9849/AppIcon-0-0-1x_U007emarketing-0-8-0-85-220.png/512x512bb.jpg',
+  },
+  {
+    id: 'roblox',
+    name: 'Roblox',
+    icon: 'cube',
+    color: '#E02424',
+    category: 'Game',
+    subText: 'Roblox Metaverse',
+    logoUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/a2/5d/b7/a25db7ef-5fd9-160f-3158-5753572d2fdb/AppIcon-0-0-1x_U007epad-0-1-0-85-220.png/512x512bb.jpg',
+  },
+  {
+    id: 'wuwa',
+    name: 'Wuthering Waves',
+    icon: 'cloudy-night',
+    color: '#30B0C7',
+    category: 'Game',
+    subText: 'Kuro Games Action RPG',
+    logoUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/a7/21/24/a7212444-17a1-e926-5558-1063fee9c6b1/AppIcon-0-0-1x_U007emarketing-0-8-0-85-220.png/512x512bb.jpg',
+  },
+  {
+    id: 'minecraft',
+    name: 'Minecraft',
+    icon: 'grid',
+    color: '#5B8C5A',
+    category: 'Game',
+    subText: 'Mojang Sandbox',
+    logoUrl: 'https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/minecraft.png',
+  },
 
   // Dịch vụ & Tài chính
-  { id: 'bank', name: 'Ngân Hàng (Banking)', icon: 'business', color: '#34C759', category: 'Work', subText: 'Tài khoản ngân hàng' },
-  { id: 'momo', name: 'Ví MoMo', icon: 'wallet', color: '#A50064', category: 'Work', subText: 'Ví điện tử MoMo' },
-  { id: 'binance', name: 'Binance', icon: 'swap-horizontal', color: '#F3BA2F', category: 'Work', subText: 'Sàn giao dịch Crypto' },
-  { id: 'netflix', name: 'Netflix', icon: 'film', color: '#E50914', category: 'Social', subText: 'Xem phim trực tuyến' },
-  { id: 'spotify', name: 'Spotify', icon: 'musical-notes', color: '#1DB954', category: 'Social', subText: 'Nghe nhạc trực tuyến' },
-  { id: 'github', name: 'GitHub', icon: 'logo-github', color: '#6E5494', category: 'Work', subText: 'Kho mã nguồn lập trình' },
+  {
+    id: 'bank',
+    name: 'Ngân Hàng (MBBank / Banking)',
+    icon: 'business',
+    color: '#003B70',
+    category: 'Work',
+    subText: 'Tài khoản ngân hàng',
+    logoUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/83/cb/ab/83cbab4a-df79-108f-e3bb-f57cdbdf3a53/AppIcon-0-0-1x_U007emarketing-0-8-0-85-220.png/512x512bb.jpg',
+  },
+  {
+    id: 'momo',
+    name: 'Ví MoMo',
+    icon: 'wallet',
+    color: '#A50064',
+    category: 'Work',
+    subText: 'Ví điện tử MoMo',
+    logoUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/43/01/4e/43014e31-d813-c994-aeee-82047a0010de/AppIcon-0-0-1x_U007emarketing-0-6-0-sRGB-85-220.png/512x512bb.jpg',
+  },
+  {
+    id: 'binance',
+    name: 'Binance',
+    icon: 'swap-horizontal',
+    color: '#F3BA2F',
+    category: 'Work',
+    subText: 'Sàn giao dịch Crypto',
+    logoUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/a3/0d/84/a30d8426-fb29-5fc4-0be4-0bbbc7805b3f/AppIcon-0-0-1x_U007emarketing-0-8-0-85-220.png/512x512bb.jpg',
+  },
+  {
+    id: 'netflix',
+    name: 'Netflix',
+    icon: 'film',
+    color: '#E50914',
+    category: 'Social',
+    subText: 'Xem phim trực tuyến',
+    logoUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/cd/76/f9/cd76f98c-0811-0a8c-7587-715d38832dc9/AppIcon-0-0-1x_U007epad-0-1-0-sRGB-0-85-220.png/512x512bb.jpg',
+  },
+  {
+    id: 'spotify',
+    name: 'Spotify',
+    icon: 'musical-notes',
+    color: '#1DB954',
+    category: 'Social',
+    subText: 'Nghe nhạc trực tuyến',
+    logoUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/fd/b0/e6/fdb0e66d-165c-aa66-ac6b-1ee1e01911e8/AppIcon-0-0-1x_U007epad-0-1-0-0-sRGB-85-220.png/512x512bb.jpg',
+  },
+  {
+    id: 'github',
+    name: 'GitHub',
+    icon: 'logo-github',
+    color: '#24292E',
+    category: 'Work',
+    subText: 'Kho mã nguồn lập trình',
+    logoUrl: 'https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/github.png',
+  },
 ];
 
-export const getPlatformInfo = (platformName: string = '', category?: string): { name: string; icon: keyof typeof Ionicons.glyphMap; color: string; category: 'Social' | 'Game' | 'Work' | 'Clone' } => {
+export const getPlatformInfo = (platformName: string = '', category?: string): { name: string; icon: keyof typeof Ionicons.glyphMap; color: string; category: 'Social' | 'Game' | 'Work' | 'Clone'; logoUrl?: string } => {
   const norm = (platformName || '').toLowerCase().trim();
-  
-  if (norm.includes('genshin')) return { name: platformName || 'Genshin Impact', icon: 'sparkles', color: '#2563EB', category: 'Game' };
-  if (norm.includes('honkai') || norm.includes('hsr')) return { name: platformName || 'Honkai: Star Rail', icon: 'train', color: '#7C3AED', category: 'Game' };
-  if (norm.includes('liên quân') || norm.includes('lien quan') || norm.includes('aov')) return { name: platformName || 'Liên Quân Mobile', icon: 'shield-checkmark', color: '#FF9F0A', category: 'Game' };
-  if (norm.includes('free fire') || norm.includes('ff')) return { name: platformName || 'Free Fire', icon: 'flame', color: '#FF375F', category: 'Game' };
-  if (norm.includes('riot') || norm.includes('lol') || norm.includes('lmht') || norm.includes('valorant')) return { name: platformName || 'Riot Games', icon: 'hardware-chip', color: '#D32936', category: 'Game' };
-  if (norm.includes('steam')) return { name: platformName || 'Steam', icon: 'logo-steam', color: '#171A21', category: 'Game' };
-  if (norm.includes('roblox')) return { name: platformName || 'Roblox', icon: 'cube', color: '#E02424', category: 'Game' };
-  if (norm.includes('wuthering') || norm.includes('wuwa')) return { name: platformName || 'Wuthering Waves', icon: 'cloudy-night', color: '#30B0C7', category: 'Game' };
-  if (norm.includes('minecraft')) return { name: platformName || 'Minecraft', icon: 'grid', color: '#5B8C5A', category: 'Game' };
 
-  if (norm.includes('facebook') || norm === 'fb') return { name: platformName || 'Facebook', icon: 'logo-facebook', color: '#1877F2', category: 'Social' };
-  if (norm.includes('google') || norm.includes('gmail')) return { name: platformName || 'Google / Gmail', icon: 'logo-google', color: '#EA4335', category: 'Work' };
-  if (norm.includes('tiktok')) return { name: platformName || 'TikTok', icon: 'logo-tiktok', color: '#FE2C55', category: 'Social' };
-  if (norm.includes('telegram') || norm === 'tele') return { name: platformName || 'Telegram', icon: 'paper-plane', color: '#24A1DE', category: 'Social' };
-  if (norm.includes('discord')) return { name: platformName || 'Discord', icon: 'logo-discord', color: '#5865F2', category: 'Social' };
-  if (norm.includes('zalo')) return { name: platformName || 'Zalo', icon: 'chatbubble-ellipses', color: '#0068FF', category: 'Social' };
-  if (norm.includes('instagram') || norm === 'insta' || norm === 'ig') return { name: platformName || 'Instagram', icon: 'logo-instagram', color: '#E4405F', category: 'Social' };
-  if (norm.includes('twitter') || norm === 'x') return { name: platformName || 'X (Twitter)', icon: 'logo-twitter', color: '#1DA1F2', category: 'Social' };
-  if (norm.includes('apple') || norm.includes('icloud')) return { name: platformName || 'Apple ID', icon: 'logo-apple', color: '#8E8E93', category: 'Work' };
-  if (norm.includes('youtube') || norm === 'yt') return { name: platformName || 'YouTube', icon: 'logo-youtube', color: '#FF0000', category: 'Social' };
-  if (norm.includes('microsoft') || norm.includes('outlook')) return { name: platformName || 'Microsoft', icon: 'logo-windows', color: '#00A4EF', category: 'Work' };
+  const matched = PLATFORM_PRESETS.find(
+    (p) =>
+      p.id === norm ||
+      p.name.toLowerCase() === norm ||
+      norm.includes(p.id) ||
+      norm.includes(p.name.toLowerCase()) ||
+      (p.id === 'genshin' && norm.includes('genshin')) ||
+      (p.id === 'hsr' && (norm.includes('honkai') || norm.includes('hsr') || norm.includes('star rail'))) ||
+      (p.id === 'lienquan' && (norm.includes('liên quân') || norm.includes('lien quan') || norm.includes('aov'))) ||
+      (p.id === 'freefire' && (norm.includes('free fire') || norm.includes('ff'))) ||
+      (p.id === 'riot' && (norm.includes('riot') || norm.includes('lol') || norm.includes('lmht') || norm.includes('valorant'))) ||
+      (p.id === 'facebook' && (norm.includes('facebook') || norm === 'fb')) ||
+      (p.id === 'google' && (norm.includes('google') || norm.includes('gmail'))) ||
+      (p.id === 'tiktok' && norm.includes('tiktok')) ||
+      (p.id === 'telegram' && (norm.includes('telegram') || norm === 'tele')) ||
+      (p.id === 'zalo' && norm.includes('zalo')) ||
+      (p.id === 'instagram' && (norm.includes('instagram') || norm === 'insta' || norm === 'ig')) ||
+      (p.id === 'x_twitter' && (norm.includes('twitter') || norm === 'x')) ||
+      (p.id === 'apple' && (norm.includes('apple') || norm.includes('icloud'))) ||
+      (p.id === 'youtube' && (norm.includes('youtube') || norm === 'yt')) ||
+      (p.id === 'microsoft' && (norm.includes('microsoft') || norm.includes('outlook'))) ||
+      (p.id === 'bank' && (norm.includes('ngân hàng') || norm.includes('bank') || norm.includes('mbbank') || norm.includes('vietcom'))) ||
+      (p.id === 'momo' && norm.includes('momo')) ||
+      (p.id === 'binance' && (norm.includes('binance') || norm.includes('crypto'))) ||
+      (p.id === 'netflix' && norm.includes('netflix')) ||
+      (p.id === 'spotify' && norm.includes('spotify')) ||
+      (p.id === 'github' && norm.includes('github')) ||
+      (p.id === 'steam' && norm.includes('steam')) ||
+      (p.id === 'roblox' && norm.includes('roblox')) ||
+      (p.id === 'wuwa' && (norm.includes('wuthering') || norm.includes('wuwa'))) ||
+      (p.id === 'minecraft' && norm.includes('minecraft'))
+  );
 
-  if (norm.includes('ngân hàng') || norm.includes('bank') || norm.includes('mbbank') || norm.includes('vietcom')) return { name: platformName || 'Ngân Hàng', icon: 'business', color: '#34C759', category: 'Work' };
-  if (norm.includes('momo')) return { name: platformName || 'Ví MoMo', icon: 'wallet', color: '#A50064', category: 'Work' };
-  if (norm.includes('binance') || norm.includes('crypto')) return { name: platformName || 'Binance', icon: 'swap-horizontal', color: '#F3BA2F', category: 'Work' };
-  if (norm.includes('netflix')) return { name: platformName || 'Netflix', icon: 'film', color: '#E50914', category: 'Social' };
-  if (norm.includes('spotify')) return { name: platformName || 'Spotify', icon: 'musical-notes', color: '#1DB954', category: 'Social' };
-  if (norm.includes('github')) return { name: platformName || 'GitHub', icon: 'logo-github', color: '#6E5494', category: 'Work' };
-
-  const matched = PLATFORM_PRESETS.find(p => p.id === norm || p.name.toLowerCase() === norm);
   if (matched) {
-    return { name: matched.name, icon: matched.icon, color: matched.color, category: matched.category };
+    return {
+      name: platformName || matched.name,
+      icon: matched.icon,
+      color: matched.color,
+      category: matched.category,
+      logoUrl: matched.logoUrl,
+    };
   }
 
   // Fallback dựa trên category hoặc mặc định
@@ -11646,9 +11864,17 @@ function MainApp() {
                             setShowPlatformPickerModal(true);
                           }}
                         >
-                          <View style={[styles.cellLeadingIcon, { backgroundColor: currentPlatInfo.color }]}>
-                            <Ionicons name={currentPlatInfo.icon} size={17} color="#FFFFFF" />
-                          </View>
+                          {currentPlatInfo.logoUrl ? (
+                            <Image
+                              source={{ uri: currentPlatInfo.logoUrl }}
+                              style={{ width: 28, height: 28, borderRadius: 7, marginRight: 8, backgroundColor: '#1E293B' }}
+                              resizeMode="cover"
+                            />
+                          ) : (
+                            <View style={[styles.cellLeadingIcon, { backgroundColor: currentPlatInfo.color }]}>
+                              <Ionicons name={currentPlatInfo.icon} size={17} color="#FFFFFF" />
+                            </View>
+                          )}
                           <Text style={[styles.formLabel, { width: 95 }, isLight && { color: '#000000' }]}>Nền tảng</Text>
                           <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
                             <Text style={{ fontSize: 15, fontWeight: '600', color: newGame ? (isLight ? '#000000' : '#FFFFFF') : '#8E8E93' }}>
@@ -11926,9 +12152,23 @@ function MainApp() {
                               setShowPlatformPickerModal(false);
                             }}
                           >
-                            <View style={[styles.cellLeadingIcon, { backgroundColor: preset.color }]}>
-                              <Ionicons name={preset.icon} size={18} color="#FFFFFF" />
-                            </View>
+                            {preset.logoUrl ? (
+                              <Image
+                                source={{ uri: preset.logoUrl }}
+                                style={{
+                                  width: 40,
+                                  height: 40,
+                                  borderRadius: 10,
+                                  marginRight: 12,
+                                  backgroundColor: '#1E293B',
+                                }}
+                                resizeMode="cover"
+                              />
+                            ) : (
+                              <View style={[styles.cellLeadingIcon, { backgroundColor: preset.color }]}>
+                                <Ionicons name={preset.icon} size={18} color="#FFFFFF" />
+                              </View>
+                            )}
                             <View style={{ flex: 1 }}>
                               <Text style={{ fontSize: 15, fontWeight: '600', color: isLight ? '#000000' : '#FFFFFF' }}>
                                 {preset.name}
@@ -12002,23 +12242,41 @@ function MainApp() {
                   return (
                     <>
                       <View style={{ alignItems: 'center', marginVertical: 16 }}>
-                        <View
-                          style={{
-                            width: 68,
-                            height: 68,
-                            borderRadius: 20,
-                            backgroundColor: detailPlat.color,
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                            marginBottom: 10,
-                            shadowColor: detailPlat.color,
-                            shadowOffset: { width: 0, height: 4 },
-                            shadowOpacity: 0.35,
-                            shadowRadius: 8,
-                          }}
-                        >
-                          <Ionicons name={detailPlat.icon} size={34} color="#FFFFFF" />
-                        </View>
+                        {detailPlat.logoUrl ? (
+                          <Image
+                            source={{ uri: detailPlat.logoUrl }}
+                            style={{
+                              width: 72,
+                              height: 72,
+                              borderRadius: 20,
+                              marginBottom: 10,
+                              backgroundColor: '#1E293B',
+                              shadowColor: '#000000',
+                              shadowOffset: { width: 0, height: 4 },
+                              shadowOpacity: 0.35,
+                              shadowRadius: 10,
+                            }}
+                            resizeMode="cover"
+                          />
+                        ) : (
+                          <View
+                            style={{
+                              width: 68,
+                              height: 68,
+                              borderRadius: 20,
+                              backgroundColor: detailPlat.color,
+                              justifyContent: 'center',
+                              alignItems: 'center',
+                              marginBottom: 10,
+                              shadowColor: detailPlat.color,
+                              shadowOffset: { width: 0, height: 4 },
+                              shadowOpacity: 0.35,
+                              shadowRadius: 8,
+                            }}
+                          >
+                            <Ionicons name={detailPlat.icon} size={34} color="#FFFFFF" />
+                          </View>
+                        )}
                         <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 21, fontWeight: '700', textAlign: 'center' }}>
                           {selectedAccount.title}
                         </Text>
@@ -12044,9 +12302,17 @@ function MainApp() {
                         <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }]}>
                           {/* Hàng Nền tảng */}
                           <View style={[styles.cellItem, isLight && { borderBottomColor: '#E5E5EA' }]}>
-                            <View style={[styles.cellLeadingIcon, { backgroundColor: detailPlat.color }]}>
-                              <Ionicons name={detailPlat.icon} size={17} color="#FFFFFF" />
-                            </View>
+                            {detailPlat.logoUrl ? (
+                              <Image
+                                source={{ uri: detailPlat.logoUrl }}
+                                style={{ width: 28, height: 28, borderRadius: 7, marginRight: 8, backgroundColor: '#1E293B' }}
+                                resizeMode="cover"
+                              />
+                            ) : (
+                              <View style={[styles.cellLeadingIcon, { backgroundColor: detailPlat.color }]}>
+                                <Ionicons name={detailPlat.icon} size={17} color="#FFFFFF" />
+                              </View>
+                            )}
                             <Text style={[styles.formLabel, { width: 95 }, isLight && { color: '#000000' }]}>Nền tảng</Text>
                             <Text style={[styles.detailVal, { flex: 1, textAlign: 'right' }, isLight && { color: '#000000' }]}>{detailPlat.name}</Text>
                             <TouchableOpacity onPress={() => copyText(detailPlat.name, 'Nền tảng')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ marginLeft: 8 }}>
@@ -12734,23 +13000,41 @@ function MainApp() {
                           }}
                         >
                           {/* Platform Logo / Icon */}
-                          <View
-                            style={{
-                              width: 48,
-                              height: 48,
-                              borderRadius: 14,
-                              backgroundColor: itemPlat.color,
-                              justifyContent: 'center',
-                              alignItems: 'center',
-                              marginRight: 14,
-                              shadowColor: itemPlat.color,
-                              shadowOffset: { width: 0, height: 2 },
-                              shadowOpacity: 0.3,
-                              shadowRadius: 5,
-                            }}
-                          >
-                            <Ionicons name={itemPlat.icon} size={24} color="#FFFFFF" />
-                          </View>
+                          {itemPlat.logoUrl ? (
+                            <Image
+                              source={{ uri: itemPlat.logoUrl }}
+                              style={{
+                                width: 48,
+                                height: 48,
+                                borderRadius: 14,
+                                marginRight: 14,
+                                backgroundColor: '#1E293B',
+                                shadowColor: '#000000',
+                                shadowOffset: { width: 0, height: 3 },
+                                shadowOpacity: 0.25,
+                                shadowRadius: 6,
+                              }}
+                              resizeMode="cover"
+                            />
+                          ) : (
+                            <View
+                              style={{
+                                width: 48,
+                                height: 48,
+                                borderRadius: 14,
+                                backgroundColor: itemPlat.color,
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                marginRight: 14,
+                                shadowColor: itemPlat.color,
+                                shadowOffset: { width: 0, height: 2 },
+                                shadowOpacity: 0.3,
+                                shadowRadius: 5,
+                              }}
+                            >
+                              <Ionicons name={itemPlat.icon} size={24} color="#FFFFFF" />
+                            </View>
+                          )}
 
                           {/* Account Info */}
                           <View style={{ flex: 1 }}>
