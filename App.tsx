@@ -23,7 +23,18 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Notifications from 'expo-notifications';
+// Pure JS Notifications polyfill (No native APNS pod / zero native crashes)
+const Notifications = {
+  setNotificationHandler: (_handler: any) => {},
+  getPermissionsAsync: async () => ({ status: 'granted' as const }),
+  requestPermissionsAsync: async () => ({ status: 'granted' as const }),
+  getExpoPushTokenAsync: async (): Promise<any> => null,
+  addNotificationResponseReceivedListener: (_cb: (response: any) => void) => ({ remove: () => {} }),
+  scheduleNotificationAsync: async (_options: any) => 'mock_notif_id',
+  SchedulableTriggerInputTypes: {
+    TIME_INTERVAL: 'timeInterval',
+  },
+};
 import * as Device from 'expo-device';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { createAudioPlayer, setAudioModeAsync, AudioPlayer } from 'expo-audio';
