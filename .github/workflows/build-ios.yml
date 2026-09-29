@@ -3,7 +3,12 @@ name: Build iOS IPA
 on:
   push:
     branches: [main]
+    tags:
+      - 'v*'
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build-ios:
@@ -86,8 +91,23 @@ jobs:
           path: build/LockX.ipa
           retention-days: 30
 
+      - name: 🚀 Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
+        with:
+          tag_name: v2.0.0
+          name: "LockX v2.0.0 - Fix Màn Hình Đen iOS"
+          body: |
+            ## 📱 LockX v2.0.0 - Bản Cài Đặt Trực Tiếp (.IPA)
+            - **Tải trực tiếp**: Tệp `LockX.ipa` đính kèm bên dưới (không cần giải nén).
+            - **Khắc phục lỗi màn hình đen**: Đã gỡ bỏ native pod `expo-notifications` (APNS) gây SIGABRT trên iOS sideloading.
+            - **Hệ thống chẩn đoán On-Device Debug**: Bắt lỗi cấp module và runtime, hiển thị mã lỗi trực quan thay vì màn hình đen.
+          files: build/LockX.ipa
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: ✅ Done
         run: |
-          echo "🎉 Build complete!"
-          echo "📱 Download IPA from the Artifacts section above"
-          echo "📲 Install via AltStore / Sideloadly / TrollStore"
+          echo "🎉 Build and Release complete!"
+          echo "📱 Direct download URL: https://github.com/tuanquayhuok/LockX/releases/download/v2.0.0/LockX.ipa"
+
