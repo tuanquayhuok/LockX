@@ -95,13 +95,14 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
         with:
-          tag_name: v2.0.0
-          name: "LockX v2.0.0 - Fix Màn Hình Đen iOS"
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v2.0.1' }}
+          name: "LockX ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v2.0.1' }} - Bản Cài Đặt Trực Tiếp (.IPA)"
           body: |
-            ## 📱 LockX v2.0.0 - Bản Cài Đặt Trực Tiếp (.IPA)
-            - **Tải trực tiếp**: Tệp `LockX.ipa` đính kèm bên dưới (không cần giải nén).
-            - **Khắc phục lỗi màn hình đen**: Đã gỡ bỏ native pod `expo-notifications` (APNS) gây SIGABRT trên iOS sideloading.
-            - **Hệ thống chẩn đoán On-Device Debug**: Bắt lỗi cấp module và runtime, hiển thị mã lỗi trực quan thay vì màn hình đen.
+            ## 📱 LockX iOS - Bản Cài Đặt Trực Tiếp (.IPA)
+            - **Tải trực tiếp**: Tệp `LockX.ipa` đính kèm bên dưới (cài qua Scarlet / TrollStore / AltStore / Sideloadly / Esign).
+            - **Giao diện mới**: Đồng bộ màu đen OLED & xám đen Apple HIG.
+            - **Tối ưu Light & Dark Mode**: Độ tương phản cao, mượt mà trên iPhone.
+            - **Chế độ Ngoại Tuyến**: Tính năng Offline Gate cho Tệp và Bạn Bè.
           files: build/LockX.ipa
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -109,5 +110,5 @@ jobs:
       - name: ✅ Done
         run: |
           echo "🎉 Build and Release complete!"
-          echo "📱 Direct download URL: https://github.com/tuanquayhuok/LockX/releases/download/v2.0.0/LockX.ipa"
+          echo "📱 Release page: https://github.com/tuanquayhuok/LockX/releases"
 
