@@ -4,6 +4,7 @@ import {
   Text,
   View,
   ScrollView,
+  Pressable,
   TouchableOpacity,
   TextInput,
   Modal,
@@ -13,18 +14,21 @@ import {
   Switch,
   Image,
   Animated,
+  Easing,
   PanResponder,
   Platform,
   Linking,
   KeyboardAvoidingView,
   ActivityIndicator,
   Share,
+  Dimensions,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
+import { Svg, Path as SvgPath, Circle as SvgCircle, G as SvgGroup, Text as SvgText } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-// Pure JS Notifications polyfill (No native APNS pod / zero native crashes)
-const Notifications = {
+// Safe Dynamic Native Notification Loader (Chống crash iOS, chống màn hình đen, tự động kích hoạt native trên iPhone)
+let Notifications: any = {
   setNotificationHandler: (_handler: any) => {},
   getPermissionsAsync: async () => ({ status: 'granted' as const }),
   requestPermissionsAsync: async () => ({ status: 'granted' as const }),
@@ -35,6 +39,17 @@ const Notifications = {
     TIME_INTERVAL: 'timeInterval',
   },
 };
+
+try {
+  if (Platform.OS !== 'web') {
+    const NativeNotifications = require('expo-notifications');
+    if (NativeNotifications && typeof NativeNotifications.scheduleNotificationAsync === 'function') {
+      Notifications = NativeNotifications;
+    }
+  }
+} catch (nativeNotifError) {
+  console.warn('Safe Notifications dynamic fallback engaged:', nativeNotifError);
+}
 import * as Device from 'expo-device';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { createAudioPlayer, setAudioModeAsync, AudioPlayer } from 'expo-audio';
@@ -97,6 +112,14 @@ export function checkIsSupportedVersion(ver: string): boolean {
 }
 
 // --- Types ---
+export interface DeletedAccountItem extends Account {
+  deletedAt: string;
+}
+
+export interface DeletedFileItem extends LockXFileItem {
+  deletedAt: string;
+}
+
 interface Account {
   id: string;
   title: string;
@@ -110,6 +133,7 @@ interface Account {
   hasTotp?: boolean;
   totpSecret?: string;
   notes?: string;
+  isFavorite?: boolean;
   createdAt?: number | string;
   updatedAt?: number | string;
 }
@@ -1235,6 +1259,9 @@ export interface AppSettings {
   cloudSync?: boolean; // Đồng bộ đám mây iCloud
   securityAlerts: boolean; // Cảnh báo bảo mật tài khoản
   blurSwitcher: boolean; // Che mờ ứng dụng trong App Switcher (Bảo vệ riêng tư)
+  autoClearClipboard?: 'never' | '30s' | '60s' | '120s'; // Tự động xóa Clipboard sau khi sao chép
+  accountsSortBy?: 'recent' | 'name' | 'favorite'; // Sắp xếp danh sách tài khoản
+  accountsViewMode?: 'cards' | 'compact'; // Kiểu hiển thị danh sách
   // iOS Notifications System
   enableNotifications: boolean; // Bật / tắt thông báo ứng dụng iOS
   notifySecurityAlerts: boolean; // Cảnh báo bảo mật qua Push
@@ -1896,6 +1923,1396 @@ export const INITIAL_LOCKX_FILES: LockXFileItem[] = [];
 // Initial Data: Két Sắt tài khoản rỗng (Chỉ lưu và hiển thị tài khoản thật của người dùng)
 const INITIAL_ACCOUNTS: Account[] = [];
 
+const LOCKX_PROMO_SLIDES = [
+  { image: require('./assets/anhvongquay.png'), label: 'Banner 1 - Vòng quay may mắn LockX', isEvent: true },
+  { image: require('./assets/anh1.png'), label: 'Banner 2 - Bảo mật thông minh LockX' },
+];
+
+export interface SpinHistoryItem {
+  id: string;
+  reward: string;
+  points: number;
+  timestamp: number;
+  formattedTime: string;
+  color?: string;
+  iconIndex?: number;
+}
+
+const LUCKY_EVENT_REWARDS = [
+  { label: '+50 Điểm', points: 50, color: '#F59E0B', shortText: '+50' },
+  { label: '+100 Điểm', points: 100, color: '#0A84FF', shortText: '+100' },
+  { label: '0 Điểm', points: 0, color: '#475569', shortText: '0 Đ' },
+  { label: '+200 Điểm', points: 200, color: '#10B981', shortText: '+200' },
+  { label: '+500 Điểm', points: 500, color: '#EC4899', shortText: '+500' },
+  { label: '+20 Điểm', points: 20, color: '#8B5CF6', shortText: '+20' },
+  { label: '+1.000 Điểm', points: 1000, color: '#EF4444', shortText: '1.000' },
+  { label: '+80 Điểm', points: 80, color: '#06B6D4', shortText: '+80' },
+];
+const LUCKY_REWARD_POINTS = [50, 100, 0, 200, 500, 20, 1000, 80];
+
+const getWheelSlicePath = (index: number, radius: number, center: number) => {
+  const startAngle = (-90 + index * 45) * (Math.PI / 180);
+  const endAngle = (-90 + (index + 1) * 45) * (Math.PI / 180);
+  const startX = center + radius * Math.cos(startAngle);
+  const startY = center + radius * Math.sin(startAngle);
+  const endX = center + radius * Math.cos(endAngle);
+  const endY = center + radius * Math.sin(endAngle);
+  return `M ${center} ${center} L ${startX} ${startY} A ${radius} ${radius} 0 0 1 ${endX} ${endY} Z`;
+};
+
+const getRewardIconPath = (index: number) => {
+  if (index === 0) return 'M10 3a7 7 0 1 0 0 14 7 7 0 0 0 0-14zm0 2a5 5 0 1 1 0 10 5 5 0 0 1 0-10zm0 2v6m-2-4h4';
+  if (index === 1) return 'M10 2l1.5 5 5 1.5-5 1.5-1.5 5-1.5-5-5-1.5 5-1.5z';
+  if (index === 2) return 'M10 3a7 7 0 1 0 0 14 7 7 0 0 0 0-14zm-4 7h8';
+  if (index === 3) return 'M5 4h10v5a5 5 0 0 1-10 0V4zm0 2H3v2a2 2 0 0 0 2 2h0m10-4h2v2a2 2 0 0 1-2 2h0m-5 4v4m-3 0h6';
+  if (index === 4) return 'M6 4h8l3 5-7 8-7-8z';
+  if (index === 5) return 'M4 7h12v10H4zm-1-3h14v3H3zm7 0v13';
+  if (index === 6) return 'M10 2c-3 4-5 6-5 9a5 5 0 0 0 10 0c0-4-3-6-5-9z';
+  return 'M10 2l2.4 5 5.6.8-4 4 1 5.6-5-2.6-5 2.6 1-5.6-4-4 5.6-.8z';
+};
+
+const LuckyRewardIcon: React.FC<{ index: number; color?: string; size?: number }> = ({ index, color = '#0A84FF', size = 20 }) => {
+  const iconNames: (keyof typeof Ionicons.glyphMap)[] = [
+    'cash',
+    'sparkles',
+    'close-circle',
+    'trophy',
+    'diamond',
+    'gift',
+    'flame',
+    'star',
+  ];
+  const name = iconNames[index % iconNames.length] || 'star';
+  return (
+    <View style={{ width: size + 10, height: size + 10, borderRadius: (size + 10) / 2, backgroundColor: `${color}18`, alignItems: 'center', justifyContent: 'center' }}>
+      <Ionicons name={name as any} size={size} color={color} />
+    </View>
+  );
+};
+
+const DAILY_CHECKIN_REWARDS = [
+  { day: 1, spins: 1, points: 0, title: '+1 Lượt quay', desc: 'Khởi đầu ngày mới', icon: 'ticket' },
+  { day: 2, spins: 1, points: 20, title: '+1 Lượt, +20 pts', desc: 'Duy trì chuỗi', icon: 'sparkles' },
+  { day: 3, spins: 1, points: 30, title: '+1 Lượt, +30 pts', desc: 'Chăm chỉ tích lũy', icon: 'star' },
+  { day: 4, spins: 2, points: 40, title: '+2 Lượt, +40 pts', desc: 'Bứt phá điểm số', icon: 'flash' },
+  { day: 5, spins: 2, points: 50, title: '+2 Lượt, +50 pts', desc: 'Kiên trì đón lộc', icon: 'flame' },
+  { day: 6, spins: 2, points: 60, title: '+2 Lượt, +60 pts', desc: 'Sắp về đích rồi', icon: 'diamond' },
+  { day: 7, spins: 3, points: 100, title: '+3 Lượt & +100 pts', desc: 'Rương Thần Tài 🎉', icon: 'trophy' },
+];
+
+const LuckyEventTabBar: React.FC<{
+  activeTab: 'wallet' | 'event' | 'checkin' | 'rules';
+  onNavigate: (tab: 'wallet' | 'event' | 'checkin' | 'rules') => void;
+  isLight: boolean;
+}> = ({ activeTab, onNavigate, isLight }) => {
+  const tabs = [
+    { key: 'wallet', label: 'Ví', icon: 'wallet', outlineIcon: 'wallet-outline' },
+    { key: 'event', label: 'Sự kiện', icon: 'gift', outlineIcon: 'gift-outline' },
+    { key: 'checkin', label: 'Điểm danh', icon: 'calendar', outlineIcon: 'calendar-outline' },
+    { key: 'rules', label: 'Thể lệ', icon: 'information-circle', outlineIcon: 'information-circle-outline' },
+  ] as const;
+
+  return (
+    <View style={{ height: 66, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', borderTopWidth: 1, borderTopColor: isLight ? '#E5E5EA' : '#2C2C2E', backgroundColor: isLight ? '#FFFFFF' : '#0B0B0D' }}>
+      {tabs.map((tab) => {
+        const isActive = activeTab === tab.key;
+        return (
+          <TouchableOpacity
+            key={tab.key}
+            onPress={() => onNavigate(tab.key)}
+            style={{ alignItems: 'center', gap: 3, flex: 1, paddingVertical: 8 }}
+          >
+            <Ionicons
+              name={(isActive ? tab.icon : tab.outlineIcon) as any}
+              size={20}
+              color={isActive ? '#0A84FF' : '#8E8E93'}
+            />
+            <Text style={{ color: isActive ? '#0A84FF' : '#8E8E93', fontSize: 10, fontWeight: isActive ? '700' : '400' }}>
+              {tab.label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+};
+
+const LuckyEventRulesScreen: React.FC<{
+  isLight: boolean;
+  onClose: () => void;
+  onNavigate: (tab: 'wallet' | 'event' | 'checkin' | 'rules') => void;
+}> = ({ isLight, onClose, onNavigate }) => (
+  <SafeAreaView style={{ flex: 1, backgroundColor: isLight ? '#F2F2F7' : '#000000' }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: isLight ? '#E5E5EA' : '#2C2C2E' }}>
+      <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+        <Svg width="28" height="28" viewBox="0 0 28 28">
+          <SvgPath d="M18 5 9 14l9 9M9 14h12" stroke={isLight ? '#000000' : '#FFFFFF'} strokeWidth="2.2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+      </TouchableOpacity>
+      <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 17, fontWeight: '800' }}>Thể lệ sự kiện</Text>
+      <View style={{ width: 28 }} />
+    </View>
+    <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+      <View style={{ backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E', borderRadius: 18, padding: 18, borderWidth: 1, borderColor: isLight ? '#E5E5EA' : '#2C2C2E', marginBottom: 14 }}>
+        <View style={{ alignItems: 'center', marginBottom: 18 }}>
+          <View style={{ width: 58, height: 58, borderRadius: 18, backgroundColor: '#0A84FF', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
+            <Ionicons name="document-text" size={28} color="#FFFFFF" />
+          </View>
+          <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 20, fontWeight: '800' }}>Vòng quay may mắn LockX</Text>
+          <Text style={{ color: '#8E8E93', fontSize: 13, marginTop: 4, textAlign: 'center' }}>Thông tin và quy định tham gia</Text>
+        </View>
+        {[
+          ['01', 'Mỗi tài khoản có sẵn 3 lượt quay khởi đầu sự kiện.'],
+          ['02', 'Điểm danh hằng ngày tại mục "Điểm danh" để nhận thêm lượt quay miễn phí mỗi ngày.'],
+          ['03', 'Mỗi lượt quay nhận một phần thưởng điểm số ngẫu nhiên trên vòng quay (hoặc 0 điểm).'],
+          ['04', 'Dùng điểm thưởng tích lũy tại mục "Ví" để đổi các gói dung lượng lưu trữ vĩnh viễn.'],
+          ['05', 'Lịch sử lượt quay được lưu chi tiết kèm ngày giờ thực tế.'],
+        ].map(([number, rule]) => (
+          <View key={number} style={{ flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 13, borderTopWidth: 1, borderTopColor: isLight ? '#E5E5EA' : '#2C2C2E' }}>
+            <View style={{ width: 30, height: 30, borderRadius: 10, backgroundColor: 'rgba(10,132,255,0.16)', alignItems: 'center', justifyContent: 'center', marginRight: 11 }}>
+              <Text style={{ color: '#0A84FF', fontSize: 11, fontWeight: '800' }}>{number}</Text>
+            </View>
+            <Text style={{ flex: 1, color: isLight ? '#3C3C43' : '#D1D1D6', fontSize: 14, lineHeight: 20 }}>{rule}</Text>
+          </View>
+        ))}
+      </View>
+      <View style={{ backgroundColor: 'rgba(255,159,10,0.12)', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: 'rgba(255,159,10,0.28)', flexDirection: 'row', gap: 10 }}>
+        <Ionicons name="information-circle" size={20} color="#FF9F0A" />
+        <Text style={{ flex: 1, color: isLight ? '#6C4A00' : '#FFD60A', fontSize: 13, lineHeight: 18 }}>Sự kiện mang tính giải trí trong ứng dụng. Phần thưởng hiển thị là điểm thưởng và quyền lợi sử dụng LockX.</Text>
+      </View>
+    </ScrollView>
+    <LuckyEventTabBar activeTab="rules" onNavigate={onNavigate} isLight={isLight} />
+  </SafeAreaView>
+);
+
+interface ShopReward {
+  id: string;
+  name: string;
+  category: 'storage' | 'spins';
+  cost: number;
+  badge: string;
+  badgeColor: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  iconColor: string;
+  desc: string;
+  detail: string;
+  itemKey: string;
+  spinsToAdd?: number;
+}
+
+const SHOP_REWARDS: ShopReward[] = [
+  {
+    id: 'storage_200gb',
+    name: 'Dung Lượng 200 GB (Vĩnh viễn)',
+    category: 'storage',
+    cost: 250,
+    badge: '👑 KHUYÊN DÙNG',
+    badgeColor: '#34C759',
+    icon: 'server',
+    iconColor: '#34C759',
+    desc: 'Lưu trữ trọn đời',
+    detail: 'Mở rộng 200 GB dung lượng lưu trữ an toàn, không giới hạn thời hạn sử dụng.',
+    itemKey: '200GB',
+  },
+  {
+    id: 'storage_50gb',
+    name: 'Dung Lượng 50 GB (Vĩnh viễn)',
+    category: 'storage',
+    cost: 100,
+    badge: 'HOT 🔥',
+    badgeColor: '#0A84FF',
+    icon: 'cloud',
+    iconColor: '#0A84FF',
+    desc: 'Lưu trữ ảnh & video',
+    detail: 'Tăng 50 GB dung lượng lưu trữ vĩnh viễn trên đám mây cá nhân bảo mật LockX.',
+    itemKey: '50GB',
+  },
+  {
+    id: 'spins_3',
+    name: 'Vé Quay (+3 Lượt)',
+    category: 'spins',
+    cost: 50,
+    badge: 'GIẢI TRÍ 🎰',
+    badgeColor: '#FF9F0A',
+    icon: 'ticket',
+    iconColor: '#FF9F0A',
+    desc: 'Cộng ngay 3 lượt quay',
+    detail: 'Cộng trực tiếp 3 lượt quay vào Vòng Quay May Mắn để tiếp tục săn điểm thưởng.',
+    itemKey: '3 Lượt quay',
+    spinsToAdd: 3,
+  },
+  {
+    id: 'spins_10',
+    name: 'Combo Vé Vàng (+10 Lượt)',
+    category: 'spins',
+    cost: 150,
+    badge: 'SIÊU LỜI ⚡',
+    badgeColor: '#FFD60A',
+    icon: 'flash',
+    iconColor: '#FFD60A',
+    desc: 'Cộng ngay 10 lượt quay',
+    detail: 'Gói 10 lượt quay siêu tốc giúp bạn bứt phá điểm số nhận các phần quà giá trị cao.',
+    itemKey: '10 Lượt quay',
+    spinsToAdd: 10,
+  },
+  {
+    id: 'storage_1tb',
+    name: 'Dung Lượng 1 TB (Vĩnh viễn)',
+    category: 'storage',
+    cost: 1000,
+    badge: 'SIÊU VIP 💎',
+    badgeColor: '#FF2D55',
+    icon: 'infinite',
+    iconColor: '#FF2D55',
+    desc: 'Dung lượng cực đại 1.000 GB',
+    detail: 'Gói dung lượng lưu trữ khổng lồ 1.000 GB dành cho người dùng lưu trữ không giới hạn.',
+    itemKey: '1TB',
+  },
+];
+
+const LuckyWalletScreen: React.FC<{
+  isLight: boolean;
+  onClose: () => void;
+  onNavigate: (tab: 'wallet' | 'event' | 'checkin' | 'rules') => void;
+  points: number;
+  redeemedItems: string[];
+  onRedeem: (cost: number, item: string) => void;
+}> = ({ isLight, onClose, onNavigate, points, redeemedItems, onRedeem }) => {
+  const [selectedFilter, setSelectedFilter] = useState<'all' | 'storage' | 'spins'>('all');
+  const [confirmItem, setConfirmItem] = useState<ShopReward | null>(null);
+  const [redeemSuccess, setRedeemSuccess] = useState<ShopReward | null>(null);
+
+  const filteredRewards = SHOP_REWARDS.filter((r) => {
+    if (selectedFilter === 'all') return true;
+    return r.category === selectedFilter;
+  });
+
+  const handleConfirmRedeem = () => {
+    if (!confirmItem) return;
+    onRedeem(confirmItem.cost, confirmItem.itemKey);
+    setRedeemSuccess(confirmItem);
+    setConfirmItem(null);
+    playAppleNotificationSound('success');
+  };
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: isLight ? '#F2F2F7' : '#000000' }}>
+      {/* TOP HEADER */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: isLight ? '#E5E5EA' : '#2C2C2E' }}>
+        <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <Svg width="28" height="28" viewBox="0 0 28 28">
+            <SvgPath d="M18 5 9 14l9 9M9 14h12" stroke={isLight ? '#000000' : '#FFFFFF'} strokeWidth="2.2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+          </Svg>
+        </TouchableOpacity>
+        <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 17, fontWeight: '800' }}>Đổi Thưởng LockX</Text>
+        <View style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, backgroundColor: 'rgba(255,184,0,0.15)', borderWidth: 1, borderColor: 'rgba(255,184,0,0.35)', flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+          <Ionicons name="sparkles" size={14} color="#FFB800" />
+          <Text style={{ color: '#FFB800', fontSize: 12, fontWeight: '900' }}>{points.toLocaleString('vi-VN')} đ</Text>
+        </View>
+      </View>
+
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+        {/* TITANIUM WALLET BALANCE CARD */}
+        <View style={{ backgroundColor: isLight ? '#FFFFFF' : '#151518', borderRadius: 22, padding: 20, borderWidth: 1.5, borderColor: isLight ? '#E5E5EA' : 'rgba(255,184,0,0.3)', shadowColor: '#FFB800', shadowOffset: { width: 0, height: 4 }, shadowOpacity: isLight ? 0.05 : 0.15, shadowRadius: 16 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: 'rgba(255,184,0,0.16)', alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name="wallet" size={18} color="#FFB800" />
+              </View>
+              <Text style={{ color: isLight ? '#666668' : '#AEAEB2', fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 }}>Ví Điểm Thưởng LockX</Text>
+            </View>
+            <TouchableOpacity onPress={() => onNavigate('event')} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, backgroundColor: 'rgba(10,132,255,0.14)' }}>
+              <Ionicons name="gift" size={13} color="#0A84FF" />
+              <Text style={{ color: '#0A84FF', fontSize: 11, fontWeight: '800' }}>Kiếm thêm điểm</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8, marginVertical: 4 }}>
+            <Text style={{ color: '#FFB800', fontSize: 34, fontWeight: '900', letterSpacing: -0.5 }}>
+              {points.toLocaleString('vi-VN')}
+            </Text>
+            <Text style={{ color: isLight ? '#3C3C43' : '#AEAEB2', fontSize: 15, fontWeight: '700' }}>điểm khả dụng</Text>
+          </View>
+
+          <Text style={{ color: isLight ? '#8E8E93' : '#8E8E93', fontSize: 12, marginTop: 4 }}>
+            Đổi các gói dung lượng vĩnh viễn và vé quay thêm không bao giờ hết hạn.
+          </Text>
+        </View>
+
+        {/* CATEGORY FILTER PILLS */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 14 }}>
+          {[
+            { key: 'all', label: 'Tất Cả (5)', icon: 'grid' },
+            { key: 'storage', label: 'Dung Lượng (3)', icon: 'cloud' },
+            { key: 'spins', label: 'Vé Quay (2)', icon: 'ticket' },
+          ].map((cat) => {
+            const isSel = selectedFilter === cat.key;
+            return (
+              <TouchableOpacity
+                key={cat.key}
+                onPress={() => setSelectedFilter(cat.key as any)}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  paddingHorizontal: 14,
+                  paddingVertical: 8,
+                  borderRadius: 14,
+                  backgroundColor: isSel ? '#0A84FF' : isLight ? '#FFFFFF' : '#1C1C1E',
+                  borderWidth: 1,
+                  borderColor: isSel ? '#0A84FF' : isLight ? '#E5E5EA' : '#2C2C2E',
+                }}
+              >
+                <Ionicons name={cat.icon as any} size={15} color={isSel ? '#FFFFFF' : '#8E8E93'} />
+                <Text style={{ color: isSel ? '#FFFFFF' : isLight ? '#3C3C43' : '#D1D1D6', fontSize: 12.5, fontWeight: '700' }}>
+                  {cat.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
+        {/* FEATURED HERO BANNER (DUNG LƯỢNG 200 GB VIP) */}
+        {(selectedFilter === 'all' || selectedFilter === 'storage') && (
+          <View style={{ backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E', borderRadius: 22, padding: 18, marginBottom: 14, borderWidth: 1.5, borderColor: '#34C759', shadowColor: '#34C759', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 14 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, backgroundColor: 'rgba(52,199,89,0.18)' }}>
+                <Text style={{ color: '#34C759', fontSize: 11, fontWeight: '900' }}>👑 GÓI DUNG LƯỢNG ĐƯỢC CHỌN NHIỀU NHẤT</Text>
+              </View>
+              <View style={{ paddingHorizontal: 9, paddingVertical: 4, borderRadius: 10, backgroundColor: 'rgba(255,184,0,0.15)' }}>
+                <Text style={{ color: '#FFB800', fontSize: 13, fontWeight: '900' }}>✨ 250 điểm</Text>
+              </View>
+            </View>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginVertical: 6 }}>
+              <View style={{ width: 56, height: 56, borderRadius: 18, backgroundColor: 'rgba(52,199,89,0.18)', alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name="server" size={28} color="#34C759" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 17, fontWeight: '800' }}>
+                  Gói Dung Lượng 200 GB (Vĩnh viễn)
+                </Text>
+                <Text style={{ color: '#8E8E93', fontSize: 12, marginTop: 3 }}>
+                  Lưu trữ dữ liệu mã hóa trọn đời, an toàn tuyệt đối.
+                </Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              disabled={points < 250 || redeemedItems.includes('200GB')}
+              onPress={() => setConfirmItem(SHOP_REWARDS[0])}
+              activeOpacity={0.85}
+              style={{
+                width: '100%',
+                height: 44,
+                borderRadius: 12,
+                backgroundColor: redeemedItems.includes('200GB')
+                  ? 'rgba(52,199,89,0.2)'
+                  : points >= 250
+                  ? '#34C759'
+                  : isLight ? '#E5E5EA' : '#2C2C2E',
+                justifyContent: 'center',
+                alignItems: 'center',
+                flexDirection: 'row',
+                gap: 6,
+                marginTop: 8,
+              }}
+            >
+              <Ionicons
+                name={redeemedItems.includes('200GB') ? 'checkmark-circle' : points >= 250 ? 'gift' : 'lock-closed'}
+                size={16}
+                color={redeemedItems.includes('200GB') ? '#34C759' : points >= 250 ? '#FFFFFF' : '#8E8E93'}
+              />
+              <Text style={{ color: redeemedItems.includes('200GB') ? '#34C759' : points >= 250 ? '#FFFFFF' : '#8E8E93', fontSize: 14, fontWeight: '800' }}>
+                {redeemedItems.includes('200GB')
+                  ? '✓ ĐÃ KÍCH HOẠT VĨNH VIỄN'
+                  : points >= 250
+                  ? 'ĐỔI NGAY (250 ĐIỂM)'
+                  : `CÒN THIẾU ${250 - points} ĐIỂM`}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* 2-COLUMN RICH REWARD GRID */}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -5 }}>
+          {filteredRewards.map((item) => {
+            const isRedeemed = item.category === 'storage' && redeemedItems.includes(item.itemKey);
+            const canAfford = points >= item.cost;
+
+            return (
+              <View key={item.id} style={{ width: '50%', padding: 5 }}>
+                <View
+                  style={{
+                    backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                    borderRadius: 18,
+                    padding: 14,
+                    borderWidth: 1.5,
+                    borderColor: isRedeemed
+                      ? 'rgba(52,199,89,0.4)'
+                      : canAfford
+                      ? `${item.badgeColor}55`
+                      : isLight ? '#E5E5EA' : '#2C2C2E',
+                    height: '100%',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  {/* CARD HEADER: BADGE & PRICE */}
+                  <View>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                      <View style={{ paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8, backgroundColor: `${item.badgeColor}20` }}>
+                        <Text style={{ color: item.badgeColor, fontSize: 9.5, fontWeight: '800' }}>
+                          {item.badge}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* BIG GLOWING ICON */}
+                    <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: `${item.iconColor}22`, alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
+                      <Ionicons name={item.icon as any} size={24} color={item.iconColor} />
+                    </View>
+
+                    {/* ITEM TITLE & DESCRIPTION */}
+                    <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 14, fontWeight: '800', lineHeight: 18 }}>
+                      {item.name}
+                    </Text>
+                    <Text style={{ color: '#8E8E93', fontSize: 11, marginTop: 4, lineHeight: 15 }} numberOfLines={2}>
+                      {item.desc}
+                    </Text>
+                  </View>
+
+                  {/* PRICE & BUTTON */}
+                  <View style={{ marginTop: 12 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 8, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: 'rgba(255,184,0,0.12)', alignSelf: 'flex-start' }}>
+                      <Ionicons name="sparkles" size={13} color="#FFB800" />
+                      <Text style={{ color: '#FFB800', fontSize: 12, fontWeight: '900' }}>
+                        {item.cost.toLocaleString('vi-VN')} điểm
+                      </Text>
+                    </View>
+
+                    <TouchableOpacity
+                      disabled={isRedeemed || !canAfford}
+                      onPress={() => setConfirmItem(item)}
+                      activeOpacity={0.85}
+                      style={{
+                        width: '100%',
+                        height: 38,
+                        borderRadius: 10,
+                        backgroundColor: isRedeemed
+                          ? 'rgba(52,199,89,0.16)'
+                          : canAfford
+                          ? item.badgeColor || '#0A84FF'
+                          : isLight ? '#E5E5EA' : '#2A2A2D',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        flexDirection: 'row',
+                        gap: 4,
+                      }}
+                    >
+                      <Ionicons
+                        name={isRedeemed ? 'checkmark-circle' : canAfford ? 'gift' : 'lock-closed'}
+                        size={14}
+                        color={isRedeemed ? '#34C759' : canAfford ? '#FFFFFF' : '#8E8E93'}
+                      />
+                      <Text
+                        numberOfLines={1}
+                        style={{
+                          color: isRedeemed ? '#34C759' : canAfford ? '#FFFFFF' : '#8E8E93',
+                          fontSize: 12,
+                          fontWeight: '800',
+                        }}
+                      >
+                        {isRedeemed ? 'Đã sở hữu' : canAfford ? 'Đổi ngay' : `Thiếu ${item.cost - points}đ`}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      </ScrollView>
+
+      {/* CONFIRMATION MODAL */}
+      <Modal visible={!!confirmItem} transparent animationType="fade" onRequestClose={() => setConfirmItem(null)}>
+        <Pressable onPress={() => setConfirmItem(null)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.68)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          <Pressable onPress={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 330, backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E', borderRadius: 24, padding: 22, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)', shadowColor: '#000', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.4, shadowRadius: 24 }}>
+            {confirmItem && (
+              <>
+                <View style={{ width: 68, height: 68, borderRadius: 22, backgroundColor: `${confirmItem.iconColor}22`, alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+                  <Ionicons name={confirmItem.icon as any} size={36} color={confirmItem.iconColor} />
+                </View>
+                <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 19, fontWeight: '800', textAlign: 'center' }}>
+                  Xác Nhận Đổi Quà
+                </Text>
+                <Text style={{ color: confirmItem.iconColor, fontSize: 15, fontWeight: '700', marginTop: 4, textAlign: 'center' }}>
+                  {confirmItem.name}
+                </Text>
+                <Text style={{ color: '#8E8E93', fontSize: 12.5, textAlign: 'center', marginTop: 6, lineHeight: 17 }}>
+                  {confirmItem.detail}
+                </Text>
+
+                {/* BREAKDOWN TABLE */}
+                <View style={{ width: '100%', backgroundColor: isLight ? '#F2F2F7' : '#2A2A2D', borderRadius: 14, padding: 12, marginTop: 14, marginBottom: 16 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
+                    <Text style={{ color: '#8E8E93', fontSize: 12 }}>Điểm hiện tại:</Text>
+                    <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 12, fontWeight: '700' }}>{points.toLocaleString('vi-VN')} điểm</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
+                    <Text style={{ color: '#FF453A', fontSize: 12 }}>Điểm cần dùng:</Text>
+                    <Text style={{ color: '#FF453A', fontSize: 12, fontWeight: '800' }}>- {confirmItem.cost.toLocaleString('vi-VN')} điểm</Text>
+                  </View>
+                  <View style={{ height: 1, backgroundColor: isLight ? '#E5E5EA' : '#3A3A3C', marginVertical: 4 }} />
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
+                    <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 12, fontWeight: '700' }}>Điểm còn lại:</Text>
+                    <Text style={{ color: '#34C759', fontSize: 13, fontWeight: '900' }}>{(points - confirmItem.cost).toLocaleString('vi-VN')} điểm</Text>
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  onPress={handleConfirmRedeem}
+                  activeOpacity={0.85}
+                  style={{ width: '100%', height: 46, borderRadius: 14, backgroundColor: confirmItem.badgeColor || '#0A84FF', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}
+                >
+                  <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '800' }}>XÁC NHẬN ĐỔI NGAY</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setConfirmItem(null)}
+                  style={{ width: '100%', height: 38, alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <Text style={{ color: '#8E8E93', fontSize: 14, fontWeight: '600' }}>Hủy bỏ</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* REDEEM SUCCESS CELEBRATION MODAL */}
+      <Modal visible={!!redeemSuccess} transparent animationType="fade" onRequestClose={() => setRedeemSuccess(null)}>
+        <Pressable onPress={() => setRedeemSuccess(null)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.68)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          <Pressable onPress={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 330, backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E', borderRadius: 24, padding: 24, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)', shadowColor: '#000', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.4, shadowRadius: 24 }}>
+            <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: 'rgba(52,199,89,0.18)', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+              <Ionicons name="trophy" size={38} color="#34C759" />
+            </View>
+            <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 20, fontWeight: '800', textAlign: 'center', marginBottom: 6 }}>
+              Đổi Thưởng Thành Công! 🎉
+            </Text>
+            <Text style={{ color: '#34C759', fontSize: 15, fontWeight: '800', textAlign: 'center', marginBottom: 6 }}>
+              {redeemSuccess?.name}
+            </Text>
+            <Text style={{ color: '#8E8E93', fontSize: 13, textAlign: 'center', marginBottom: 18, lineHeight: 18 }}>
+              Phần thưởng đã được kích hoạt thành công trên tài khoản của bạn.
+            </Text>
+
+            {redeemSuccess?.category === 'spins' ? (
+              <TouchableOpacity
+                onPress={() => {
+                  setRedeemSuccess(null);
+                  onNavigate('event');
+                }}
+                style={{ width: '100%', height: 46, borderRadius: 14, backgroundColor: '#0A84FF', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}
+              >
+                <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '800' }}>QUAY VÒNG QUAY NGAY</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                onPress={() => {
+                  setRedeemSuccess(null);
+                  onClose();
+                }}
+                style={{ width: '100%', height: 46, borderRadius: 14, backgroundColor: '#34C759', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}
+              >
+                <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '800' }}>XEM DUNG LƯỢNG CỦA TÔI</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity
+              onPress={() => setRedeemSuccess(null)}
+              style={{ width: '100%', height: 38, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Text style={{ color: '#8E8E93', fontSize: 14, fontWeight: '600' }}>Ở lại Cửa Hàng</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* FOOTER TAB BAR */}
+      <LuckyEventTabBar activeTab="wallet" onNavigate={onNavigate} isLight={isLight} />
+    </SafeAreaView>
+  );
+};
+
+const getMonthlyCheckInReward = (day: number, daysInMonth: number) => {
+  if (day === daysInMonth) {
+    return { spins: 3, points: 150, title: '+3 Lượt & +150 pts', isJackpot: true, desc: 'Đại Tiệc Cuối Tháng' };
+  }
+  if (day === 28) {
+    return { spins: 3, points: 100, title: '+3 Lượt & +100 pts', isJackpot: true, desc: 'Rương Thần Tài' };
+  }
+  if (day === 7 || day === 14 || day === 21) {
+    return { spins: 2, points: 50, title: '+2 Lượt & +50 pts', isJackpot: true, desc: 'Mốc Thưởng Tuần' };
+  }
+  return { spins: 1, points: 20, title: '+1 Lượt & +20 pts', isJackpot: false, desc: 'Điểm danh ngày' };
+};
+
+const LuckyCheckInScreen: React.FC<{
+  isLight: boolean;
+  onClose: () => void;
+  onNavigate: (tab: 'wallet' | 'event' | 'checkin' | 'rules') => void;
+  checkedInDates: string[];
+  remainingSpins: number;
+  onCheckIn: () => void;
+}> = ({
+  isLight,
+  onClose,
+  onNavigate,
+  checkedInDates,
+  remainingSpins,
+  onCheckIn,
+}) => {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth(); // 0-indexed
+  const currentDate = now.getDate(); // 1-indexed (hôm nay là ngày mấy)
+  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+
+  // Thứ trong tuần của ngày 1 (Monday = 0, ..., Sunday = 6)
+  const firstDayOfMonthRaw = new Date(currentYear, currentMonth, 1).getDay(); // Sunday = 0
+  const emptyCols = (firstDayOfMonthRaw + 6) % 7;
+
+  const todayKey = `${currentYear}-${pad(currentMonth + 1)}-${pad(currentDate)}`;
+  const isCheckedInToday = checkedInDates.includes(todayKey);
+
+  // Thống kê trong tháng
+  let checkedCount = 0;
+  let missedCount = 0;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const key = `${currentYear}-${pad(currentMonth + 1)}-${pad(d)}`;
+    if (checkedInDates.includes(key)) {
+      checkedCount++;
+    } else if (d < currentDate) {
+      missedCount++;
+    }
+  }
+
+  const todayReward = getMonthlyCheckInReward(currentDate, daysInMonth);
+
+  const getDayOfWeekName = (date: Date) => {
+    const day = date.getDay();
+    if (day === 0) return 'Chủ Nhật';
+    return `Thứ ${day + 1}`;
+  };
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: isLight ? '#F2F2F7' : '#000000' }}>
+      {/* HEADER */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: isLight ? '#E5E5EA' : '#2C2C2E' }}>
+        <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <Svg width="28" height="28" viewBox="0 0 28 28">
+            <SvgPath d="M18 5 9 14l9 9M9 14h12" stroke={isLight ? '#000000' : '#FFFFFF'} strokeWidth="2.2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+          </Svg>
+        </TouchableOpacity>
+        <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 17, fontWeight: '800' }}>
+          Điểm Danh Tháng {currentMonth + 1}/{currentYear}
+        </Text>
+        <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, backgroundColor: 'rgba(10,132,255,0.15)' }}>
+          <Text style={{ color: '#0A84FF', fontSize: 12, fontWeight: '800' }}>Hôm nay: Ngày {currentDate}</Text>
+        </View>
+      </View>
+
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+        {/* BANNER / HERO CARD */}
+        <View style={{ backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E', borderRadius: 20, padding: 18, alignItems: 'center', borderWidth: 1, borderColor: isLight ? '#E5E5EA' : '#2C2C2E' }}>
+          <View style={{ width: 62, height: 62, borderRadius: 20, backgroundColor: 'rgba(10,132,255,0.15)', justifyContent: 'center', alignItems: 'center', marginBottom: 10 }}>
+            <Ionicons name="calendar" size={32} color="#0A84FF" />
+          </View>
+          <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 19, fontWeight: '800' }}>
+            Lịch Điểm Danh Thực Tế
+          </Text>
+          <Text style={{ color: '#8E8E93', fontSize: 13, marginTop: 3, textAlign: 'center' }}>
+            {getDayOfWeekName(now)}, ngày {pad(currentDate)}/{pad(currentMonth + 1)}/{currentYear}
+          </Text>
+
+          {/* 3 STATISTICS PILLS */}
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 14, width: '100%' }}>
+            <View style={{ flex: 1, paddingVertical: 8, paddingHorizontal: 6, borderRadius: 12, backgroundColor: 'rgba(52,199,89,0.12)', borderWidth: 1, borderColor: 'rgba(52,199,89,0.3)', alignItems: 'center' }}>
+              <Text style={{ color: '#34C759', fontSize: 16, fontWeight: '900' }}>{checkedCount}</Text>
+              <Text style={{ color: '#34C759', fontSize: 10, fontWeight: '700', marginTop: 1 }}>Đã nhận</Text>
+            </View>
+            <View style={{ flex: 1, paddingVertical: 8, paddingHorizontal: 6, borderRadius: 12, backgroundColor: 'rgba(255,69,58,0.12)', borderWidth: 1, borderColor: 'rgba(255,69,58,0.3)', alignItems: 'center' }}>
+              <Text style={{ color: '#FF453A', fontSize: 16, fontWeight: '900' }}>{missedCount}</Text>
+              <Text style={{ color: '#FF453A', fontSize: 10, fontWeight: '700', marginTop: 1 }}>Bỏ lỡ (❌)</Text>
+            </View>
+            <View style={{ flex: 1, paddingVertical: 8, paddingHorizontal: 6, borderRadius: 12, backgroundColor: 'rgba(255,184,0,0.12)', borderWidth: 1, borderColor: 'rgba(255,184,0,0.3)', alignItems: 'center' }}>
+              <Text style={{ color: '#FFB800', fontSize: 16, fontWeight: '900' }}>{daysInMonth - currentDate}</Text>
+              <Text style={{ color: '#FFB800', fontSize: 10, fontWeight: '700', marginTop: 1 }}>Ngày còn lại</Text>
+            </View>
+          </View>
+
+          {/* LEGEND BAR */}
+          <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 12, marginTop: 12, flexWrap: 'wrap' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#34C759' }} />
+              <Text style={{ color: '#8E8E93', fontSize: 11 }}>Đã nhận</Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#FF453A' }} />
+              <Text style={{ color: '#8E8E93', fontSize: 11 }}>Bỏ lỡ (❌)</Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#0A84FF' }} />
+              <Text style={{ color: '#8E8E93', fontSize: 11 }}>Hôm nay</Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#FFB800' }} />
+              <Text style={{ color: '#8E8E93', fontSize: 11 }}>Quà khủng (🏆)</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* CALENDAR MONTH GRID */}
+        <View style={{ backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E', borderRadius: 20, padding: 14, marginTop: 14, borderWidth: 1, borderColor: isLight ? '#E5E5EA' : '#2C2C2E' }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '800' }}>
+              Lịch Tháng {currentMonth + 1}
+            </Text>
+            <Text style={{ color: '#8E8E93', fontSize: 12 }}>
+              {daysInMonth} ngày theo lịch thực tế
+            </Text>
+          </View>
+
+          {/* DAYS OF WEEK HEADER */}
+          <View style={{ flexDirection: 'row', marginBottom: 6 }}>
+            {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map((dow, idx) => (
+              <View key={dow} style={{ width: `${100 / 7}%`, alignItems: 'center', paddingVertical: 4 }}>
+                <Text style={{ color: idx >= 5 ? '#FF9F0A' : '#8E8E93', fontSize: 11, fontWeight: '800' }}>
+                  {dow}
+                </Text>
+              </View>
+            ))}
+          </View>
+
+          {/* CALENDAR CELLS GRID */}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+            {/* EMPTY OFFSET CELLS */}
+            {Array.from({ length: emptyCols }).map((_, i) => (
+              <View key={`empty-${i}`} style={{ width: `${100 / 7}%`, padding: 2.5, minHeight: 60 }} />
+            ))}
+
+            {/* MONTH DAYS 1 TO daysInMonth */}
+            {Array.from({ length: daysInMonth }).map((_, idx) => {
+              const d = idx + 1;
+              const dateKey = `${currentYear}-${pad(currentMonth + 1)}-${pad(d)}`;
+              const isChecked = checkedInDates.includes(dateKey);
+              const isToday = d === currentDate;
+              const isPast = d < currentDate;
+              const isMissed = isPast && !isChecked;
+              const reward = getMonthlyCheckInReward(d, daysInMonth);
+
+              return (
+                <View key={`day-${d}`} style={{ width: `${100 / 7}%`, padding: 2.5 }}>
+                  <View
+                    style={{
+                      borderRadius: 10,
+                      paddingVertical: 6,
+                      paddingHorizontal: 1,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: isMissed
+                        ? 'rgba(255, 69, 58, 0.10)'
+                        : isChecked
+                        ? 'rgba(52, 199, 89, 0.12)'
+                        : isToday
+                        ? 'rgba(10, 132, 255, 0.16)'
+                        : reward.isJackpot
+                        ? 'rgba(255, 184, 0, 0.10)'
+                        : isLight ? '#F2F2F7' : '#252528',
+                      borderWidth: 1.4,
+                      borderColor: isMissed
+                        ? '#FF453A'
+                        : isChecked
+                        ? '#34C759'
+                        : isToday
+                        ? '#0A84FF'
+                        : reward.isJackpot
+                        ? 'rgba(255, 184, 0, 0.35)'
+                        : 'transparent',
+                      minHeight: 60,
+                    }}
+                  >
+                    {/* DAY NUMBER */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginBottom: 2 }}>
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          fontWeight: '800',
+                          color: isMissed
+                            ? '#FF453A'
+                            : isChecked
+                            ? '#34C759'
+                            : isToday
+                            ? '#0A84FF'
+                            : reward.isJackpot
+                            ? '#FFB800'
+                            : isLight ? '#3C3C43' : '#AEAEB2',
+                        }}
+                      >
+                        {d}
+                      </Text>
+                      {reward.isJackpot && !isMissed && !isChecked && (
+                        <Ionicons name="trophy" size={9} color="#FFB800" />
+                      )}
+                    </View>
+
+                    {/* STATUS ICON */}
+                    <View style={{ width: 22, height: 22, alignItems: 'center', justifyContent: 'center', marginVertical: 1 }}>
+                      {isMissed ? (
+                        <Ionicons name="close-circle" size={20} color="#FF453A" />
+                      ) : isChecked ? (
+                        <Ionicons name="checkmark-circle" size={20} color="#34C759" />
+                      ) : isToday ? (
+                        <Ionicons name="gift" size={18} color="#0A84FF" />
+                      ) : reward.isJackpot ? (
+                        <Ionicons name="gift" size={16} color="#FFB800" />
+                      ) : (
+                        <Ionicons name="ticket-outline" size={14} color={isLight ? '#AEAEB2' : '#636366'} />
+                      )}
+                    </View>
+
+                    {/* REWARD / STATUS TEXT */}
+                    <Text
+                      numberOfLines={1}
+                      style={{
+                        fontSize: 8.5,
+                        fontWeight: '700',
+                        textAlign: 'center',
+                        color: isMissed
+                          ? '#FF453A'
+                          : isChecked
+                          ? '#34C759'
+                          : isToday
+                          ? '#0A84FF'
+                          : reward.isJackpot
+                          ? '#FFB800'
+                          : '#8E8E93',
+                      }}
+                    >
+                      {isMissed
+                        ? 'Bỏ lỡ'
+                        : isChecked
+                        ? '+1 Lượt'
+                        : isToday
+                        ? 'Hôm nay'
+                        : `+${reward.spins} Lượt`}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* CHECK-IN ACTION BUTTON */}
+        {isCheckedInToday ? (
+          <View style={{ marginTop: 16, alignItems: 'center' }}>
+            <View style={{ width: '100%', height: 48, borderRadius: 14, backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E', justifyContent: 'center', alignItems: 'center', flexDirection: 'row', gap: 8 }}>
+              <Ionicons name="checkmark-circle" size={20} color="#34C759" />
+              <Text style={{ color: isLight ? '#8E8E93' : '#8E8E93', fontSize: 15, fontWeight: '700' }}>
+                ĐÃ ĐIỂM DANH HÔM NAY (NGÀY {currentDate}/{currentMonth + 1})
+              </Text>
+            </View>
+            <Text style={{ color: '#8E8E93', fontSize: 12, marginTop: 8, textAlign: 'center' }}>
+              Quay lại vào ngày mai (Ngày {currentDate + 1}/{currentMonth + 1}) để tiếp tục nhận quà nhé!
+            </Text>
+            <TouchableOpacity
+              onPress={() => onNavigate('event')}
+              style={{ marginTop: 12, paddingVertical: 10, paddingHorizontal: 16, borderRadius: 12, backgroundColor: 'rgba(10,132,255,0.12)', flexDirection: 'row', alignItems: 'center', gap: 6 }}
+            >
+              <Ionicons name="gift" size={16} color="#0A84FF" />
+              <Text style={{ color: '#0A84FF', fontSize: 13, fontWeight: '700' }}>
+                Đến Vòng Quay May Mắn ({remainingSpins} lượt còn lại) →
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={{ marginTop: 16 }}>
+            <TouchableOpacity
+              onPress={onCheckIn}
+              activeOpacity={0.85}
+              style={{
+                width: '100%',
+                height: 50,
+                borderRadius: 14,
+                backgroundColor: '#0A84FF',
+                justifyContent: 'center',
+                alignItems: 'center',
+                flexDirection: 'row',
+                gap: 8,
+                shadowColor: '#0A84FF',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.4,
+                shadowRadius: 10,
+              }}
+            >
+              <Ionicons name="gift" size={20} color="#FFFFFF" />
+              <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '800' }}>
+                ĐIỂM DANH HÔM NAY - NGÀY {currentDate}/{currentMonth + 1} ({todayReward.title})
+              </Text>
+            </TouchableOpacity>
+            <Text style={{ color: '#8E8E93', fontSize: 12, marginTop: 8, textAlign: 'center' }}>
+              Lượt quay được cộng ngay vào Vòng Quay May Mắn
+            </Text>
+          </View>
+        )}
+
+        {/* RULES CARD */}
+        <View style={{ backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E', borderRadius: 18, padding: 16, marginTop: 16, borderWidth: 1, borderColor: isLight ? '#E5E5EA' : '#2C2C2E' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <Ionicons name="help-circle" size={18} color="#0A84FF" />
+            <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 15, fontWeight: '800' }}>
+              Quy định điểm danh theo lịch thực tế
+            </Text>
+          </View>
+          {[
+            'Lịch điểm danh cập nhật tự động theo ngày tháng thực tế ngoài đời.',
+            'Những ngày trước đó không vào điểm danh sẽ bị đánh dấu X đỏ (Bỏ lỡ).',
+            'Mỗi ngày điểm danh nhận +1 lượt quay (các mốc Ngày 7, 14, 21, 28, 31 nhận Rương Quà Khủng).',
+            'Lượt quay nhận được dùng ngay cho Vòng Quay May Mắn để nhận điểm đổi quà.',
+          ].map((rule, idx) => (
+            <View key={idx} style={{ flexDirection: 'row', alignItems: 'flex-start', marginTop: 8, gap: 8 }}>
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#0A84FF', marginTop: 6 }} />
+              <Text style={{ flex: 1, color: isLight ? '#666668' : '#A1A1A6', fontSize: 13, lineHeight: 18 }}>
+                {rule}
+              </Text>
+            </View>
+          ))}
+        </View>
+      </ScrollView>
+
+      {/* FOOTER TAB BAR */}
+      <LuckyEventTabBar activeTab="checkin" onNavigate={onNavigate} isLight={isLight} />
+    </SafeAreaView>
+  );
+};
+
+const LuckyEventScreen: React.FC<{ isLight: boolean; onClose: () => void; storageKey: string; onRedeemStorage?: (plan: '50GB' | '200GB') => void }> = ({ isLight, onClose, storageKey, onRedeemStorage }) => {
+  const [remainingSpins, setRemainingSpins] = useState(3);
+  const [lastReward, setLastReward] = useState<string | null>(null);
+  const [rewardPopup, setRewardPopup] = useState<{ title: string; subtitle: string; wonPoints: number } | null>(null);
+  const [checkInSuccessModal, setCheckInSuccessModal] = useState<{ day: number; spins: number; points: number } | null>(null);
+  const [rewardHistory, setRewardHistory] = useState<SpinHistoryItem[]>([]);
+  const [points, setPoints] = useState(0);
+  const [redeemedItems, setRedeemedItems] = useState<string[]>([]);
+  const [isSpinning, setIsSpinning] = useState(false);
+  const [currentTab, setCurrentTab] = useState<'wallet' | 'event' | 'checkin' | 'rules'>('event');
+  const [checkedInDates, setCheckedInDates] = useState<string[]>([]);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const wheelRotation = useRef(new Animated.Value(0)).current;
+  const wheelRotationValueRef = useRef(0);
+  const rewardRailRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      rewardRailRef.current?.scrollTo({ x: 180, animated: true });
+      setTimeout(() => rewardRailRef.current?.scrollTo({ x: 0, animated: true }), 1600);
+    }, 3600);
+    return () => clearInterval(timer);
+  }, []);
+
+  const spinStorageKey = `lockx_lucky_event_${storageKey}`;
+  useEffect(() => {
+    AsyncStorage.getItem(spinStorageKey).then((value) => {
+      try {
+        const saved = value ? JSON.parse(value) : null;
+        if (saved) {
+          setRemainingSpins(typeof saved.remainingSpins === 'number' ? saved.remainingSpins : 3);
+          if (Array.isArray(saved.rewardHistory)) {
+            const normalized: SpinHistoryItem[] = saved.rewardHistory.map((item: any, idx: number) => {
+              if (typeof item === 'string') {
+                const pts = parseInt(item.match(/\d+/)?.[0] || '0', 10);
+                return {
+                  id: `legacy_${idx}`,
+                  reward: item,
+                  points: pts,
+                  timestamp: Date.now() - idx * 60000,
+                  formattedTime: 'Trước đó',
+                  color: '#0A84FF',
+                  iconIndex: 1,
+                };
+              }
+              return item;
+            });
+            setRewardHistory(normalized);
+          }
+          setPoints(typeof saved.points === 'number' ? saved.points : 0);
+          setRedeemedItems(Array.isArray(saved.redeemedItems) ? saved.redeemedItems : []);
+          if (Array.isArray(saved.checkedInDates)) {
+            setCheckedInDates(saved.checkedInDates);
+          }
+        }
+      } catch (e) {}
+      setIsLoaded(true);
+    }).catch(() => setIsLoaded(true));
+  }, [spinStorageKey]);
+
+  useEffect(() => {
+    if (isLoaded) {
+      AsyncStorage.setItem(
+        spinStorageKey,
+        JSON.stringify({ remainingSpins, rewardHistory, points, redeemedItems, checkedInDates })
+      ).catch(() => {});
+    }
+  }, [isLoaded, remainingSpins, rewardHistory, points, redeemedItems, checkedInDates, spinStorageKey]);
+
+  const handleDailyCheckIn = () => {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+    const day = now.getDate();
+    const todayStr = `${currentYear}-${pad(currentMonth + 1)}-${pad(day)}`;
+
+    if (checkedInDates.includes(todayStr)) return;
+
+    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+    const reward = getMonthlyCheckInReward(day, daysInMonth);
+
+    const updatedDates = [...checkedInDates, todayStr];
+    setCheckedInDates(updatedDates);
+    setRemainingSpins((cur) => cur + reward.spins);
+    if (reward.points > 0) {
+      setPoints((cur) => cur + reward.points);
+    }
+
+    playAppleNotificationSound('success');
+    setCheckInSuccessModal({
+      day,
+      spins: reward.spins,
+      points: reward.points,
+    });
+
+    try {
+      Notifications.scheduleNotificationAsync({
+        content: {
+          title: `🎉 Điểm Danh Ngày ${day}/${currentMonth + 1} Thành Công`,
+          body: `Bạn đã nhận được +${reward.spins} lượt quay ${reward.points > 0 ? `& +${reward.points} điểm` : ''}!`,
+          data: { type: 'daily_checkin', date: todayStr }
+        },
+        trigger: null,
+      }).catch(() => {});
+    } catch (e) {}
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+      try { new Notification(`🎉 Điểm Danh Ngày ${day}/${currentMonth + 1}`, { body: `Nhận +${reward.spins} lượt quay ${reward.points > 0 ? `& +${reward.points} điểm` : ''}!`, icon: '/assets/icon.png' }); } catch (e) {}
+    }
+  };
+
+  const spinWheel = () => {
+    if (!isLoaded || isSpinning || remainingSpins <= 0) return;
+    const sliceAngle = 360 / LUCKY_EVENT_REWARDS.length;
+    const currentRotation = wheelRotationValueRef.current;
+    // Chọn góc ngẫu nhiên tạo độ xoay mượt mà
+    const randomRotation = Math.random() * 360;
+    const targetRotation = currentRotation + 1440 + randomRotation;
+    const finalModulo = ((targetRotation % 360) + 360) % 360;
+    // Kim nằm ở đỉnh (-90deg); quy đổi vị trí cuối thành lát phần thưởng
+    const pointerAngleOnWheel = ((-finalModulo % 360) + 360) % 360;
+    const rewardIndex = Math.min(LUCKY_EVENT_REWARDS.length - 1, Math.floor(pointerAngleOnWheel / sliceAngle));
+    wheelRotationValueRef.current = targetRotation;
+    setIsSpinning(true);
+    setRemainingSpins((current) => current - 1);
+    playAppleNotificationSound('tap');
+    Animated.timing(wheelRotation, {
+      toValue: targetRotation,
+      duration: 2600,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start(() => {
+      const wonReward = LUCKY_EVENT_REWARDS[rewardIndex];
+      const wonPoints = wonReward.points;
+      const rewardLabel = wonReward.label;
+
+      const now = new Date();
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const formattedTime = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} • ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+
+      const historyEntry: SpinHistoryItem = {
+        id: `spin_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+        reward: rewardLabel,
+        points: wonPoints,
+        timestamp: Date.now(),
+        formattedTime,
+        color: wonReward.color,
+        iconIndex: rewardIndex,
+      };
+
+      setLastReward(wonPoints > 0 ? `+${wonPoints} Điểm` : '0 Điểm (Chúc bạn may mắn lần sau!)');
+      setRewardPopup({
+        title: wonPoints > 0 ? 'Chúc Mừng!' : 'Rất Tiếc!',
+        subtitle: wonPoints > 0 ? `Bạn đã nhận được ${rewardLabel}` : 'Bạn quay vào ô 0 Điểm. Chúc bạn may mắn lần sau nhé!',
+        wonPoints,
+      });
+      setRewardHistory((history) => [historyEntry, ...history].slice(0, 30));
+      setPoints((current) => current + wonPoints);
+      setIsSpinning(false);
+      playAppleNotificationSound(wonPoints > 0 ? 'success' : 'tap');
+      try {
+        Notifications.scheduleNotificationAsync({
+          content: {
+            title: wonPoints > 0 ? '🎉 Bạn vừa nhận điểm thưởng LockX' : 'Vòng quay may mắn LockX',
+            body: wonPoints > 0 ? `Bạn vừa nhận được ${rewardLabel} vào ví!` : '0 Điểm - Hãy thử lại lượt tiếp theo!',
+            data: { type: 'lucky_reward', reward: rewardLabel, points: wonPoints }
+          },
+          trigger: null,
+        }).catch(() => {});
+      } catch (e) {}
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+        try { new Notification('Vòng quay may mắn LockX', { body: wonPoints > 0 ? `Bạn nhận được ${rewardLabel}` : '0 Điểm - Chúc may mắn lần sau!', icon: '/assets/icon.png' }); } catch (e) {}
+      }
+    });
+  };
+
+  const rotation = wheelRotation.interpolate({ inputRange: [0, 10000], outputRange: ['0deg', '10000deg'] });
+
+  if (currentTab === 'rules') {
+    return <LuckyEventRulesScreen isLight={isLight} onClose={onClose} onNavigate={setCurrentTab} />;
+  }
+  if (currentTab === 'wallet') {
+    return (
+      <LuckyWalletScreen
+        isLight={isLight}
+        onClose={onClose}
+        onNavigate={setCurrentTab}
+        points={points}
+        redeemedItems={redeemedItems}
+        onRedeem={(cost, item) => {
+          if (points < cost) return;
+          setPoints((current) => current - cost);
+          setRedeemedItems((items) => [item, ...items]);
+          if (item === '50GB' || item === '200GB' || item === '1TB') {
+            onRedeemStorage?.(item === '1TB' ? '200GB' : (item as any));
+          }
+          if (item === '3 Lượt quay' || item === 'Vé quay thêm') {
+            setRemainingSpins((s) => s + 3);
+          }
+          if (item === '10 Lượt quay') {
+            setRemainingSpins((s) => s + 10);
+          }
+          setLastReward(`Đã đổi ${item}`);
+        }}
+      />
+    );
+  }
+  if (currentTab === 'checkin') {
+    return (
+      <LuckyCheckInScreen
+        isLight={isLight}
+        onClose={onClose}
+        onNavigate={setCurrentTab}
+        checkedInDates={checkedInDates}
+        remainingSpins={remainingSpins}
+        onCheckIn={handleDailyCheckIn}
+      />
+    );
+  }
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: isLight ? '#F2F2F7' : '#000000' }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: isLight ? '#E5E5EA' : '#2C2C2E' }}>
+        <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <Svg width="28" height="28" viewBox="0 0 28 28">
+            <SvgPath d="M18 5 9 14l9 9M9 14h12" stroke={isLight ? '#000000' : '#FFFFFF'} strokeWidth="2.2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+          </Svg>
+        </TouchableOpacity>
+        <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 17, fontWeight: '800' }}>Sự Kiện Vòng Quay May Mắn</Text>
+        <View style={{ width: 26 }} />
+      </View>
+
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+        <Image source={require('./assets/anhvongquay.png')} style={{ width: '100%', height: 172, borderRadius: 18, marginBottom: 14 }} resizeMode="cover" />
+
+        {/* WHEEL CARD */}
+        <View style={{ backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E', borderRadius: 20, padding: 16, borderWidth: 1, borderColor: isLight ? '#E5E5EA' : '#2C2C2E', alignItems: 'center' }}>
+          <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 20, fontWeight: '800' }}>Vòng Quay May Mắn</Text>
+          <Text style={{ color: '#8E8E93', fontSize: 13, marginTop: 4, textAlign: 'center' }}>Quay tích điểm đổi các gói lưu trữ & đặc quyền</Text>
+
+          {/* WHEEL GRAPHIC */}
+          <View style={{ width: 292, height: 310, justifyContent: 'center', alignItems: 'center', marginTop: 12 }}>
+            <Svg width="30" height="22" viewBox="0 0 30 22" style={{ position: 'absolute', top: 0, zIndex: 3 }}>
+              <SvgPath d="M3 2H27L15 20Z" fill="#FFB800" stroke="#FFE08A" strokeWidth="1.5" strokeLinejoin="round" />
+            </Svg>
+            <Animated.View style={{ width: 282, height: 282, borderRadius: 141, borderWidth: 7, borderColor: '#0A84FF', backgroundColor: '#101828', shadowColor: '#0A84FF', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.7, shadowRadius: 20, transform: [{ rotate: rotation }] }}>
+              <Svg width="268" height="268" viewBox="0 0 280 280" style={{ margin: 0 }}>
+                <SvgGroup>
+                  {LUCKY_EVENT_REWARDS.map((reward, index) => {
+                    const middleAngle = (-90 + index * 45 + 22.5) * (Math.PI / 180);
+                    const textX = 140 + Math.cos(middleAngle) * 90;
+                    const textY = 140 + Math.sin(middleAngle) * 90;
+                    const labelX = 140 + Math.cos(middleAngle) * 64;
+                    const labelY = 140 + Math.sin(middleAngle) * 64;
+                    return (
+                      <SvgGroup key={reward.label}>
+                        <SvgPath d={getWheelSlicePath(index, 134, 140)} fill={reward.color} stroke="#BFE9FF" strokeWidth="1.5" />
+                        <SvgPath d={getRewardIconPath(index)} transform={`translate(${textX - 10} ${textY - 10}) scale(1.05)`} fill="none" stroke="#FFFFFF" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                        <SvgText
+                          x={labelX}
+                          y={labelY + 4}
+                          fill="#FFFFFF"
+                          fontSize="11"
+                          fontWeight="900"
+                          textAnchor="middle"
+                        >
+                          {reward.shortText}
+                        </SvgText>
+                      </SvgGroup>
+                    );
+                  })}
+                  <SvgCircle cx="140" cy="140" r="43" fill="#0A84FF" stroke="#A5F3FC" strokeWidth="5" />
+                  <SvgText x="140" y="136" fill="#FFFFFF" fontSize="12" fontWeight="900" textAnchor="middle">LOCKX</SvgText>
+                  <SvgText x="140" y="151" fill="#D7F9FF" fontSize="8" fontWeight="700" textAnchor="middle">LUCKY</SvgText>
+                </SvgGroup>
+              </Svg>
+            </Animated.View>
+          </View>
+
+          {/* SPINS REMAINING BADGE */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8, marginTop: 10, marginBottom: 14 }}>
+            <Ionicons name="ticket" size={18} color="#FFB800" />
+            <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 14, fontWeight: '700' }}>Còn {remainingSpins} lượt quay hôm nay</Text>
+          </View>
+
+          {/* SPIN BUTTON */}
+          <TouchableOpacity onPress={spinWheel} disabled={isSpinning || remainingSpins === 0} activeOpacity={0.85} style={{ width: '100%', height: 48, borderRadius: 14, backgroundColor: isSpinning || remainingSpins === 0 ? '#64748B' : '#0A84FF', justifyContent: 'center', alignItems: 'center', shadowColor: '#0A84FF', shadowOffset: { width: 0, height: 4 }, shadowOpacity: remainingSpins > 0 ? 0.35 : 0, shadowRadius: 8 }}>
+            <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '800' }}>{isSpinning ? 'Đang quay...' : remainingSpins > 0 ? 'QUAY NGAY' : 'ĐÃ HẾT LƯỢT QUAY'}</Text>
+          </TouchableOpacity>
+
+          {lastReward && (
+            <View style={{ width: '100%', marginTop: 12, padding: 12, borderRadius: 12, backgroundColor: lastReward.includes('0 Điểm') ? 'rgba(142,142,147,0.15)' : 'rgba(52,199,89,0.14)', borderWidth: 1, borderColor: lastReward.includes('0 Điểm') ? 'rgba(142,142,147,0.35)' : 'rgba(52,199,89,0.35)' }}>
+              <Text style={{ color: lastReward.includes('0 Điểm') ? '#8E8E93' : '#34C759', fontSize: 13, fontWeight: '800', textAlign: 'center' }}>Kết quả vừa quay: {lastReward}</Text>
+            </View>
+          )}
+        </View>
+
+        {/* REWARD RAIL */}
+        <View style={{ backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E', borderRadius: 20, paddingVertical: 14, marginTop: 14, borderWidth: 1, borderColor: isLight ? '#E5E5EA' : '#2C2C2E' }}>
+          <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '800', marginHorizontal: 16, marginBottom: 10 }}>Phần thưởng có thể nhận</Text>
+          <ScrollView ref={rewardRailRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingHorizontal: 16 }}>
+            {LUCKY_EVENT_REWARDS.map((reward, index) => (
+              <View key={`rail-${reward.label}`} style={{ width: 120, height: 86, borderRadius: 14, backgroundColor: `${reward.color}20`, borderWidth: 1, borderColor: `${reward.color}66`, alignItems: 'center', justifyContent: 'center', padding: 6 }}>
+                <LuckyRewardIcon index={index} color={reward.color} size={20} />
+                <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 13, fontWeight: '800', marginTop: 4, textAlign: 'center' }}>{reward.label}</Text>
+                <Text style={{ color: reward.points > 0 ? '#34C759' : '#8E8E93', fontSize: 10, fontWeight: '700', marginTop: 1 }}>{reward.points > 0 ? `+${reward.points} pts` : '0 pts'}</Text>
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+
+        {/* REDESIGNED RICH SPIN HISTORY */}
+        {rewardHistory.length > 0 && (
+          <View style={{ backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E', borderRadius: 20, padding: 18, marginTop: 14, borderWidth: 1, borderColor: isLight ? '#E5E5EA' : '#2C2C2E' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="time" size={18} color="#0A84FF" />
+                <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '800' }}>Lịch Sử Lượt Quay</Text>
+              </View>
+              <View style={{ paddingHorizontal: 9, paddingVertical: 3, borderRadius: 10, backgroundColor: 'rgba(10,132,255,0.15)' }}>
+                <Text style={{ color: '#0A84FF', fontSize: 11, fontWeight: '700' }}>{rewardHistory.length} kết quả</Text>
+              </View>
+            </View>
+
+            {rewardHistory.map((item, index) => (
+              <View
+                key={item.id || index}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingVertical: 11,
+                  borderBottomWidth: index === rewardHistory.length - 1 ? 0 : 1,
+                  borderBottomColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                }}
+              >
+                <LuckyRewardIcon index={item.iconIndex ?? index} color={item.color || '#0A84FF'} size={18} />
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 14, fontWeight: '700' }}>{item.reward}</Text>
+                  <Text style={{ color: '#8E8E93', fontSize: 11, marginTop: 2 }}>🕒 {item.formattedTime}</Text>
+                </View>
+                <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: item.points > 0 ? 'rgba(52, 199, 89, 0.15)' : 'rgba(142, 142, 147, 0.15)' }}>
+                  <Text style={{ color: item.points > 0 ? '#34C759' : '#8E8E93', fontSize: 12, fontWeight: '800' }}>
+                    {item.points > 0 ? `+${item.points} pts` : '0 pts'}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+      </ScrollView>
+
+      {/* WIN POPUP MODAL */}
+      <Modal visible={!!rewardPopup} transparent animationType="fade" onRequestClose={() => setRewardPopup(null)}>
+        <Pressable onPress={() => setRewardPopup(null)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.68)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          <Pressable onPress={(event) => event.stopPropagation()} style={{ width: '100%', maxWidth: 330, backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E', borderRadius: 24, padding: 24, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)', shadowColor: '#000', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.4, shadowRadius: 24 }}>
+            <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: rewardPopup?.wonPoints ? 'rgba(52,199,89,0.18)' : 'rgba(142,142,147,0.18)', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
+              <Ionicons name={rewardPopup?.wonPoints ? 'trophy' : 'refresh-circle'} size={40} color={rewardPopup?.wonPoints ? '#34C759' : '#8E8E93'} />
+            </View>
+            <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 20, fontWeight: '800', marginBottom: 6 }}>{rewardPopup?.title}</Text>
+            <Text style={{ color: '#8E8E93', fontSize: 13, textAlign: 'center', marginBottom: 14 }}>{rewardPopup?.subtitle}</Text>
+            {rewardPopup && rewardPopup.wonPoints > 0 ? (
+              <View style={{ paddingHorizontal: 16, paddingVertical: 8, borderRadius: 12, backgroundColor: 'rgba(52,199,89,0.15)', borderWidth: 1, borderColor: 'rgba(52,199,89,0.3)', marginBottom: 20 }}>
+                <Text style={{ color: '#34C759', fontSize: 18, fontWeight: '900', textAlign: 'center' }}>+{rewardPopup.wonPoints} Điểm Thưởng</Text>
+              </View>
+            ) : null}
+            <TouchableOpacity onPress={() => setRewardPopup(null)} style={{ width: '100%', height: 46, borderRadius: 14, backgroundColor: '#0A84FF', alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '800' }}>Xác Nhận</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* CHECK-IN SUCCESS MODAL */}
+      <Modal visible={!!checkInSuccessModal} transparent animationType="fade" onRequestClose={() => setCheckInSuccessModal(null)}>
+        <Pressable onPress={() => setCheckInSuccessModal(null)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.68)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          <Pressable onPress={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 330, backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E', borderRadius: 24, padding: 24, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)', shadowColor: '#000', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.4, shadowRadius: 24 }}>
+            <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: 'rgba(10,132,255,0.18)', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
+              <Ionicons name="sparkles" size={40} color="#0A84FF" />
+            </View>
+            <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 20, fontWeight: '800', marginBottom: 6 }}>
+              Điểm Danh Thành Công! 🎉
+            </Text>
+            <Text style={{ color: '#8E8E93', fontSize: 13, textAlign: 'center', marginBottom: 14 }}>
+              Bạn đã hoàn thành điểm danh Ngày {checkInSuccessModal?.day} của chuỗi.
+            </Text>
+            <View style={{ paddingHorizontal: 16, paddingVertical: 10, borderRadius: 14, backgroundColor: 'rgba(52,199,89,0.15)', borderWidth: 1, borderColor: 'rgba(52,199,89,0.3)', marginBottom: 16, width: '100%', alignItems: 'center' }}>
+              <Text style={{ color: '#34C759', fontSize: 17, fontWeight: '900' }}>
+                +{checkInSuccessModal?.spins} Lượt quay
+                {checkInSuccessModal?.points && checkInSuccessModal.points > 0 ? ` & +${checkInSuccessModal.points} điểm` : ''}
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => {
+                setCheckInSuccessModal(null);
+                setCurrentTab('event');
+              }}
+              style={{ width: '100%', height: 46, borderRadius: 14, backgroundColor: '#0A84FF', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}
+            >
+              <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '800' }}>Đến Vòng Quay Ngay</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setCheckInSuccessModal(null)}
+              style={{ width: '100%', height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Text style={{ color: '#8E8E93', fontSize: 14, fontWeight: '600' }}>Ở lại trang</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* UNIFIED 4-TAB FOOTER BAR */}
+      <LuckyEventTabBar activeTab="event" onNavigate={setCurrentTab} isLight={isLight} />
+    </SafeAreaView>
+  );
+};
+
 const INITIAL_STAMINA: StaminaItem[] = [
   {
     id: 'stam-genshin',
@@ -1970,10 +3387,10 @@ export const INITIAL_USER_PROFILE: UserProfile = {
   hoursUsed: 0.1,
   currentPasscode: '123456',
   lastUsernameChangeTimestamp: 0,
-  isVerified: false,
+  isVerified: true,
   verifiedBadge: 'blue_tick',
-  verifiedAt: '',
-  verifiedKey: '',
+  verifiedAt: '01/01/2026',
+  verifiedKey: 'LX-VERIFIED-AUTH-8888',
 };
 
 export const INITIAL_LOGIN_HISTORY: LoginHistoryRecord[] = [
@@ -2002,6 +3419,9 @@ export const INITIAL_SETTINGS: AppSettings = {
   hapticFeedback: true,
   securityAlerts: true,
   blurSwitcher: true,
+  autoClearClipboard: '60s',
+  accountsSortBy: 'recent',
+  accountsViewMode: 'cards',
   enableNotifications: true,
   notifySecurityAlerts: true,
   notifyActivity: true,
@@ -4044,7 +5464,7 @@ export const EnterpriseAuthScreen = ({
 
     try {
       // 1. Gọi API Forgot Password của WebPHP Backend
-      const res = await fetch('https://aecongnghe.online/api/auth/forgot_password.php', {
+      const res = await fetch('https://quangtrongtuan.id.vn/api/auth/forgot_password.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: acc }),
@@ -4125,7 +5545,7 @@ export const EnterpriseAuthScreen = ({
     setForgotError(null);
 
     try {
-      const res = await fetch('https://aecongnghe.online/api/auth/reset_password.php', {
+      const res = await fetch('https://quangtrongtuan.id.vn/api/auth/reset_password.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -5124,7 +6544,7 @@ export const checkServerUserBanStatus = async (
   if (!clean) return { isBanned: false, status: 'active', message: '' };
 
   try {
-    const res = await fetch(`https://aecongnghe.online/api/users/list.php?search=${encodeURIComponent(clean)}&limit=1`);
+    const res = await fetch(`https://quangtrongtuan.id.vn/api/users/list.php?search=${encodeURIComponent(clean)}&limit=1`);
     const data = await res.json();
     if (data && data.success && Array.isArray(data.data?.users)) {
       const match = data.data.users.find(
@@ -5542,6 +6962,723 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   }
 }
 
+const SwipeableAccountRow: React.FC<{
+  isLight: boolean;
+  isSwiped: boolean;
+  onSwipeChange: (swiped: boolean) => void;
+  onPress: () => void;
+  onLongPress: () => void;
+  onDelete: () => void;
+  children: React.ReactNode;
+}> = ({ isLight, isSwiped, onSwipeChange, onPress, onLongPress, onDelete, children }) => {
+  const translateX = useRef(new Animated.Value(0)).current;
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const didLongPress = useRef(false);
+
+  useEffect(() => {
+    Animated.spring(translateX, { toValue: isSwiped ? -72 : 0, useNativeDriver: true, bounciness: 4 }).start();
+  }, [isSwiped, translateX]);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gestureState) =>
+        Math.abs(gestureState.dx) > 10 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy),
+      onPanResponderMove: (_, gestureState) => {
+        const base = isSwiped ? -72 : 0;
+        const next = Math.max(-90, Math.min(0, base + gestureState.dx));
+        if (gestureState.dx < 0 || isSwiped) translateX.setValue(next);
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (isSwiped && gestureState.dx > 30) onSwipeChange(false);
+        else if (!isSwiped && (gestureState.dx < -45 || gestureState.vx < -0.5)) onSwipeChange(true);
+        else Animated.spring(translateX, { toValue: isSwiped ? -72 : 0, useNativeDriver: true, bounciness: 4 }).start();
+      },
+    })
+  ).current;
+
+  return (
+    <View style={{ position: 'relative', overflow: 'hidden', borderRadius: 16, backgroundColor: '#FF3B30' }}>
+      <TouchableOpacity
+        activeOpacity={0.85}
+        onPress={() => {
+          onDelete();
+          onSwipeChange(false);
+        }}
+        style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 72, justifyContent: 'center', alignItems: 'center' }}
+      >
+        <Ionicons name="trash" size={21} color="#FFFFFF" />
+        <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '700', marginTop: 3 }}>Xóa</Text>
+      </TouchableOpacity>
+      <Animated.View style={{ transform: [{ translateX }], zIndex: 2 }} {...panResponder.panHandlers}>
+        <TouchableOpacity
+          activeOpacity={0.75}
+          onPress={() => {
+            if (didLongPress.current) {
+              didLongPress.current = false;
+              return;
+            }
+            isSwiped ? onSwipeChange(false) : onPress();
+          }}
+          onPressIn={() => {
+            didLongPress.current = false;
+            longPressTimer.current = setTimeout(() => {
+              didLongPress.current = true;
+              onLongPress();
+            }, 450);
+          }}
+          onPressOut={() => {
+            if (longPressTimer.current) clearTimeout(longPressTimer.current);
+            longPressTimer.current = null;
+          }}
+          delayLongPress={400}
+          {...(Platform.OS === 'web'
+            ? { onContextMenu: (event: any) => { event.preventDefault?.(); onLongPress(); } }
+            : {})}
+        >
+          {children}
+        </TouchableOpacity>
+      </Animated.View>
+    </View>
+  );
+};
+
+export interface VipCardPerk {
+  svgType: 'shield' | 'cloud' | 'sync' | 'faceid' | 'backup' | 'palette' | 'sparkle' | 'wifi' | 'speed' | 'quantum' | 'darkweb' | 'phone' | 'stealth' | 'lock' | 'key' | 'atom' | 'ai' | 'crown' | 'camera' | 'bomb' | 'satellite' | 'decoy' | 'sos' | 'blockchain';
+  title: string;
+  desc: string;
+  badge: string;
+  color: string;
+}
+
+export interface VipCardTier {
+  id: 'silver' | 'gold' | 'diamond' | 'titanium' | 'uranium';
+  name: string;
+  badge: string;
+  accent: string;
+  gradientBg: string[];
+  bg: string;
+  borderColor: string;
+  glowColor: string;
+  chipColor: string;
+  chipBorder: string;
+  code: string;
+  duration: string;
+  desc: string;
+  perks: VipCardPerk[];
+}
+
+const VIP_CARD_TIERS: VipCardTier[] = [
+  {
+    id: 'silver',
+    name: 'Bạch Kim Titan (Silver Elite)',
+    badge: 'SILVER ELITE',
+    accent: '#CBD5E1',
+    gradientBg: ['#1E222B', '#2B313E', '#161920'],
+    bg: '#161A22',
+    borderColor: '#94A3B8',
+    glowColor: 'rgba(148, 163, 184, 0.4)',
+    chipColor: '#334155',
+    chipBorder: '#CBD5E1',
+    code: 'GV-SILVER-2026-KEY',
+    duration: 'VĨNH VIỄN ✦',
+    desc: 'Hạng thẻ tiêu chuẩn: 3 đặc quyền bảo vệ cơ bản & mã hóa AES-256.',
+    perks: [
+      {
+        svgType: 'shield',
+        color: '#94A3B8',
+        title: 'Mã Hóa AES-256 GCM Quân Đội',
+        desc: 'Bảo mật cơ sở dữ liệu mật khẩu cá nhân chuẩn ngân hàng quốc tế, chống bẻ khóa từ điển.',
+        badge: 'TIÊU CHUẨN',
+      },
+      {
+        svgType: 'cloud',
+        color: '#38BDF8',
+        title: 'Lưu Trữ Cloud Vault 50GB',
+        desc: 'Dung lượng đám mây tốc độ cao được mã hóa đầu-cuối và sao lưu tự động định kỳ.',
+        badge: '50 GB CLOUD',
+      },
+      {
+        svgType: 'sync',
+        color: '#60A5FA',
+        title: 'Đồng Bộ 3 Thiết Bị Thời Gian Thực',
+        desc: 'Tự động liên thông két sắt an toàn giữa điện thoại iPhone, máy tính bảng iPad và Laptop.',
+        badge: '3 THIẾT BỊ',
+      },
+    ],
+  },
+  {
+    id: 'gold',
+    name: 'Vàng Đúc Hoàng Gia (Gold 24K)',
+    badge: 'ROYAL GOLD VIP',
+    accent: '#FFD700',
+    gradientBg: ['#281E08', '#382B0C', '#171104'],
+    bg: '#1A1406',
+    borderColor: '#FFD700',
+    glowColor: 'rgba(255, 215, 0, 0.45)',
+    chipColor: '#B45309',
+    chipBorder: '#FDE047',
+    code: 'GV-GOLD-24K-8888',
+    duration: 'VĨNH VIỄN 👑',
+    desc: 'Hạng thẻ cao cấp: 5 đặc quyền quý tộc, mở khóa theme & icon mạ vàng.',
+    perks: [
+      {
+        svgType: 'palette',
+        color: '#FFD700',
+        title: 'Giao Diện Toàn Nền Hoàng Gia Gold Luxury',
+        desc: 'Áp dụng màu nền nhung vàng đen vương giả toàn ứng dụng, đổi toàn bộ theme giao diện.',
+        badge: 'THEME HOÀNG GIA',
+      },
+      {
+        svgType: 'sparkle',
+        color: '#FBBF24',
+        title: 'Bộ Icon Ứng Dụng Mạ Vàng 24K Độc Quyền',
+        desc: 'Tùy biến biểu tượng ứng dụng LockX mạ vàng đúc sang trọng cho màn hình chính.',
+        badge: 'ICON 24K',
+      },
+      {
+        svgType: 'cloud',
+        color: '#F59E0B',
+        title: 'Lưu Trữ Cloud Vault 200GB Siêu Tốc',
+        desc: 'Băng thông ưu tiên tải lên/xuống dữ liệu tức thì, không giới hạn số lượng tập tin đính kèm.',
+        badge: '200 GB CLOUD',
+      },
+      {
+        svgType: 'sync',
+        color: '#FCD34D',
+        title: 'Đồng Bộ Không Giới Hạn Thiết Bị',
+        desc: 'Kết nối mọi thiết bị cá nhân và gia đình đồng thời với độ trễ liên thông dưới 0.1 giây.',
+        badge: 'UNLIMITED SYNC',
+      },
+      {
+        svgType: 'wifi',
+        color: '#EAB308',
+        title: 'Tường Lửa Chống Dò Quét Wi-Fi Công Cộng',
+        desc: 'Tự động kích hoạt khiên chắn mã hóa khi kết nối mạng Wi-Fi lạ tại quán cafe, sân bay.',
+        badge: 'FIREWALL',
+      },
+    ],
+  },
+  {
+    id: 'diamond',
+    name: 'Kim Cương Lam (Diamond Imperial)',
+    badge: 'DIAMOND IMPERIAL',
+    accent: '#00E5FF',
+    gradientBg: ['#071C2E', '#0E2F4C', '#04121F'],
+    bg: '#081726',
+    borderColor: '#00E5FF',
+    glowColor: 'rgba(0, 229, 255, 0.45)',
+    chipColor: '#0369A1',
+    chipBorder: '#38BDF8',
+    code: 'GV-DIAMOND-9999-CYBER',
+    duration: 'VĨNH VIỄN 💎',
+    desc: 'Hạng thẻ thượng lưu: 7 đặc quyền lượng tử, Cloud 1TB & Dark Web Monitor.',
+    perks: [
+      {
+        svgType: 'quantum',
+        color: '#00E5FF',
+        title: 'Mã Hóa Kháng Máy Tính Lượng Tử (Post-Quantum)',
+        desc: 'Thuật toán mật mã thế hệ mới bảo vệ dữ liệu chống lại sự phá vỡ của siêu máy tính tương lai.',
+        badge: 'QUANTUM SHIELD',
+      },
+      {
+        svgType: 'palette',
+        color: '#38BDF8',
+        title: 'Giao Diện Vũ Trụ Nebula & Cyber Neon Matrix',
+        desc: 'Mở khóa toàn bộ theme Neon Cyberpunk và Tinh vân Nebula huyền bí với ánh sáng phát quang.',
+        badge: 'CYBER NEBULA',
+      },
+      {
+        svgType: 'cloud',
+        color: '#0EA5E9',
+        title: 'Dung Lượng Két Sắt Đám Mây 1TB (1000GB)',
+        desc: 'Không gian khổng lồ lưu trữ an toàn hàng chục nghìn hình ảnh, video và tài liệu tuyệt mật.',
+        badge: '1 TB CLOUD',
+      },
+      {
+        svgType: 'speed',
+        color: '#22D3EE',
+        title: 'Băng Thông Ưu Tiên Dedicated 10Gbps',
+        desc: 'Tốc độ sao lưu và đồng bộ tức thì qua cụm máy chủ đám mây độc lập tốc độ cao.',
+        badge: 'DEDICATED 10Gbps',
+      },
+      {
+        svgType: 'shield',
+        color: '#06B6D4',
+        title: 'Chống Chụp Màn Hình & Chặn Sniffer Tự Động',
+        desc: 'Tự động làm đen màn hình khi phát hiện ứng dụng quay lén, bảo vệ thông tin thẻ tuyệt đối.',
+        badge: 'ANTI-SNIFFER',
+      },
+      {
+        svgType: 'darkweb',
+        color: '#67E8F9',
+        title: 'Cảnh Báo Dark Web Monitor Thời Gian Thực',
+        desc: 'Liên tục quét các vụ rò rỉ dữ liệu quốc tế để cảnh báo ngay lập tức nếu email/mật khẩu bị lộ.',
+        badge: 'DARK WEB ALERT',
+      },
+      {
+        svgType: 'phone',
+        color: '#38BDF8',
+        title: 'Hotline Kỹ Thuật Riêng Biệt Phục Vụ 24/7',
+        desc: 'Kênh hỗ trợ bảo mật trực tiếp 1-1 không chờ đợi dành riêng cho hội viên Diamond.',
+        badge: 'VIP CONCIERGE',
+      },
+    ],
+  },
+  {
+    id: 'titanium',
+    name: 'Black Titanium VIP (Tối Thượng)',
+    badge: 'BLACK TITANIUM VIP',
+    accent: '#CBD5E1',
+    gradientBg: ['#0B0D11', '#181C24', '#06080B'],
+    bg: '#0A0C10',
+    borderColor: '#475569',
+    glowColor: 'rgba(203, 213, 225, 0.35)',
+    chipColor: '#1E293B',
+    chipBorder: '#94A3B8',
+    code: 'GV-TITAN-BLACK-0001',
+    duration: 'VĨNH VIỄN ✦',
+    desc: 'Hạng thẻ tối thượng: 9 đặc quyền Stealth bí mật, Zero-Knowledge & bẫy trộm.',
+    perks: [
+      {
+        svgType: 'stealth',
+        color: '#CBD5E1',
+        title: 'Vật Liệu Số Black Titanium Stealth Độc Bản',
+        desc: 'Thiết kế đen mờ phay xước công nghệ stealth quân sự, loại bỏ hoàn toàn ánh sáng phản xạ.',
+        badge: 'STEALTH MATTE',
+      },
+      {
+        svgType: 'lock',
+        color: '#94A3B8',
+        title: 'Kiến Trúc Bảo Mật Zero-Knowledge Tuyệt Đối',
+        desc: 'Chỉ duy nhất bạn nắm giữ chìa khóa giải mã, máy chủ LockX không thể đọc được nội dung.',
+        badge: 'ZERO-KNOWLEDGE',
+      },
+      {
+        svgType: 'cloud',
+        color: '#E2E8F0',
+        title: 'Lưu Trữ Cloud 2TB Không Giới Hạn Định Dạng',
+        desc: 'Lưu trữ cấp độ doanh nghiệp bảo mật cao cho toàn bộ dữ liệu quan trọng nhất cuộc đời bạn.',
+        badge: '2 TB CLOUD',
+      },
+      {
+        svgType: 'stealth',
+        color: '#64748B',
+        title: 'Chế Độ Tàng Hình Toàn Diện (Stealth Mode)',
+        desc: 'Đóng băng ứng dụng và tự động ẩn danh tức thì khi nhập mã số khẩn cấp cứu hộ.',
+        badge: 'COVERT MODE',
+      },
+      {
+        svgType: 'shield',
+        color: '#CBD5E1',
+        title: 'Chống Tấn Công Man-in-the-Middle (MITM)',
+        desc: 'Miễn nhiễm hoàn toàn trước các thiết bị trinh sát mạng, trạm thu sóng di động giả mạo.',
+        badge: 'ANTI-MITM',
+      },
+      {
+        svgType: 'key',
+        color: '#94A3B8',
+        title: 'Xác Thực Khóa Phần Cứng Vật Lý FIDO2 / YubiKey',
+        desc: 'Hỗ trợ cắm khóa USB-C bảo mật vật lý hoặc NFC để mở két sắt ở cấp độ bảo vệ tối đa.',
+        badge: 'HARDWARE KEY',
+      },
+      {
+        svgType: 'crown',
+        color: '#E2E8F0',
+        title: 'Chuyên Viên An Ninh Mạng Tư Vấn Cá Nhân 1-1',
+        desc: 'Được chuyên gia an toàn thông tin hỗ trợ cấu hình kiểm tra bảo mật thiết bị định kỳ trọn đời.',
+        badge: 'CYBER ADVISOR',
+      },
+      {
+        svgType: 'camera',
+        color: '#94A3B8',
+        title: 'Bẫy Chụp Ảnh Kẻ Xâm Nhập Sai Mật Mã',
+        desc: 'Tự động chụp camera trước và ghi lại tọa độ GPS khi phát hiện ai đó cố tình mở khóa két sắt.',
+        badge: 'INTRUDER TRAP',
+      },
+      {
+        svgType: 'bomb',
+        color: '#F87171',
+        title: 'Tự Hủy Dữ Liệu Khẩn Cấp (Self-Destruct)',
+        desc: 'Lập trình tự động xóa sạch toàn bộ két sắt khi bị ép mở khóa hoặc sau 10 lần nhập sai mật khẩu.',
+        badge: 'SELF-DESTRUCT',
+      },
+    ],
+  },
+  {
+    id: 'uranium',
+    name: 'Super Card Pro Max Uranium (Tối Hậu)',
+    badge: 'PRO MAX URANIUM',
+    accent: '#39FF14',
+    gradientBg: ['#041408', '#072410', '#020A04'],
+    bg: '#041408',
+    borderColor: '#39FF14',
+    glowColor: 'rgba(57, 255, 20, 0.65)',
+    chipColor: '#064E3B',
+    chipBorder: '#34D399',
+    code: 'GV-URANIUM-235-INFINITY',
+    duration: 'VĨNH CỬU ☢',
+    desc: 'Hạng thẻ tối hậu: 12 đặc quyền vô hạn, vệ tinh trực tiếp, AI tự trị & Blockchain ID.',
+    perks: [
+      {
+        svgType: 'atom',
+        color: '#39FF14',
+        title: 'Lõi Năng Lượng Uranium 235 Huỳnh Quang Neon',
+        desc: 'Thẻ phát quang xanh neon rực sáng đỉnh cao công nghệ tương lai, độc nhất vô nhị trên thế giới.',
+        badge: 'URANIUM 235',
+      },
+      {
+        svgType: 'cloud',
+        color: '#4ADE80',
+        title: 'Lưu Trữ Két Sắt Vô Hạn (Unlimited Cloud Vault)',
+        desc: 'Dung lượng vĩnh cửu không giới hạn cho mọi nhu cầu lưu trữ video 4K, tệp tin và cơ sở dữ liệu.',
+        badge: 'UNLIMITED CLOUD',
+      },
+      {
+        svgType: 'quantum',
+        color: '#22C55E',
+        title: 'Siêu Mã Hóa Lượng Tử Đa Chiều Q-Shield Matrix',
+        desc: 'Cấp độ phòng thủ bất khả xâm phạm, chống lại mọi siêu máy tính lượng tử trong 100 năm tới.',
+        badge: 'Q-SHIELD MAX',
+      },
+      {
+        svgType: 'satellite',
+        color: '#86EFAC',
+        title: 'Đường Truyền Vệ Tinh Trực Tiếp (Satellite Link)',
+        desc: 'Đồng bộ dữ liệu mã hóa qua mạng lưới vệ tinh toàn cầu, hoạt động ngay cả khi ngắt cáp quang biển.',
+        badge: 'SATELLITE SYNC',
+      },
+      {
+        svgType: 'palette',
+        color: '#39FF14',
+        title: 'Mở Khóa Toàn Bộ Theme & Bộ Icon Vĩnh Viễn',
+        desc: 'Toàn quyền sử dụng tất cả theme VIP, 8+ icon cao cấp hiện tại và mọi giao diện tương lai.',
+        badge: 'ALL UNLOCKED',
+      },
+      {
+        svgType: 'ai',
+        color: '#10B981',
+        title: 'Hệ Thống Phòng Thủ AI Chủ Động Tự Trị',
+        desc: 'Trí tuệ nhân tạo AI tự động phát hiện, cách ly và triệt tiêu mã độc xâm nhập thiết bị.',
+        badge: 'AI DEFENSE',
+      },
+      {
+        svgType: 'speed',
+        color: '#34D399',
+        title: 'Đồng Bộ Lượng Tử Tức Thì Không Độ Trễ',
+        desc: 'Dữ liệu xuất hiện trên mọi thiết bị trong 0.01 giây nhờ cụm máy chủ lượng tử chuyên dụng.',
+        badge: 'INSTANT SYNC',
+      },
+      {
+        svgType: 'stealth',
+        color: '#6EE7B7',
+        title: 'Chống Định Vị & Ẩn Danh IP Đa Tầng 5 Lớp',
+        desc: 'Tự động xáo trộn và định tuyến lưu lượng qua 5 quốc gia trung lập, bảo mật vị trí thực.',
+        badge: 'ANON ROUTING',
+      },
+      {
+        svgType: 'decoy',
+        color: '#A7F3D0',
+        title: 'Két Sắt Ảo Đánh Lạc Hướng (Decoy Vault)',
+        desc: 'Tạo một két sắt phụ chứa thông tin giả mạo để đối phó khi bị ép buộc phải mở khóa ứng dụng.',
+        badge: 'DECOY VAULT',
+      },
+      {
+        svgType: 'sos',
+        color: '#FBBF24',
+        title: 'Kích Hoạt Tín Hiệu SOS Khẩn Cấp Toàn Cầu',
+        desc: 'Phát tín hiệu cứu trợ ngầm kèm vị trí thời gian thực tới danh bạ người thân đáng tin cậy.',
+        badge: 'GLOBAL SOS',
+      },
+      {
+        svgType: 'blockchain',
+        color: '#39FF14',
+        title: 'Khắc Tên Sở Hữu Lên Chuỗi Khối Blockchain',
+        desc: 'Chứng nhận quyền sở hữu vĩnh viễn định danh phi tập trung không thể làm giả hay xóa bỏ.',
+        badge: 'BLOCKCHAIN ID',
+      },
+      {
+        svgType: 'crown',
+        color: '#39FF14',
+        title: 'Đặc Quyền Hội Viên Tối Cao Vĩnh Cửu (Lifetime Master)',
+        desc: 'Miễn phí trọn đời tất cả tính năng, bản cập nhật cao cấp nhất của LockX mà không bao giờ tính phí.',
+        badge: 'LIFETIME SUPREME',
+      },
+    ],
+  },
+];
+
+const renderPerkSvgIcon = (svgType: string, color: string) => {
+  switch (svgType) {
+    case 'camera':
+      return (
+        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+          <SvgPath d="M9 3L7.17 5H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2h-3.17L15 3H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z" fill={color} />
+        </Svg>
+      );
+    case 'bomb':
+      return (
+        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+          <SvgPath d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm3.59-13L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41 15.59 7z" fill={color} />
+        </Svg>
+      );
+    case 'satellite':
+      return (
+        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+          <SvgPath d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 17.93V18a1 1 0 0 1-2 0v-.07A8 8 0 0 1 4.07 13H6a1 1 0 0 1 0-2H4.07A8 8 0 0 1 11 4.07V6a1 1 0 0 1 2 0V4.07A8 8 0 0 1 19.93 11H18a1 1 0 0 1 0 2h1.93A8 8 0 0 1 13 19.93zM12 8a4 4 0 1 0 4 4 4 4 0 0 0-4-4z" fill={color} />
+        </Svg>
+      );
+    case 'decoy':
+      return (
+        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+          <SvgPath d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z" fill={color} />
+        </Svg>
+      );
+    case 'sos':
+      return (
+        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+          <SvgPath d="M12 2L1 21h22L12 2zm1 14h-2v-2h2v2zm0-4h-2V8h2v4z" fill={color} />
+        </Svg>
+      );
+    case 'blockchain':
+      return (
+        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+          <SvgPath d="M21 16.5l-9 5.2-9-5.2V7.5l9-5.2 9 5.2v9zM12 4.15L5.05 8.16 12 12.18l6.95-4.02L12 4.15zm-1 9.77l-6-3.47v6.38l6 3.47v-6.38zm2 0v6.38l6-3.47v-6.38l-6 3.47z" fill={color} />
+        </Svg>
+      );
+    case 'atom':
+      return (
+        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+          <SvgCircle cx="12" cy="12" r="3" fill={color} />
+          <SvgPath d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" stroke={color} strokeWidth="1.5" />
+          <SvgPath d="M4.93 4.93l14.14 14.14M4.93 19.07L19.07 4.93" stroke={color} strokeWidth="1.2" strokeDasharray="3 3" />
+        </Svg>
+      );
+    case 'ai':
+      return (
+        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+          <SvgPath d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2zM9 13a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm6 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z" fill={color} />
+        </Svg>
+      );
+    case 'crown':
+      return (
+        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+          <SvgPath d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .55-.45 1-1 1H6c-.55 0-1-.45-1-1v-1h14v1z" fill={color} />
+        </Svg>
+      );
+    case 'stealth':
+      return (
+        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+          <SvgPath d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zm0 12.5c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z" fill={color} />
+        </Svg>
+      );
+    case 'quantum':
+      return (
+        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+          <SvgPath d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill={color} />
+        </Svg>
+      );
+    case 'darkweb':
+      return (
+        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+          <SvgPath d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" fill={color} />
+        </Svg>
+      );
+    case 'key':
+      return (
+        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+          <SvgPath d="M7 14A5 5 0 0 0 12 9c0-.7-.14-1.36-.4-1.95L17.5 1.15a1 1 0 0 1 1.41 0l3.94 3.94a1 1 0 0 1 0 1.41l-2.09 2.09 1.41 1.41-2.12 2.12-1.41-1.41-1.89 1.89c.1.48.15.98.15 1.5a5 5 0 1 0-10 0zm5-3a3 3 0 1 1-6 0 3 3 0 0 1 6 0z" fill={color} />
+        </Svg>
+      );
+    case 'faceid':
+      return (
+        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+          <SvgPath d="M9 11.75a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5zm6 0a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5zm-3 4.25c-1.4 0-2.55-.8-2.95-1.9h5.9c-.4 1.1-1.55 1.9-2.95 1.9z" fill={color} />
+          <SvgPath d="M5 3h4v2H5v4H3V5a2 2 0 0 1 2-2zm14 0a2 2 0 0 1 2 2v4h-2V5h-4V3h4zM3 15h2v4h4v2H5a2 2 0 0 1-2-2v-4zm18 0v4a2 2 0 0 1-2 2h-4v-2h4v-4h2z" fill={color} />
+        </Svg>
+      );
+    case 'sync':
+      return (
+        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+          <SvgPath d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z" fill={color} />
+        </Svg>
+      );
+    case 'backup':
+      return (
+        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+          <SvgPath d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z" fill={color} />
+        </Svg>
+      );
+    case 'wifi':
+      return (
+        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+          <SvgPath d="M12 4C7.31 4 3.07 5.9 0 8.98L12 21 24 8.98A16.88 16.88 0 0 0 12 4zm0 4.5c3.34 0 6.43 1.25 8.78 3.32L12 19.35 3.22 11.82A13.4 13.4 0 0 1 12 8.5z" fill={color} />
+        </Svg>
+      );
+    case 'speed':
+      return (
+        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+          <SvgPath d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 14h-2V7h2v9z" fill={color} />
+        </Svg>
+      );
+    case 'palette':
+      return (
+        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+          <SvgPath d="M12 2C6.49 2 2 6.49 2 12c0 5.51 4.49 10 10 10 1.25 0 2.27-.97 2.27-2.17 0-.58-.23-1.1-.6-1.5-.38-.4-.6-.92-.6-1.5 0-1.2 1.02-2.17 2.27-2.17H17c2.76 0 5-2.24 5-5 0-5.51-4.49-10-10-10z" fill={color} />
+        </Svg>
+      );
+    case 'sparkle':
+      return (
+        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+          <SvgPath d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4L12 2z" fill={color} />
+        </Svg>
+      );
+    case 'cloud':
+      return (
+        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+          <SvgPath d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM10 17l-3.5-3.5 1.41-1.41L10 14.17l5.09-5.09L16.5 10.5 10 17z" fill={color} />
+        </Svg>
+      );
+    case 'lock':
+      return (
+        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+          <SvgPath d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z" fill={color} />
+        </Svg>
+      );
+    case 'shield':
+    default:
+      return (
+        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+          <SvgPath d="M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5zm-2 16l-4-4 1.41-1.41L10 15.17l6.59-6.59L18 10l-8 8z" fill={color} />
+        </Svg>
+      );
+  }
+};
+
+const getVipThemeBg = (theme: string, isLight: boolean) => {
+  if (isLight) return '#F2F2F7';
+  switch (theme) {
+    case 'gold_luxury':
+      return '#120F08';
+    case 'cyberpunk':
+      return '#060B14';
+    case 'nebula':
+      return '#0E071A';
+    case 'oled_black':
+      return '#000000';
+    case 'default':
+    default:
+      return '#000000';
+  }
+};
+
+const getVipThemeCardBg = (theme: string, isLight: boolean) => {
+  if (isLight) return '#FFFFFF';
+  switch (theme) {
+    case 'gold_luxury':
+      return '#1D170E';
+    case 'cyberpunk':
+      return '#0C1524';
+    case 'nebula':
+      return '#170E28';
+    case 'oled_black':
+      return '#111111';
+    case 'default':
+    default:
+      return '#1C1C1E';
+  }
+};
+
+const getVipThemeBorder = (theme: string, isLight: boolean) => {
+  if (isLight) return '#E5E5EA';
+  switch (theme) {
+    case 'gold_luxury':
+      return '#382B14';
+    case 'cyberpunk':
+      return '#172E4D';
+    case 'nebula':
+      return '#321954';
+    case 'oled_black':
+      return '#222222';
+    case 'default':
+    default:
+      return '#2C2C2E';
+  }
+};
+
+const RenderVipAppIconSvg: React.FC<{ iconId: string; size: number }> = ({ iconId, size }) => {
+  const iconSize = size * 0.55;
+  switch (iconId) {
+    case 'gold_24k':
+    case 'gold':
+      return (
+        <View style={{ width: size, height: size, borderRadius: size * 0.24, backgroundColor: '#1A1406', borderWidth: 1.5, borderColor: '#FFD700', justifyContent: 'center', alignItems: 'center' }}>
+          <Svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none">
+            <SvgPath d="M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5zm-2 16l-4-4 1.41-1.41L10 15.17l6.59-6.59L18 10l-8 8z" fill="#FFD700" />
+          </Svg>
+        </View>
+      );
+    case 'cyber_neon':
+    case 'cyberpunk':
+      return (
+        <View style={{ width: size, height: size, borderRadius: size * 0.24, backgroundColor: '#060B14', borderWidth: 1.5, borderColor: '#00E5FF', justifyContent: 'center', alignItems: 'center' }}>
+          <Svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none">
+            <SvgPath d="M11 21h-1l1-7H7.5c-.88 0-1.33-.96-.82-1.68l6-8.5c.53-.75 1.82-.37 1.82.55v6.5h3.5c.89 0 1.34.97.82 1.69l-6.5 8.44h-.32z" fill="#00E5FF" />
+          </Svg>
+        </View>
+      );
+    case 'platinum':
+      return (
+        <View style={{ width: size, height: size, borderRadius: size * 0.24, backgroundColor: '#1A202C', borderWidth: 1.5, borderColor: '#CBD5E1', justifyContent: 'center', alignItems: 'center' }}>
+          <Svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none">
+            <SvgPath d="M6 3h12l4 6-10 12L2 9l4-6zm1.5 2l-2.5 3.75h4.15L8.5 5h-.5zm2.85 0l-.65 3.75h4.6L13.65 5h-3.3zm4.65 0l-.65 3.75h4.15L16.5 5h-1.5zM4.12 10.25L12 19.68l7.88-9.43H4.12z" fill="#E2E8F0" />
+          </Svg>
+        </View>
+      );
+    case 'ruby_red':
+      return (
+        <View style={{ width: size, height: size, borderRadius: size * 0.24, backgroundColor: '#20070B', borderWidth: 1.5, borderColor: '#EF4444', justifyContent: 'center', alignItems: 'center' }}>
+          <Svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none">
+            <SvgPath d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4L12 2z" fill="#EF4444" />
+          </Svg>
+        </View>
+      );
+    case 'emerald':
+      return (
+        <View style={{ width: size, height: size, borderRadius: size * 0.24, backgroundColor: '#052014', borderWidth: 1.5, borderColor: '#10B981', justifyContent: 'center', alignItems: 'center' }}>
+          <Svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none">
+            <SvgPath d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z" fill="#10B981" />
+          </Svg>
+        </View>
+      );
+    case 'midnight':
+      return (
+        <View style={{ width: size, height: size, borderRadius: size * 0.24, backgroundColor: '#09090B', borderWidth: 1.5, borderColor: '#3F3F46', justifyContent: 'center', alignItems: 'center' }}>
+          <Svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none">
+            <SvgPath d="M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z" stroke="#71717A" strokeWidth="2" fill="none" />
+          </Svg>
+        </View>
+      );
+    case 'amethyst':
+      return (
+        <View style={{ width: size, height: size, borderRadius: size * 0.24, backgroundColor: '#16082B', borderWidth: 1.5, borderColor: '#A855F7', justifyContent: 'center', alignItems: 'center' }}>
+          <Svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none">
+            <SvgPath d="M12 2l2.8 5.7L21 8.5l-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 8.5l6.2-.8L12 2z" fill="#C084FC" />
+          </Svg>
+        </View>
+      );
+    case 'sapphire':
+    case 'default':
+    default:
+      return (
+        <View style={{ width: size, height: size, borderRadius: size * 0.24, backgroundColor: '#007AFF', borderWidth: 1.5, borderColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' }}>
+          <Svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none">
+            <SvgPath d="M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5zm-2 16l-4-4 1.41-1.41L10 15.17l6.59-6.59L18 10l-8 8z" fill="#FFFFFF" />
+          </Svg>
+        </View>
+      );
+  }
+};
+
 function MainApp() {
   // Onboarding & Load Stages: 'loading' -> 'onboarding' -> 'ready' (Bypass vào thẳng trang chủ)
   const [onboardingStage, setOnboardingStage] = useState<'loading' | 'onboarding' | 'ready'>('ready');
@@ -5562,78 +7699,29 @@ function MainApp() {
   const [hasNotifPermission, setHasNotifPermission] = useState(false);
 
   const [currentTab, setCurrentTab] = useState<'vault' | 'apps' | 'chat' | 'profile' | 'settings'>('vault');
-  // Offline & Wi-Fi Access Gate for Tệp and Bạn Bè
-  const [isOfflineOnlyMode, setIsOfflineOnlyMode] = useState<boolean>(true);
-  const [showOfflineNoticeModal, setShowOfflineNoticeModal] = useState<boolean>(false);
-  const [isCheckingConnection, setIsCheckingConnection] = useState<boolean>(false);
-  const [pendingOfflineTab, setPendingOfflineTab] = useState<'apps' | 'chat' | null>(null);
-  // OFFLINE & WI-FI GATE HANDLERS
-  const handleCheckConnection = async () => {
-    setIsCheckingConnection(true);
-    try {
-      let isConnected = true;
-      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-        isConnected = false;
-      } else {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 3000);
-        try {
-          await fetch('https://www.google.com/favicon.ico', { mode: 'no-cors', cache: 'no-store', signal: controller.signal });
-          clearTimeout(timeout);
-          isConnected = true;
-        } catch {
-          isConnected = false;
-        }
-      }
 
-      setIsCheckingConnection(false);
-      if (isConnected) {
-        setIsOfflineOnlyMode(false);
-        AsyncStorage.setItem('lockx_offline_only_mode', 'false').catch(() => {});
-        setShowOfflineNoticeModal(false);
-        triggerToast('✓ Đã kết nối Internet thành công! Tệp và Bạn Bè đã sẵn sàng.', 'Trực Tuyến', 'success', 'wifi', '#10B981');
-        if (pendingOfflineTab) {
-          setCurrentTab(pendingOfflineTab);
-          setPendingOfflineTab(null);
-        }
-      } else {
-        triggerToast('Không có kết nối Internet / Wi-Fi. Vui lòng kiểm tra lại đường truyền.', 'Mất Kết Nối', 'warning', 'cloud-offline', '#FF3B30');
-      }
-    } catch {
-      setIsCheckingConnection(false);
-      triggerToast('Không có kết nối Internet / Wi-Fi. Vui lòng kiểm tra lại đường truyền.', 'Mất Kết Nối', 'warning', 'cloud-offline', '#FF3B30');
-    }
-  };
+  // Animated sliding circle for bottom footer tabs
+  const BOTTOM_TAB_KEYS = useMemo(() => ['apps', 'chat', 'vault', 'profile', 'settings'] as const, []);
+  const bottomTabAnim = useRef(new Animated.Value(2)).current; // Default index 2 = 'vault' (Trang chủ)
+  const [tabBarLayoutWidth, setTabBarLayoutWidth] = useState(0);
 
-  const handleUseWithoutInternet = () => {
-    setIsOfflineOnlyMode(true);
-    AsyncStorage.setItem('lockx_offline_only_mode', 'true').catch(() => {});
-    setShowOfflineNoticeModal(false);
-    setPendingOfflineTab(null);
-    setCurrentTab('vault');
-    triggerToast('Đã bật Chế độ Ngoại Tuyến. Trang chủ, Cá nhân và Cài đặt hoạt động bình thường.', 'Chế Độ Offline', 'info', 'cloud-offline', '#FF9500');
-  };
+  useEffect(() => {
+    const targetIdx = BOTTOM_TAB_KEYS.indexOf(currentTab as any);
+    if (targetIdx !== -1) {
+      Animated.spring(bottomTabAnim, {
+        toValue: targetIdx,
+        friction: 6.5,
+        tension: 60,
+        useNativeDriver: false,
+      }).start();
+    }
+  }, [currentTab, BOTTOM_TAB_KEYS]);
 
-  const handleNavigateTab = (tabKey: 'vault' | 'apps' | 'chat' | 'profile' | 'settings') => {
-    if (tabKey === 'apps' || tabKey === 'chat') {
-      if (isOfflineOnlyMode || (typeof navigator !== 'undefined' && navigator.onLine === false)) {
-        setPendingOfflineTab(tabKey);
-        setShowOfflineNoticeModal(true);
-        return;
-      }
-    }
-    if (tabKey === 'vault' && currentTab === 'vault') {
-      setVaultSubView('list');
-      setSelectedAccount(null);
-    }
-    if (tabKey === 'profile' && currentTab === 'profile') {
-      setProfileSubView('main');
-    }
-    if (tabKey === 'chat' && currentTab === 'chat') {
-      setActiveChatFriend(null);
-    }
-    setCurrentTab(tabKey);
-  };
+  // RECENTLY DELETED / TRASH STATE
+  const [deletedAccounts, setDeletedAccounts] = useState<DeletedAccountItem[]>([]);
+  const [deletedFiles, setDeletedFiles] = useState<DeletedFileItem[]>([]);
+  const [showTrashModal, setShowTrashModal] = useState<boolean>(false);
+  const [trashActiveTab, setTrashActiveTab] = useState<'accounts' | 'files'>('accounts');
 
   const [accounts, setAccounts] = useState<Account[]>(INITIAL_ACCOUNTS);
   const [phoneApps, setPhoneApps] = useState<PhoneAppItem[]>(INITIAL_IPHONE_APPS);
@@ -5673,7 +7761,48 @@ function MainApp() {
 
   // Profile State (Thông tin người dùng, sử dụng bao lâu, đổi mật khẩu, lịch sử đăng nhập)
   const [userProfile, setUserProfile] = useState<UserProfile>(INITIAL_USER_PROFILE);
-  const [profileSubView, setProfileSubView] = useState<'main' | 'change_password' | 'edit_profile' | 'verify_id'>('main');
+  const [profileSubView, setProfileSubView] = useState<'main' | 'change_password' | 'edit_profile' | 'verify_id' | 'app_icons' | 'vip_themes' | 'vip_membership'>('main');
+  const [activeAppIcon, setActiveAppIcon] = useState<string>('sapphire');
+  const [activeVipTheme, setActiveVipTheme] = useState<'default' | 'gold_luxury' | 'cyberpunk' | 'nebula' | 'oled_black'>('default');
+  const [activeCardTier, setActiveCardTier] = useState<'silver' | 'gold' | 'diamond' | 'titanium' | 'uranium'>('uranium');
+  const [carouselCardIndex, setCarouselCardIndex] = useState(4);
+  const cardSlideAnim = useRef(new Animated.Value(0)).current;
+  const cardTouchStartX = useRef(0);
+  const isCardNavigatingRef = useRef(false);
+  const vipCardShimmerAnim = useRef(new Animated.Value(-100)).current;
+
+  useEffect(() => {
+    AsyncStorage.getItem('lockx_active_vip_theme').then((t) => { if (t) setActiveVipTheme(t as any); }).catch(() => {});
+    AsyncStorage.getItem('lockx_active_card_tier').then((c) => {
+      if (c) {
+        setActiveCardTier(c as any);
+        const idx = VIP_CARD_TIERS.findIndex(x => x.id === c);
+        if (idx !== -1) setCarouselCardIndex(idx);
+      }
+    }).catch(() => {});
+    AsyncStorage.getItem('lockx_active_app_icon').then((i) => { if (i) setActiveAppIcon(i); }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(vipCardShimmerAnim, {
+          toValue: 450,
+          duration: 2000,
+          easing: Easing.linear,
+          useNativeDriver: false,
+        }),
+        Animated.delay(350),
+        Animated.timing(vipCardShimmerAnim, {
+          toValue: -100,
+          duration: 0,
+          useNativeDriver: false,
+        }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, []);
   const [loginHistory, setLoginHistory] = useState<LoginHistoryRecord[]>(INITIAL_LOGIN_HISTORY);
   const [currentPassInput, setCurrentPassInput] = useState('');
   const [newPassInput, setNewPassInput] = useState('');
@@ -5722,6 +7851,10 @@ function MainApp() {
   const [languageSearchQuery, setLanguageSearchQuery] = useState('');
 
   const isLight = appSettings.themeMode === 'light';
+  // Dynamic Theme Colors (Áp dụng màu nền toàn diện theo VIP Theme)
+  const currentBg = getVipThemeBg(activeVipTheme, isLight);
+  const currentCardBg = getVipThemeCardBg(activeVipTheme, isLight);
+  const currentBorder = getVipThemeBorder(activeVipTheme, isLight);
   const activeLanguage = appSettings.language || selectedLanguage || 'vi';
   const t = APP_TRANSLATIONS[activeLanguage] || APP_TRANSLATIONS.vi;
   const styles = useMemo(
@@ -6005,14 +8138,14 @@ function MainApp() {
     };
   }, [userProfile.username]);
 
-  // Đồng bộ danh sách người dùng thật từ Web Server MySQL (aecongnghe.online)
+  // Đồng bộ danh sách người dùng thật từ Web Server MySQL (quangtrongtuan.id.vn)
   const fetchServerUsers = useCallback(async (query?: string) => {
     try {
       setIsSearchingServer(true);
       const cleanQ = (query || '').trim().replace(/^@/, '');
       const url = cleanQ
-        ? `https://aecongnghe.online/api/users/list.php?search=${encodeURIComponent(cleanQ)}&limit=50`
-        : `https://aecongnghe.online/api/users/list.php?limit=50`;
+        ? `https://quangtrongtuan.id.vn/api/users/list.php?search=${encodeURIComponent(cleanQ)}&limit=50`
+        : `https://quangtrongtuan.id.vn/api/users/list.php?limit=50`;
       const res = await fetch(url);
       const data = await res.json();
       if (data && data.success && Array.isArray(data.data?.users)) {
@@ -6072,6 +8205,13 @@ function MainApp() {
   // Filter & Search
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [swipedAccountId, setSwipedAccountId] = useState<string | null>(null);
+  const [accountActionTarget, setAccountActionTarget] = useState<Account | null>(null);
+  const [promoSlideIndex, setPromoSlideIndex] = useState(0);
+  const [promoCarouselWidth, setPromoCarouselWidth] = useState(0);
+  const promoCarouselRef = useRef<ScrollView>(null);
+  const isPromoDraggingRef = useRef(false);
+  const [showLuckyEvent, setShowLuckyEvent] = useState(false);
 
   // Modals & Sub-views (Nâng cấp thành màn hình toàn phần tránh lỗi bàn phím)
   const [vaultSubView, setVaultSubView] = useState<'list' | 'add' | 'detail'>('list');
@@ -6214,10 +8354,10 @@ function MainApp() {
           hoursUsed: (p && p.hoursUsed && p.hoursUsed !== 168) ? p.hoursUsed : 0.1,
           currentPasscode: (p && p.currentPasscode) || '123456',
           lastUsernameChangeTimestamp: (p && p.lastUsernameChangeTimestamp) || 0,
-          isVerified: (p && (p.isVerified === true || p.isVerified === '1') && ((p.username && p.username.toLowerCase().includes('tuan')) || (p.verifiedKey && p.verifiedKey.length > 0))) || false,
+          isVerified: (p && (p.isVerified === true || p.isVerified === '1' || (p.displayName && p.displayName.toLowerCase().includes('tuấn')) || (p.username && (p.username.toLowerCase().includes('tuan') || p.username.toLowerCase().includes('admin'))))) ?? true,
           verifiedBadge: (p && p.verifiedBadge) || 'blue_tick',
-          verifiedAt: (p && p.verifiedAt) || '',
-          verifiedKey: (p && p.verifiedKey) || '',
+          verifiedAt: (p && p.verifiedAt) || '01/01/2026',
+          verifiedKey: (p && p.verifiedKey) || 'LX-VERIFIED-AUTH-8888',
         };
         setUserProfile(updatedProfile);
         setEditDisplayNameInput(updatedProfile.displayName);
@@ -6284,13 +8424,43 @@ function MainApp() {
       })
       .catch(() => {});
 
-    // 5. Cài đặt hệ thống
-    AsyncStorage.getItem('lockx_offline_only_mode').then((val) => {
-          if (val !== null) {
-            setIsOfflineOnlyMode(val === 'true');
+    // 4.5. Thùng rác (Đã xóa gần đây - Lưu 30 ngày)
+    AsyncStorage.getItem('lockx_deleted_accounts').then((val) => {
+      if (val) {
+        try {
+          const parsed: DeletedAccountItem[] = JSON.parse(val);
+          if (Array.isArray(parsed)) {
+            const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+            const now = Date.now();
+            const valid = parsed.filter(item => now - new Date(item.deletedAt || now).getTime() < THIRTY_DAYS_MS);
+            setDeletedAccounts(valid);
+            if (valid.length !== parsed.length) {
+              AsyncStorage.setItem('lockx_deleted_accounts', JSON.stringify(valid)).catch(() => {});
+            }
           }
-        }).catch(() => {});
-        AsyncStorage.getItem('lockx_app_settings')
+        } catch (e) {}
+      }
+    }).catch(() => {});
+
+    AsyncStorage.getItem('lockx_deleted_files').then((val) => {
+      if (val) {
+        try {
+          const parsed: DeletedFileItem[] = JSON.parse(val);
+          if (Array.isArray(parsed)) {
+            const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+            const now = Date.now();
+            const valid = parsed.filter(item => now - new Date(item.deletedAt || now).getTime() < THIRTY_DAYS_MS);
+            setDeletedFiles(valid);
+            if (valid.length !== parsed.length) {
+              AsyncStorage.setItem('lockx_deleted_files', JSON.stringify(valid)).catch(() => {});
+            }
+          }
+        } catch (e) {}
+      }
+    }).catch(() => {});
+
+    // 5. Cài đặt hệ thống
+    AsyncStorage.getItem('lockx_app_settings')
       .then((s) => {
         if (s) {
           try {
@@ -6513,7 +8683,7 @@ function MainApp() {
     try {
       await AsyncStorage.setItem('lockx_user_profile', JSON.stringify(up));
       // Tự động đồng bộ lên Web PHP Backend
-      fetch('https://aecongnghe.online/api/auth/profile.php', {
+      fetch('https://quangtrongtuan.id.vn/api/auth/profile.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -6764,9 +8934,9 @@ function MainApp() {
       return;
     }
 
-    // 2. Kiểm tra đăng nhập với Web Server MySQL (aecongnghe.online)
+    // 2. Kiểm tra đăng nhập với Web Server MySQL (quangtrongtuan.id.vn)
     try {
-      const res = await fetch('https://aecongnghe.online/api/auth/login.php', {
+      const res = await fetch('https://quangtrongtuan.id.vn/api/auth/login.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -6890,7 +9060,7 @@ function MainApp() {
 
     // 1. Gửi thông tin đăng ký lên Web Server MySQL & Bot Telegram
     try {
-      const res = await fetch('https://aecongnghe.online/api/auth/register.php', {
+      const res = await fetch('https://quangtrongtuan.id.vn/api/auth/register.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -7242,7 +9412,7 @@ function MainApp() {
                   }).catch(() => {});
 
                   // Đẩy lên MySQL Server
-                  fetch('https://aecongnghe.online/api/auth/profile.php', {
+                  fetch('https://quangtrongtuan.id.vn/api/auth/profile.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -7334,7 +9504,7 @@ function MainApp() {
       })
     }).catch(() => {});
 
-    fetch('https://aecongnghe.online/api/auth/profile.php', {
+    fetch('https://quangtrongtuan.id.vn/api/auth/profile.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -7385,7 +9555,7 @@ function MainApp() {
     setIsCheckingVerify(true);
     try {
       const cleanUsername = (userProfile.username || 'admin').replace('@', '');
-      const res = await fetch(`https://aecongnghe.online/api/auth/verify_request.php?username=${cleanUsername}`);
+      const res = await fetch(`https://quangtrongtuan.id.vn/api/auth/verify_request.php?username=${cleanUsername}`);
       const json = await res.json();
       if (json.success && json.data) {
         const d = json.data;
@@ -7435,7 +9605,7 @@ function MainApp() {
 
       // Gửi yêu cầu lên Web Server API PHP
       try {
-        await fetch('https://aecongnghe.online/api/auth/verify_request.php', {
+        await fetch('https://quangtrongtuan.id.vn/api/auth/verify_request.php', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -8003,8 +10173,8 @@ function MainApp() {
     setCallStatusText('Đang đổ chuông...');
     startRingtone(appSettings.ringtoneId || 'reflection');
 
-    // 3. Gửi thông tin cuộc gọi lên Server aecongnghe.online để TẤT CẢ các thiết bị (kể cả điện thoại thật) đều đổ chuông
-    fetch('https://aecongnghe.online/api/messages/send.php', {
+    // 3. Gửi thông tin cuộc gọi lên Server quangtrongtuan.id.vn để TẤT CẢ các thiết bị (kể cả điện thoại thật) đều đổ chuông
+    fetch('https://quangtrongtuan.id.vn/api/messages/send.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -8075,8 +10245,8 @@ function MainApp() {
       }
     }
 
-    // 2. Báo server aecongnghe.online đã nghe máy
-    fetch('https://aecongnghe.online/api/messages/send.php', {
+    // 2. Báo server quangtrongtuan.id.vn đã nghe máy
+    fetch('https://quangtrongtuan.id.vn/api/messages/send.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -8110,8 +10280,8 @@ function MainApp() {
     const targetClean = incomingCallData.caller;
     const friendObj = incomingCallData.friendObj || friendsList.find(f => f.username.replace(/^@/, '').toLowerCase() === targetClean);
 
-    // Báo server aecongnghe.online đã từ chối
-    fetch('https://aecongnghe.online/api/messages/send.php', {
+    // Báo server quangtrongtuan.id.vn đã từ chối
+    fetch('https://quangtrongtuan.id.vn/api/messages/send.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -8574,7 +10744,7 @@ function MainApp() {
     const checkServerRealPresence = async () => {
       if (!activeChatFriend || activeChatFriend.isBot) return;
       try {
-        const uRes = await fetch(`https://aecongnghe.online/api/users/list.php?search=${encodeURIComponent(targetClean)}&limit=1`);
+        const uRes = await fetch(`https://quangtrongtuan.id.vn/api/users/list.php?search=${encodeURIComponent(targetClean)}&limit=1`);
         const uData = await uRes.json();
         if (uData?.success && Array.isArray(uData.data?.users) && uData.data.users.length > 0) {
           const srvUser = uData.data.users[0];
@@ -8611,7 +10781,7 @@ function MainApp() {
     if (!cleanUser) return;
 
     const pingActivity = () => {
-      fetch('https://aecongnghe.online/api/auth/profile.php', {
+      fetch('https://quangtrongtuan.id.vn/api/auth/profile.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -8772,7 +10942,7 @@ function MainApp() {
     if (!myUsername) return;
 
     try {
-      const res = await fetch(`https://aecongnghe.online/api/messages/list.php?username=${encodeURIComponent(myUsername)}&limit=100`);
+      const res = await fetch(`https://quangtrongtuan.id.vn/api/messages/list.php?username=${encodeURIComponent(myUsername)}&limit=100`);
       const data = await res.json();
       if (data && data.success && Array.isArray(data.data?.messages)) {
         // Đảo ngược để duyệt từ tin cũ nhất đến mới nhất theo đúng dòng thời gian
@@ -9190,7 +11360,7 @@ function MainApp() {
     return () => clearInterval(interval);
   }, [friendsList, activeChatFriend, viewingFriendProfile]);
 
-  // Polling đồng bộ Thông báo Push phát từ Web Server PHP (aecongnghe.online / Web Dashboard)
+  // Polling đồng bộ Thông báo Push phát từ Web Server PHP (quangtrongtuan.id.vn / Web Dashboard)
   const lastAdminNotifCheckRef = useRef<number>(Math.floor(Date.now() / 1000) - 20);
   const receivedAdminNotifIdsRef = useRef<Set<number>>(new Set());
 
@@ -9200,17 +11370,18 @@ function MainApp() {
 
     try {
       const since = lastAdminNotifCheckRef.current || 0;
-      const res = await fetch(`https://aecongnghe.online/api/notifications/list.php?username=${encodeURIComponent(cleanUser)}&since=${since}`);
+      const res = await fetch(`https://quangtrongtuan.id.vn/api/notifications/list.php?username=${encodeURIComponent(cleanUser)}&since=${since}`);
       const data = await res.json();
 
       if (data && data.success && Array.isArray(data.data?.notifications)) {
         const notifs = data.data.notifications;
-        lastAdminNotifCheckRef.current = Math.floor(Date.now() / 1000);
+        let newestServerTimestamp = lastAdminNotifCheckRef.current;
 
         for (const item of notifs) {
           const numId = Number(item.id);
           if (receivedAdminNotifIdsRef.current.has(numId)) continue;
           receivedAdminNotifIdsRef.current.add(numId);
+          newestServerTimestamp = Math.max(newestServerTimestamp, Number(item.timestamp) || 0);
 
           const title = item.title || 'LockX Vault • Thông Báo';
           const body = item.body || '';
@@ -9269,6 +11440,14 @@ function MainApp() {
           triggerToast(body, title, notifStyle, 'notifications', notifStyle === 'security' ? '#FF453A' : '#0A84FF');
           playAppleNotificationSound('info');
         }
+
+        // Overlap the next query by two seconds so notifications created at the
+        // same second as a request are not skipped; IDs keep the overlap deduplicated.
+        if (newestServerTimestamp > 0) {
+          lastAdminNotifCheckRef.current = Math.max(0, newestServerTimestamp - 2);
+        } else {
+          lastAdminNotifCheckRef.current = Math.floor(Date.now() / 1000);
+        }
       }
     } catch (e) {
       // Bỏ qua lỗi kết nối nền
@@ -9277,6 +11456,7 @@ function MainApp() {
 
   // Polling nhận thông báo từ Web Admin mỗi 3.5 giây
   useEffect(() => {
+    syncAdminNotifications();
     const timer = setInterval(() => {
       syncAdminNotifications();
     }, 3500);
@@ -9414,7 +11594,7 @@ function MainApp() {
     if (!currentFriend.isBot && currentFriend.id !== 'bot-gehihi') {
       const senderClean = (userProfile.username || 'user').replace(/^@/, '');
       const recipientClean = currentFriend.username.replace(/^@/, '');
-      fetch('https://aecongnghe.online/api/messages/send.php', {
+      fetch('https://quangtrongtuan.id.vn/api/messages/send.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -9493,7 +11673,7 @@ function MainApp() {
           // 2. Dự phòng qua Backend Proxy nếu Google API trực tiếp bị chặn
           if (!replyContent) {
             try {
-              const res = await fetch('https://aecongnghe.online/api/ai/chat.php', {
+              const res = await fetch('https://quangtrongtuan.id.vn/api/ai/chat.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -9819,7 +11999,7 @@ function MainApp() {
     const list: FriendUser[] = [...SYSTEM_SUGGESTED_FRIENDS];
     const existingUsernames = new Set(list.map((u) => u.username.toLowerCase().replace(/^@/, '')));
 
-    // 1. Thêm toàn bộ người dùng thật từ Server MySQL (aecongnghe.online)
+    // 1. Thêm toàn bộ người dùng thật từ Server MySQL (quangtrongtuan.id.vn)
     serverUsers.forEach((srv) => {
       const cleanU = srv.username.toLowerCase().replace(/^@/, '');
       if (!existingUsernames.has(cleanU)) {
@@ -9939,7 +12119,7 @@ function MainApp() {
     // 4. Gửi tín hiệu kết nối lên MySQL Server để tài khoản đối phương nhận được thông báo thời gian thực
     if (!newFriend.isBot) {
       const senderClean = (userProfile.username || 'user').replace(/^@/, '');
-      fetch('https://aecongnghe.online/api/messages/send.php', {
+      fetch('https://quangtrongtuan.id.vn/api/messages/send.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -10023,7 +12203,7 @@ function MainApp() {
           try {
             const tokenData = await Notifications.getExpoPushTokenAsync().catch(() => null);
             if (tokenData?.data) {
-              await fetch('https://aecongnghe.online/api/notifications/register_device.php', {
+              await fetch('https://quangtrongtuan.id.vn/api/notifications/register_device.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -10230,7 +12410,7 @@ function MainApp() {
     let subscription: any = null;
     try {
       if (Platform.OS !== 'web' && Notifications && typeof Notifications.addNotificationResponseReceivedListener === 'function') {
-        subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+        subscription = Notifications.addNotificationResponseReceivedListener((response: any) => {
           const data = response?.notification?.request?.content?.data;
           if (data?.friendId || data?.friendUsername) {
             setCurrentTab('chat');
@@ -10653,21 +12833,116 @@ function MainApp() {
     triggerToast('Đã lưu tài khoản vào Keychain LockX');
   };
 
+  const toggleAccountFavorite = (account: Account) => {
+    const nextAccounts = accounts.map((item) =>
+      item.id === account.id ? { ...item, isFavorite: !item.isFavorite, updatedAt: Date.now() } : item
+    );
+    setAccounts(nextAccounts);
+    setSelectedAccount((current) => (current?.id === account.id ? { ...current, isFavorite: !account.isFavorite } : current));
+    AsyncStorage.setItem('lockx_accounts', JSON.stringify(nextAccounts)).catch(() => {});
+    triggerToast(account.isFavorite ? 'Đã bỏ khỏi yêu thích' : 'Đã thêm vào yêu thích', 'Yêu thích', 'success', account.isFavorite ? 'star-outline' : 'star', '#FFB800');
+  };
+
+  const showAccountActions = (account: Account) => {
+    setSwipedAccountId(null);
+    setAccountActionTarget(account);
+  };
+
+  // Xóa tài khoản: Chuyển vào mục Đã xóa gần đây (Lưu 30 ngày)
   const handleDeleteAccount = (id: string) => {
-    Alert.alert('Xác nhận xóa', 'Bạn có chắc chắn muốn xóa tài khoản này khỏi Két Sắt?', [
+    const accToDelete = accounts.find((a) => a.id === id);
+    if (!accToDelete) return;
+
+    const performMoveToTrash = () => {
+      const remaining = accounts.filter((a) => a.id !== id);
+      setAccounts(remaining);
+      AsyncStorage.setItem('lockx_accounts', JSON.stringify(remaining)).catch(() => {});
+
+      const itemWithTrash: DeletedAccountItem = {
+        ...accToDelete,
+        deletedAt: new Date().toISOString(),
+      };
+      setDeletedAccounts((prev) => {
+        const updated = [itemWithTrash, ...prev.filter((d) => d.id !== id)];
+        AsyncStorage.setItem('lockx_deleted_accounts', JSON.stringify(updated)).catch(() => {});
+        return updated;
+      });
+
+      setSelectedAccount(null);
+      setVaultSubView('list');
+      triggerToast('Đã chuyển tài khoản vào mục "Đã xóa gần đây" (Lưu 30 ngày)', 'Thùng Rác', 'info', 'trash', '#FF9500');
+    };
+
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
+        if (window.confirm(`Chuyển tài khoản "${accToDelete.game || accToDelete.title}" vào mục Đã xóa gần đây? Bạn có thể khôi phục trong vòng 30 ngày.`)) {
+          performMoveToTrash();
+        }
+      } else {
+        performMoveToTrash();
+      }
+      return;
+    }
+
+    Alert.alert('Chuyển Vào Đã Xóa Gần Đây', `Chuyển tài khoản "${accToDelete.game || accToDelete.title}" vào Thùng rác? Bạn có thể khôi phục lại bất kỳ lúc nào trong 30 ngày.`, [
       { text: 'Hủy', style: 'cancel' },
       {
-        text: 'Xóa',
+        text: 'Chuyển Vào Thùng Rác',
         style: 'destructive',
-        onPress: () => {
-          const remaining = accounts.filter((a) => a.id !== id);
-          setAccounts(remaining);
-          AsyncStorage.setItem('lockx_accounts', JSON.stringify(remaining)).catch(() => {});
-          setSelectedAccount(null);
-          setVaultSubView('list');
-          triggerToast('Đã xóa tài khoản');
-        },
+        onPress: performMoveToTrash,
       },
+    ]);
+  };
+
+  // Khôi phục tài khoản từ thùng rác
+  const handleRestoreAccount = (id: string) => {
+    const accToRestore = deletedAccounts.find((a) => a.id === id);
+    if (!accToRestore) return;
+
+    const { deletedAt, ...originalAccount } = accToRestore;
+    setDeletedAccounts((prev) => {
+      const updated = prev.filter((a) => a.id !== id);
+      AsyncStorage.setItem('lockx_deleted_accounts', JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
+
+    setAccounts((prev) => {
+      const updated = [originalAccount, ...prev.filter((a) => a.id !== id)];
+      AsyncStorage.setItem('lockx_accounts', JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
+
+    triggerToast(`✓ Đã khôi phục tài khoản "${originalAccount.game || originalAccount.title}"!`, 'Khôi Phục', 'success', 'checkmark-circle', '#34C759');
+  };
+
+  // Xóa vĩnh viễn tài khoản khỏi thùng rác
+  const handlePermanentDeleteAccount = (id: string) => {
+    const acc = deletedAccounts.find((a) => a.id === id);
+    const title = acc ? (acc.game || acc.title) : 'tài khoản này';
+
+    const performPermanentDelete = () => {
+      setDeletedAccounts((prev) => {
+        const updated = prev.filter((a) => a.id !== id);
+        AsyncStorage.setItem('lockx_deleted_accounts', JSON.stringify(updated)).catch(() => {});
+        return updated;
+      });
+      triggerToast('Đã xóa vĩnh viễn tài khoản khỏi hệ thống', 'Đã Xóa', 'info', 'trash', '#FF3B30');
+    };
+
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
+        if (window.confirm(`Xóa vĩnh viễn tài khoản "${title}"? Hành động này không thể hoàn tác!`)) {
+          performPermanentDelete();
+        }
+      } else {
+        performPermanentDelete();
+      }
+      return;
+    }
+
+    Alert.alert('Xóa Vĩnh Viễn', `Bạn có chắc chắn muốn xóa vĩnh viễn "${title}"? Dữ liệu này sẽ mất hoàn toàn.`, [
+      { text: 'Hủy', style: 'cancel' },
+      { text: 'Xóa Vĩnh Viễn', style: 'destructive', onPress: performPermanentDelete },
     ]);
   };
 
@@ -10742,6 +13017,19 @@ function MainApp() {
       acc.username.toLowerCase().includes(searchQuery.toLowerCase());
     return matchCat && matchQuery;
   });
+
+  useEffect(() => {
+    if (!promoCarouselWidth) return;
+    const timer = setInterval(() => {
+      if (isPromoDraggingRef.current) return;
+      setPromoSlideIndex((current) => {
+        const next = (current + 1) % LOCKX_PROMO_SLIDES.length;
+        promoCarouselRef.current?.scrollTo({ x: next * promoCarouselWidth, animated: true });
+        return next;
+      });
+    }, 4500);
+    return () => clearInterval(timer);
+  }, [promoCarouselWidth]);
 
   // Screen time helpers & calculations
   const totalScreenTimeMinutes = phoneApps.reduce((acc, a) => acc + (a.usageMinutes || 0), 0);
@@ -11150,7 +13438,7 @@ function MainApp() {
 
     // 2. Gọi API máy chủ resolve_url.php để lấy thông tin tệp thực tế và link tải trực tiếp
     try {
-      const res = await fetch(`https://aecongnghe.online/api/storage/resolve_url.php?url=${encodeURIComponent(url)}`);
+      const res = await fetch(`https://quangtrongtuan.id.vn/api/storage/resolve_url.php?url=${encodeURIComponent(url)}`);
       const data = await res.json();
       if (data && data.success && data.data) {
         if (!downloadCustomName.trim() && data.data.filename) {
@@ -11328,40 +13616,167 @@ function MainApp() {
     );
   };
 
+  // Xóa tệp: Chuyển vào mục Đã xóa gần đây (Lưu 30 ngày)
   const handleDeleteFile = (fileId: string) => {
     const fileToDelete = filesList.find((f) => f.id === fileId);
-    const fileName = fileToDelete?.name || 'tệp này';
-    const performDelete = () => {
-      const updated = filesList.filter((f) => f.id !== fileId);
-      saveFilesToStorage(updated);
+    if (!fileToDelete) return;
+    const fileName = fileToDelete.name || 'tệp này';
+
+    const performMoveFileToTrash = () => {
+      const remaining = filesList.filter((f) => f.id !== fileId);
+      saveFilesToStorage(remaining);
+
+      const fileWithTrash: DeletedFileItem = {
+        ...fileToDelete,
+        deletedAt: new Date().toISOString(),
+      };
+      setDeletedFiles((prev) => {
+        const updated = [fileWithTrash, ...prev.filter((d) => d.id !== fileId)];
+        AsyncStorage.setItem('lockx_deleted_files', JSON.stringify(updated)).catch(() => {});
+        return updated;
+      });
+
       if (selectedFilePreview?.id === fileId) {
         setSelectedFilePreview(null);
       }
+      triggerToast(`Đã chuyển tệp "${fileName}" vào mục "Đã xóa gần đây" (Lưu 30 ngày)`, 'Thùng Rác', 'info', 'trash', '#FF9500');
     };
 
     if (Platform.OS === 'web') {
       if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
-        if (window.confirm(`Bạn có chắc muốn xóa vĩnh viễn tệp "${fileName}" khỏi LockX không? Dữ liệu đã xóa không thể khôi phục.`)) {
-          performDelete();
+        if (window.confirm(`Chuyển tệp "${fileName}" vào mục Đã xóa gần đây? Bạn có thể khôi phục trong vòng 30 ngày.`)) {
+          performMoveFileToTrash();
         }
       } else {
-        performDelete();
+        performMoveFileToTrash();
       }
       return;
     }
 
     Alert.alert(
-      'Xóa Tệp Khỏi Két Sắt',
-      `Bạn có chắc chắn muốn xóa vĩnh viễn tệp "${fileName}" khỏi LockX không? Dữ liệu đã xóa không thể khôi phục.`,
+      'Chuyển Vào Đã Xóa Gần Đây',
+      `Bạn có muốn chuyển tệp "${fileName}" vào Thùng rác không? Bạn có thể khôi phục lại trong vòng 30 ngày.`,
       [
         { text: 'Hủy', style: 'cancel' },
         {
-          text: 'Xóa Vĩnh Viễn',
+          text: 'Chuyển Vào Thùng Rác',
           style: 'destructive',
-          onPress: performDelete,
+          onPress: performMoveFileToTrash,
         },
       ]
     );
+  };
+
+  // Khôi phục tệp từ thùng rác
+  const handleRestoreFile = (fileId: string) => {
+    const fileToRestore = deletedFiles.find((f) => f.id === fileId);
+    if (!fileToRestore) return;
+
+    const { deletedAt, ...originalFile } = fileToRestore;
+    setDeletedFiles((prev) => {
+      const updated = prev.filter((f) => f.id !== fileId);
+      AsyncStorage.setItem('lockx_deleted_files', JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
+
+    const updatedFiles = [originalFile, ...filesList.filter((f) => f.id !== fileId)];
+    saveFilesToStorage(updatedFiles);
+
+    triggerToast(`✓ Đã khôi phục tệp "${originalFile.name}"!`, 'Khôi Phục', 'success', 'checkmark-circle', '#34C759');
+  };
+
+  // Xóa vĩnh viễn tệp khỏi thùng rác
+  const handlePermanentDeleteFile = (fileId: string) => {
+    const file = deletedFiles.find((f) => f.id === fileId);
+    const fileName = file ? file.name : 'tệp này';
+
+    const performPermanentDelete = () => {
+      setDeletedFiles((prev) => {
+        const updated = prev.filter((f) => f.id !== fileId);
+        AsyncStorage.setItem('lockx_deleted_files', JSON.stringify(updated)).catch(() => {});
+        return updated;
+      });
+      triggerToast('Đã xóa vĩnh viễn tệp khỏi hệ thống', 'Đã Xóa', 'info', 'trash', '#FF3B30');
+    };
+
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
+        if (window.confirm(`Xóa vĩnh viễn tệp "${fileName}"? Hành động này không thể hoàn tác!`)) {
+          performPermanentDelete();
+        }
+      } else {
+        performPermanentDelete();
+      }
+      return;
+    }
+
+    Alert.alert('Xóa Vĩnh Viễn Tệp', `Bạn có chắc chắn muốn xóa vĩnh viễn tệp "${fileName}"? Dữ liệu đã xóa không thể khôi phục.`, [
+      { text: 'Hủy', style: 'cancel' },
+      { text: 'Xóa Vĩnh Viễn', style: 'destructive', onPress: performPermanentDelete },
+    ]);
+  };
+
+  // Dọn sạch toàn bộ thùng rác trong tab hiện tại
+  const handleEmptyTrash = () => {
+    const isAccounts = trashActiveTab === 'accounts';
+    const count = isAccounts ? deletedAccounts.length : deletedFiles.length;
+    if (count === 0) return;
+
+    const performEmpty = () => {
+      if (isAccounts) {
+        setDeletedAccounts([]);
+        AsyncStorage.setItem('lockx_deleted_accounts', JSON.stringify([])).catch(() => {});
+      } else {
+        setDeletedFiles([]);
+        AsyncStorage.setItem('lockx_deleted_files', JSON.stringify([])).catch(() => {});
+      }
+      triggerToast('Đã dọn sạch thùng rác thành công!', 'Dọn Sạch', 'success', 'checkmark-circle', '#10B981');
+    };
+
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
+        if (window.confirm(`Bạn có chắc muốn xóa vĩnh viễn tất cả ${count} mục trong thùng rác? Dữ liệu sẽ mất hoàn toàn.`)) {
+          performEmpty();
+        }
+      } else {
+        performEmpty();
+      }
+      return;
+    }
+
+    Alert.alert('Dọn Sạch Thùng Rác', `Bạn có chắc chắn muốn xóa vĩnh viễn tất cả ${count} mục? Dữ liệu này sẽ mất hoàn toàn.`, [
+      { text: 'Hủy', style: 'cancel' },
+      { text: 'Dọn Sạch Tất Cả', style: 'destructive', onPress: performEmpty },
+    ]);
+  };
+
+  // Khôi phục tất cả mục trong thùng rác
+  const handleRestoreAll = () => {
+    const isAccounts = trashActiveTab === 'accounts';
+    if (isAccounts) {
+      if (deletedAccounts.length === 0) return;
+      const restored = deletedAccounts.map((d) => {
+        const { deletedAt, ...rest } = d;
+        return rest;
+      });
+      const newAccounts = [...restored, ...accounts.filter((a) => !restored.some((r) => r.id === a.id))];
+      setAccounts(newAccounts);
+      AsyncStorage.setItem('lockx_accounts', JSON.stringify(newAccounts)).catch(() => {});
+      setDeletedAccounts([]);
+      AsyncStorage.setItem('lockx_deleted_accounts', JSON.stringify([])).catch(() => {});
+      triggerToast(`✓ Đã khôi phục tất cả ${restored.length} tài khoản!`, 'Khôi Phục', 'success', 'checkmark-circle', '#34C759');
+    } else {
+      if (deletedFiles.length === 0) return;
+      const restored = deletedFiles.map((d) => {
+        const { deletedAt, ...rest } = d;
+        return rest;
+      });
+      const newFiles = [...restored, ...filesList.filter((f) => !restored.some((r) => r.id === f.id))];
+      saveFilesToStorage(newFiles);
+      setDeletedFiles([]);
+      AsyncStorage.setItem('lockx_deleted_files', JSON.stringify([])).catch(() => {});
+      triggerToast(`✓ Đã khôi phục tất cả ${restored.length} tệp tin!`, 'Khôi Phục', 'success', 'checkmark-circle', '#34C759');
+    }
   };
 
   const handleShareFile = async (file: LockXFileItem) => {
@@ -11513,7 +13928,7 @@ function MainApp() {
     // Gọi Web API tạo đơn hàng thanh toán
     let orderResult: any = null;
     try {
-      const res = await fetch('https://aecongnghe.online/api/payment/create_order.php', {
+      const res = await fetch('https://quangtrongtuan.id.vn/api/payment/create_order.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -11564,7 +13979,7 @@ function MainApp() {
 
     let verifyResult: any = null;
     try {
-      const res = await fetch('https://aecongnghe.online/api/payment/confirm_payment.php', {
+      const res = await fetch('https://quangtrongtuan.id.vn/api/payment/confirm_payment.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -11629,7 +14044,7 @@ function MainApp() {
   // =========================================================================
   // =========================================================================
   return (
-    <SafeAreaView style={styles.safeRoot}>
+    <SafeAreaView style={[styles.safeRoot, { backgroundColor: currentBg }]}>
       <StatusBar style="light" />
 
       {/* APPLE IOS 18 DYNAMIC ISLAND TOP BANNER TOAST (BIỂU NGỮ TINH TẾ ĐẦU MÀN HÌNH - KHÔNG CHE MÀN HÌNH, TỰ ĐỘNG TRƯỢT ẨN) */}
@@ -11897,6 +14312,13 @@ function MainApp() {
       <View style={styles.mainContent}>
         {/* TAB 0: TRANG CHỦ LOCKX & KÉT SẮT */}
         {currentTab === 'vault' && (
+          showLuckyEvent ? (
+            <LuckyEventScreen
+              isLight={isLight}
+              storageKey={(userProfile.username || savedAccount || 'guest').replace(/^@/, '').toLowerCase()}
+              onClose={() => setShowLuckyEvent(false)}
+            />
+          ) : (
           vaultSubView === 'add' ? (
             <>
               {/* DEDICATED FULL-SCREEN ADD ACCOUNT VIEW (CHUẨN APPLE iOS 18 INSET GROUPED) */}
@@ -12607,6 +15029,7 @@ function MainApp() {
                   <Text style={{ fontSize: 13, color: isLight ? '#64748B' : '#94A3B8' }}>
                     Chào <Text style={{ fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>{userProfile.displayName ? (userProfile.displayName.split(' ').pop() || userProfile.displayName) : 'Tuấn'}</Text> 👋
                   </Text>
+                  
                   <TouchableOpacity
                     activeOpacity={0.75}
                     onPress={() => setShowNotificationCenter(true)}
@@ -12637,6 +15060,109 @@ function MainApp() {
                       />
                     )}
                   </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* LOCKX PROMO CAROUSEL */}
+              <View
+                onLayout={(event) => setPromoCarouselWidth(event.nativeEvent.layout.width)}
+                style={{
+                  height: 154,
+                  marginBottom: 14,
+                  borderRadius: 18,
+                  overflow: 'hidden',
+                  backgroundColor: isLight ? '#E5E5EA' : '#1C1C1E',
+                  borderWidth: 1,
+                  borderColor: isLight ? '#D1D1D6' : '#2C2C2E',
+                }}
+              >
+                <ScrollView
+                  ref={promoCarouselRef}
+                  horizontal
+                  pagingEnabled
+                  scrollEnabled={true}
+                  nestedScrollEnabled={true}
+                  directionalLockEnabled={true}
+                  decelerationRate="fast"
+                  scrollEventThrottle={16}
+                  showsHorizontalScrollIndicator={false}
+                  onScrollBeginDrag={() => {
+                    isPromoDraggingRef.current = true;
+                  }}
+                  onScrollEndDrag={() => {
+                    setTimeout(() => {
+                      isPromoDraggingRef.current = false;
+                    }, 800);
+                  }}
+                  onMomentumScrollEnd={(event) => {
+                    isPromoDraggingRef.current = false;
+                    const width = event.nativeEvent.layoutMeasurement.width;
+                    if (width > 0) {
+                      setPromoSlideIndex(Math.round(event.nativeEvent.contentOffset.x / width));
+                    }
+                  }}
+                  onScroll={(event) => {
+                    const width = event.nativeEvent.layoutMeasurement.width;
+                    if (width > 0) {
+                      const idx = Math.round(event.nativeEvent.contentOffset.x / width);
+                      if (idx !== promoSlideIndex && idx >= 0 && idx < LOCKX_PROMO_SLIDES.length) {
+                        setPromoSlideIndex(idx);
+                      }
+                    }
+                  }}
+                >
+                  {LOCKX_PROMO_SLIDES.map((slide, sIdx) => (
+                    <TouchableOpacity
+                      key={slide.label}
+                      activeOpacity={0.88}
+                      onPress={() => {
+                        if ((slide as any).isEvent) {
+                          setShowLuckyEvent(true);
+                        } else {
+                          const nextIdx = (sIdx + 1) % LOCKX_PROMO_SLIDES.length;
+                          setPromoSlideIndex(nextIdx);
+                          promoCarouselRef.current?.scrollTo({ x: nextIdx * (promoCarouselWidth || 320), animated: true });
+                        }
+                      }}
+                      style={{ width: promoCarouselWidth || 320, height: 154 }}
+                    >
+                      <Image source={slide.image} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+                <View
+                  style={{
+                    position: 'absolute',
+                    left: 0,
+                    right: 0,
+                    bottom: 8,
+                    flexDirection: 'row',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}
+                >
+                  {LOCKX_PROMO_SLIDES.map((slide, index) => (
+                    <TouchableOpacity
+                      key={`${slide.label}-dot`}
+                      activeOpacity={0.7}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      onPress={() => {
+                        setPromoSlideIndex(index);
+                        promoCarouselRef.current?.scrollTo({ x: index * (promoCarouselWidth || 320), animated: true });
+                      }}
+                      style={{ padding: 4 }}
+                    >
+                      <View
+                        style={{
+                          width: index === promoSlideIndex ? 22 : 6,
+                          height: 6,
+                          borderRadius: 3,
+                          backgroundColor: index === promoSlideIndex ? '#FFFFFF' : 'rgba(255,255,255,0.45)',
+                        }}
+                      />
+                    </TouchableOpacity>
+                  ))}
                 </View>
               </View>
 
@@ -13017,14 +15543,32 @@ function MainApp() {
                     {filteredAccounts.map((acc) => {
                       const itemPlat = getPlatformInfo(acc.game, acc.category);
                       return (
-                        <TouchableOpacity
+                        <SwipeableAccountRow
                           key={acc.id}
-                          activeOpacity={0.75}
+                          isLight={isLight}
+                          isSwiped={swipedAccountId === acc.id}
+                          onSwipeChange={(swiped) => setSwipedAccountId(swiped ? acc.id : null)}
                           onPress={() => {
                             setSelectedAccount(acc);
                             setIsPwdRevealed(false);
                             setVaultSubView('detail');
                           }}
+                          onLongPress={() => showAccountActions(acc)}
+                          onDelete={() => handleDeleteAccount(acc.id)}
+                        >
+                        <TouchableOpacity
+                          activeOpacity={0.75}
+                          onPress={() => {
+                            if (swipedAccountId === acc.id) {
+                              setSwipedAccountId(null);
+                              return;
+                            }
+                            setSelectedAccount(acc);
+                            setIsPwdRevealed(false);
+                            setVaultSubView('detail');
+                          }}
+                          onLongPress={() => showAccountActions(acc)}
+                          delayLongPress={400}
                           style={{
                             backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
                             borderRadius: 16,
@@ -13035,6 +15579,11 @@ function MainApp() {
                             alignItems: 'center',
                           }}
                         >
+                          {acc.isFavorite && (
+                            <View style={{ width: 22, alignItems: 'center', marginRight: 8 }}>
+                              <Ionicons name="star" size={19} color="#FFB800" />
+                            </View>
+                          )}
                           {/* Platform Logo / Icon */}
                           {itemPlat.logoUrl ? (
                             <Image
@@ -13099,15 +15648,68 @@ function MainApp() {
                             </View>
                           </View>
 
-                          {/* Chevron */}
                           <Ionicons name="chevron-forward" size={18} color="#475569" />
                         </TouchableOpacity>
+                        </SwipeableAccountRow>
                       );
                     })}
                   </View>
                 )}
+
+                {/* BANNER: ĐÃ XÓA GẦN ĐÂY (TRASH & RECENTLY DELETED) */}
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => {
+                    setTrashActiveTab('accounts');
+                    setShowTrashModal(true);
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                    borderRadius: 16,
+                    padding: 14,
+                    borderWidth: 1,
+                    borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                    marginTop: 16,
+                    marginBottom: 10,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 12,
+                      backgroundColor: 'rgba(255, 149, 0, 0.15)',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      marginRight: 12,
+                    }}
+                  >
+                    <Ionicons name="trash-outline" size={20} color="#FF9500" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
+                        Đã Xóa Gần Đây
+                      </Text>
+                      {deletedAccounts.length > 0 && (
+                        <View style={{ backgroundColor: '#FF9500', borderRadius: 10, paddingHorizontal: 7, paddingVertical: 1 }}>
+                          <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '700' }}>
+                            {deletedAccounts.length}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={{ fontSize: 12, color: isLight ? '#6C6C70' : '#8E8E93', marginTop: 2 }}>
+                      Khôi phục hoặc xóa vĩnh viễn trong vòng 30 ngày
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={17} color="#64748B" />
+                </TouchableOpacity>
               </View>
             </ScrollView>
+          )
           )
         )}
 
@@ -13166,6 +15768,7 @@ function MainApp() {
 
               {/* Right: Search Icon + Storage Pill */}
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+
                 <TouchableOpacity
                   activeOpacity={0.75}
                   onPress={() => setShowFileSearchInput(!showFileSearchInput)}
@@ -13774,6 +16377,58 @@ function MainApp() {
                 </Text>
               </View>
             )}
+
+            {/* BANNER: TỆP ĐÃ XÓA GẦN ĐÂY */}
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => {
+                setTrashActiveTab('files');
+                setShowTrashModal(true);
+              }}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                borderRadius: 16,
+                padding: 14,
+                borderWidth: 1,
+                borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                marginTop: 18,
+                marginBottom: 10,
+              }}
+            >
+              <View
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 12,
+                  backgroundColor: 'rgba(255, 149, 0, 0.15)',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  marginRight: 12,
+                }}
+              >
+                <Ionicons name="trash-outline" size={20} color="#FF9500" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
+                    Tệp Đã Xóa Gần Đây
+                  </Text>
+                  {deletedFiles.length > 0 && (
+                    <View style={{ backgroundColor: '#FF9500', borderRadius: 10, paddingHorizontal: 7, paddingVertical: 1 }}>
+                      <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '700' }}>
+                        {deletedFiles.length}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                <Text style={{ fontSize: 12, color: isLight ? '#6C6C70' : '#8E8E93', marginTop: 2 }}>
+                  Khôi phục hoặc xóa tệp vĩnh viễn trong vòng 30 ngày
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={17} color="#64748B" />
+            </TouchableOpacity>
           </ScrollView>
         )}
 
@@ -16260,6 +18915,895 @@ function MainApp() {
                 )}
               </ScrollView>
             </KeyboardAvoidingView>
+          ) : profileSubView === 'app_icons' ? (
+            /* SUBVIEW: BỘ SƯU TẬP BIỂU TƯỢNG ỨNG DỤNG SVG (PRESTIGE & CYBER) */
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: currentBg }}>
+              <View style={[styles.fullScreenNavBar, isLight && { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E5EA' }]}>
+                <TouchableOpacity onPress={() => setProfileSubView('vip_membership')} style={styles.fullScreenNavBtn}>
+                  <Ionicons name="chevron-back" size={20} color={appSettings.accentColor} />
+                  <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor }]}>Hội Viên VIP</Text>
+                </TouchableOpacity>
+                <Text style={[styles.fullScreenNavTitle, isLight && { color: '#000000' }]}>Icon Ứng Dụng SVG</Text>
+                <TouchableOpacity onPress={() => setProfileSubView('vip_membership')} style={styles.fullScreenNavBtn}>
+                  <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor, fontWeight: '700' }]}>Xong</Text>
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 110 }}>
+                {/* Mockup Preview Phone Screen */}
+                <View
+                  style={{
+                    backgroundColor: currentCardBg,
+                    borderRadius: 22,
+                    padding: 18,
+                    alignItems: 'center',
+                    marginBottom: 20,
+                    borderWidth: 1.2,
+                    borderColor: currentBorder,
+                    shadowColor: appSettings.accentColor,
+                    shadowOffset: { width: 0, height: 3 },
+                    shadowOpacity: 0.15,
+                    shadowRadius: 8,
+                  }}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: appSettings.accentColor, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 14 }}>
+                    XEM TRƯỚC MÀN HÌNH CHÍNH (PREVIEW)
+                  </Text>
+                  <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 24, alignItems: 'center' }}>
+                    {/* Dummy App 1: Phone */}
+                    <View style={{ alignItems: 'center', gap: 6 }}>
+                      <View style={{ width: 54, height: 54, borderRadius: 14, backgroundColor: '#34C759', justifyContent: 'center', alignItems: 'center' }}>
+                        <Ionicons name="call" size={26} color="#FFFFFF" />
+                      </View>
+                      <Text style={{ fontSize: 11, color: isLight ? '#000000' : '#FFFFFF', fontWeight: '500' }}>Điện thoại</Text>
+                    </View>
+
+                    {/* Dummy App 2: Safari */}
+                    <View style={{ alignItems: 'center', gap: 6 }}>
+                      <View style={{ width: 54, height: 54, borderRadius: 14, backgroundColor: '#007AFF', justifyContent: 'center', alignItems: 'center' }}>
+                        <Ionicons name="compass" size={26} color="#FFFFFF" />
+                      </View>
+                      <Text style={{ fontSize: 11, color: isLight ? '#000000' : '#FFFFFF', fontWeight: '500' }}>Safari</Text>
+                    </View>
+
+                    {/* Active Selected SVG App Icon */}
+                    <View style={{ alignItems: 'center', gap: 6 }}>
+                      <RenderVipAppIconSvg iconId={activeAppIcon} size={54} />
+                      <Text style={{ fontSize: 11, color: isLight ? '#000000' : '#FFFFFF', fontWeight: '800' }}>
+                        GVault
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Section Header */}
+                <Text style={{ fontSize: 12.5, fontWeight: '700', color: isLight ? '#6C6C70' : '#8E8E93', textTransform: 'uppercase', marginBottom: 12, marginLeft: 4 }}>
+                  BỘ SƯU TẬP BIỂU TƯỢNG SVG NGHỆ THUẬT (8 TÙY CHỌN)
+                </Text>
+
+                <View style={{ gap: 11 }}>
+                  {[
+                    { id: 'sapphire', name: 'GVault Sapphire (Mặc định)', desc: 'Xanh lam nguyên bản Apple iOS với khiên bảo mật SVG', accent: '#007AFF', badge: 'CHUẨN APPLE' },
+                    { id: 'gold_24k', name: 'Obsidian Gold 24K', desc: 'Khiên vàng 24K đúc nổi trên nền titan đen quý tộc', accent: '#FFD700', badge: 'HOÀNG GIA' },
+                    { id: 'cyber_neon', name: 'Cyberpunk Matrix 2077', desc: 'Tia chớp Neon Cyan & Tím điện tử tương lai phát sáng', accent: '#00E5FF', badge: 'CYBER PRO' },
+                    { id: 'platinum', name: 'Diamond Platinum', desc: 'Bạch kim sáng bóng phản quang đa chiều sắc nét', accent: '#CBD5E1', badge: 'BẠCH KIM' },
+                    { id: 'ruby_red', name: 'Imperial Ruby Red', desc: 'Đỏ huyết dụ quyền lực tối thượng với khiên bảo vệ', accent: '#EF4444', badge: 'RUBY VIP' },
+                    { id: 'emerald', name: 'Emerald Vault', desc: 'Ngọc lục bảo mật mã cấp NSA bảo vệ tuyệt đối', accent: '#10B981', badge: 'LỤC BẢO' },
+                    { id: 'midnight', name: 'Midnight Stealth Black', desc: 'Titan đen nhám tối giản sang trọng phong cách bí mật', accent: '#71717A', badge: 'TITAN ĐEN' },
+                    { id: 'amethyst', name: 'Nebula Amethyst', desc: 'Thạch anh tím ánh sao vũ trụ huyền bí đa tầng', accent: '#C084FC', badge: 'TÍM VŨ TRỤ' },
+                  ].map((item) => {
+                    const isSelected = activeAppIcon === item.id;
+                    return (
+                      <TouchableOpacity
+                        key={item.id}
+                        activeOpacity={0.8}
+                        onPress={() => {
+                          setActiveAppIcon(item.id);
+                          AsyncStorage.setItem('lockx_active_app_icon', item.id).catch(() => {});
+                          triggerToast(`✓ Đã áp dụng biểu tượng "${item.name}"!`, 'Icon Ứng Dụng', 'success', 'sparkles', item.accent);
+                        }}
+                        style={{
+                          backgroundColor: currentCardBg,
+                          borderRadius: 18,
+                          padding: 14,
+                          borderWidth: 1.5,
+                          borderColor: isSelected ? item.accent : currentBorder,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 14,
+                        }}
+                      >
+                        <RenderVipAppIconSvg iconId={item.id} size={48} />
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            <Text style={{ fontSize: 15, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>{item.name}</Text>
+                            {item.badge && (
+                              <View style={{ backgroundColor: `${item.accent}20`, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, borderWidth: 0.8, borderColor: `${item.accent}40` }}>
+                                <Text style={{ fontSize: 9.5, fontWeight: '800', color: item.accent }}>{item.badge}</Text>
+                              </View>
+                            )}
+                          </View>
+                          <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 3 }}>{item.desc}</Text>
+                        </View>
+                        <View style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: isSelected ? item.accent : '#8E8E93', justifyContent: 'center', alignItems: 'center' }}>
+                          {isSelected && <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: item.accent }} />}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </ScrollView>
+            </KeyboardAvoidingView>
+          ) : profileSubView === 'vip_themes' ? (
+            /* SUBVIEW: BỘ THEME ĐỘC QUYỀN VIP (FULL BACKGROUND THEMES) */
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: currentBg }}>
+              <View style={[styles.fullScreenNavBar, isLight && { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E5EA' }]}>
+                <TouchableOpacity onPress={() => setProfileSubView('vip_membership')} style={styles.fullScreenNavBtn}>
+                  <Ionicons name="chevron-back" size={20} color={appSettings.accentColor} />
+                  <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor }]}>Hội Viên VIP</Text>
+                </TouchableOpacity>
+                <Text style={[styles.fullScreenNavTitle, isLight && { color: '#000000' }]}>Theme VIP</Text>
+                <TouchableOpacity onPress={() => setProfileSubView('vip_membership')} style={styles.fullScreenNavBtn}>
+                  <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor, fontWeight: '700' }]}>Xong</Text>
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 110 }}>
+                {/* Live Theme Preview Box */}
+                <View
+                  style={{
+                    backgroundColor: currentCardBg,
+                    borderRadius: 22,
+                    padding: 18,
+                    marginBottom: 20,
+                    borderWidth: 1.5,
+                    borderColor: appSettings.accentColor,
+                    shadowColor: appSettings.accentColor,
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.35,
+                    shadowRadius: 10,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: appSettings.accentColor, letterSpacing: 0.8, textTransform: 'uppercase' }}>
+                      XEM TRƯỚC THEME ĐANG ÁP DỤNG
+                    </Text>
+                    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                      <SvgPath d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4L12 2z" fill={appSettings.accentColor} />
+                    </Svg>
+                  </View>
+                  <Text style={{ fontSize: 17, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF', marginBottom: 4 }}>
+                    Giao Diện LockX VIP Pro
+                  </Text>
+                  <Text style={{ fontSize: 13, color: '#94A3B8', marginBottom: 14 }}>
+                    Màu nền toàn bộ hệ thống và thẻ giao diện đã đồng bộ sang chủ đề này.
+                  </Text>
+                  <View style={{ height: 40, borderRadius: 12, backgroundColor: appSettings.accentColor, justifyContent: 'center', alignItems: 'center' }}>
+                    <Text style={{ color: activeVipTheme === 'gold_luxury' ? '#000000' : '#FFFFFF', fontWeight: '800', fontSize: 14 }}>
+                      NÚT BẤM SANG TRỌNG
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Theme Cards List */}
+                <Text style={{ fontSize: 12.5, fontWeight: '700', color: isLight ? '#6C6C70' : '#8E8E93', textTransform: 'uppercase', marginBottom: 12, marginLeft: 4 }}>
+                  BỘ SƯU TẬP GIAO DIỆN ĐỔI MÀU NỀN HỆ THỐNG
+                </Text>
+                <View style={{ gap: 12 }}>
+                  {[
+                    { id: 'gold_luxury', name: 'Vàng Hoàng Gia (Gold Luxury)', desc: 'Màu nền đen vàng champagne #120F08, viền óng ánh phong cách quý tộc', accent: '#FFD700', badge: 'HOÀNG GIA', iconSvg: 'diamond' },
+                    { id: 'cyberpunk', name: 'Cyberpunk 2077 (Neon Glitch)', desc: 'Màu nền đêm sâu #060B14, sắc neon Cyan & Tím khói điện tử tương lai', accent: '#00E5FF', badge: 'NEON CYBER', iconSvg: 'bolt' },
+                    { id: 'nebula', name: 'Deep Space Nebula (Vũ Trụ)', desc: 'Màu nền tím vũ trụ #0E071A, huyền ảo với sắc tím thạch anh sâu thẳm', accent: '#AF52DE', badge: 'NEBULA', iconSvg: 'sparkle' },
+                    { id: 'oled_black', name: 'Pure OLED True Black', desc: 'Màu nền đen tuyệt đối 100% #000000, tắt điểm ảnh OLED siêu tiết kiệm pin', accent: '#38BDF8', badge: 'OLED 100%', iconSvg: 'shield' },
+                    { id: 'default', name: 'Ocean Blue (Tiêu Chuẩn Apple)', desc: 'Màu nền cổ điển chuẩn Apple Keychain, viền lam thanh lịch', accent: '#0A84FF', badge: 'TIÊU CHUẨN', iconSvg: 'shield' },
+                  ].map((theme) => {
+                    const isSelected = activeVipTheme === theme.id;
+                    return (
+                      <TouchableOpacity
+                        key={theme.id}
+                        activeOpacity={0.8}
+                        onPress={() => {
+                          setActiveVipTheme(theme.id as any);
+                          saveAppSettings({ ...appSettings, accentColor: theme.accent });
+                          AsyncStorage.setItem('lockx_active_vip_theme', theme.id).catch(() => {});
+                          triggerToast(`✓ Đã áp dụng theme "${theme.name}"!`, 'Theme VIP', 'success', 'color-palette', theme.accent);
+                        }}
+                        style={{
+                          backgroundColor: currentCardBg,
+                          borderRadius: 18,
+                          padding: 16,
+                          borderWidth: 2,
+                          borderColor: isSelected ? theme.accent : currentBorder,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 14,
+                        }}
+                      >
+                        <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: `${theme.accent}20`, justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: theme.accent }}>
+                          {theme.iconSvg === 'diamond' ? (
+                            <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+                              <SvgPath d="M6 3h12l4 6-10 12L2 9l4-6zm1.5 2l-2.5 3.75h4.15L8.5 5h-.5zm2.85 0l-.65 3.75h4.6L13.65 5h-3.3zm4.65 0l-.65 3.75h4.15L16.5 5h-1.5zM4.12 10.25L12 19.68l7.88-9.43H4.12z" fill={theme.accent} />
+                            </Svg>
+                          ) : theme.iconSvg === 'bolt' ? (
+                            <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+                              <SvgPath d="M11 21h-1l1-7H7.5c-.88 0-1.33-.96-.82-1.68l6-8.5c.53-.75 1.82-.37 1.82.55v6.5h3.5c.89 0 1.34.97.82 1.69l-6.5 8.44h-.32z" fill={theme.accent} />
+                            </Svg>
+                          ) : theme.iconSvg === 'sparkle' ? (
+                            <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+                              <SvgPath d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4L12 2z" fill={theme.accent} />
+                            </Svg>
+                          ) : (
+                            <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+                              <SvgPath d="M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5zm-2 16l-4-4 1.41-1.41L10 15.17l6.59-6.59L18 10l-8 8z" fill={theme.accent} />
+                            </Svg>
+                          )}
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Text style={{ fontSize: 15.5, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>{theme.name}</Text>
+                            {theme.badge && (
+                              <View style={{ backgroundColor: `${theme.accent}20`, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, borderWidth: 0.8, borderColor: `${theme.accent}40` }}>
+                                <Text style={{ fontSize: 9.5, fontWeight: '800', color: theme.accent }}>{theme.badge}</Text>
+                              </View>
+                            )}
+                          </View>
+                          <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 3 }}>{theme.desc}</Text>
+                        </View>
+                        <View style={{ width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: isSelected ? theme.accent : '#8E8E93', justifyContent: 'center', alignItems: 'center' }}>
+                          {isSelected && <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: theme.accent }} />}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </ScrollView>
+            </KeyboardAvoidingView>
+          ) : profileSubView === 'vip_membership' ? (
+            /* SUBVIEW: HỘI VIÊN VIP (CAROUSEL VUỐT 4 HẠNG THẺ & 7 ĐẶC QUYỀN CAO CẤP) */
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: currentBg }}>
+              <View style={[styles.fullScreenNavBar, isLight && { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E5EA' }]}>
+                <TouchableOpacity onPress={() => setProfileSubView('main')} style={styles.fullScreenNavBtn}>
+                  <Ionicons name="chevron-back" size={20} color={appSettings.accentColor} />
+                  <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor }]}>{t.tabProfile}</Text>
+                </TouchableOpacity>
+                <Text style={[styles.fullScreenNavTitle, isLight && { color: '#000000' }]}>Hội Viên VIP</Text>
+                <TouchableOpacity onPress={() => setProfileSubView('main')} style={styles.fullScreenNavBtn}>
+                  <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor, fontWeight: '700' }]}>Xong</Text>
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 110 }}>
+                {/* VIP Header Banner */}
+                <View style={{ alignItems: 'center', marginBottom: 16, marginTop: 4 }}>
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 6,
+                      backgroundColor: 'rgba(255, 215, 0, 0.12)',
+                      paddingHorizontal: 12,
+                      paddingVertical: 5,
+                      borderRadius: 20,
+                      borderWidth: 1,
+                      borderColor: 'rgba(255, 215, 0, 0.35)',
+                      marginBottom: 8,
+                    }}
+                  >
+                    <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
+                      <SvgPath d="M6 3h12l4 6-10 12L2 9l4-6zm1.5 2l-2.5 3.75h4.15L8.5 5h-.5zm2.85 0l-.65 3.75h4.6L13.65 5h-3.3zm4.65 0l-.65 3.75h4.15L16.5 5h-1.5zM4.12 10.25L12 19.68l7.88-9.43H4.12z" fill="#FFD700" />
+                    </Svg>
+                    <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#FFD700', letterSpacing: 0.8 }}>
+                      BỘ SƯU TẬP THẺ VIP 3D CHÍNH CHỦ
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 18, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF', textAlign: 'center' }}>
+                    Thẻ Hội Viên 3D Đa Cấp Độ
+                  </Text>
+                  <Text style={{ fontSize: 13, color: '#8E8E93', textAlign: 'center', marginTop: 4 }}>
+                    Nhấn mũi tên hoặc vuốt để xem: Bạc, Vàng, Kim Cương, Titan, Uranium
+                  </Text>
+                </View>
+
+                {/* 3-CARD PEEK CAROUSEL (HIỂN THỊ ĐỦ 3 THẺ CÓ ANIMATION TRƯỢT MƯỢT MÀ 60FPS) */}
+                {(() => {
+                  const screenWidth = Dimensions.get('window').width;
+                  const stageWidth = Math.min(screenWidth - 32, 420);
+                  const cardWidth = Math.min(Math.round(stageWidth * 0.74), 288);
+                  const cardHeight = 176;
+                  const gap = 14;
+                  const D = cardWidth + gap;
+                  const centerLeft = (stageWidth - cardWidth) / 2;
+                  const totalTiers = VIP_CARD_TIERS.length;
+                  const currentTier = VIP_CARD_TIERS[carouselCardIndex] || VIP_CARD_TIERS[4];
+                  const isCurrentActive = activeCardTier === currentTier.id;
+
+                  const animateSlide = (direction: 'next' | 'prev', targetIdx?: number) => {
+                    if (isCardNavigatingRef.current) return;
+                    isCardNavigatingRef.current = true;
+
+                    const toValue = direction === 'next' ? -1 : 1;
+                    const nextRealIdx = targetIdx !== undefined
+                      ? targetIdx
+                      : direction === 'next'
+                        ? (carouselCardIndex + 1) % totalTiers
+                        : (carouselCardIndex - 1 + totalTiers) % totalTiers;
+
+                    Animated.timing(cardSlideAnim, {
+                      toValue,
+                      duration: 250,
+                      easing: Easing.out(Easing.cubic),
+                      useNativeDriver: false,
+                    }).start(() => {
+                      setCarouselCardIndex(nextRealIdx);
+                      requestAnimationFrame(() => {
+                        cardSlideAnim.setValue(0);
+                        isCardNavigatingRef.current = false;
+                      });
+                    });
+                  };
+
+                  const handleNext = () => animateSlide('next');
+                  const handlePrev = () => animateSlide('prev');
+                  const jumpToTier = (targetIdx: number) => {
+                    if (targetIdx === carouselCardIndex || isCardNavigatingRef.current) return;
+                    const diff = targetIdx - carouselCardIndex;
+                    animateSlide(diff > 0 ? 'next' : 'prev', targetIdx);
+                  };
+
+                  return (
+                    <View style={{ marginBottom: 16 }}>
+                      {/* 3-Card Stage Container with Gesture & Arrow controls */}
+                      <View
+                        style={{
+                          width: stageWidth,
+                          height: cardHeight + 20,
+                          alignSelf: 'center',
+                          position: 'relative',
+                          overflow: 'hidden',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                        }}
+                        onTouchStart={(e) => {
+                          cardTouchStartX.current = e.nativeEvent.pageX;
+                        }}
+                        onTouchEnd={(e) => {
+                          const dx = e.nativeEvent.pageX - cardTouchStartX.current;
+                          if (dx > 35) {
+                            handlePrev();
+                          } else if (dx < -35) {
+                            handleNext();
+                          }
+                        }}
+                      >
+                        {VIP_CARD_TIERS.map((tier, i) => {
+                          let diff = i - carouselCardIndex;
+                          if (diff > 2) diff -= totalTiers;
+                          if (diff < -2) diff += totalTiers;
+
+                          const baseDiff = diff;
+                          const baseLeft = centerLeft + baseDiff * D;
+                          const isThisTierActive = activeCardTier === tier.id;
+
+                          const animatedLeft = cardSlideAnim.interpolate({
+                            inputRange: [-1, 0, 1],
+                            outputRange: [baseLeft - D, baseLeft, baseLeft + D],
+                          });
+
+                          const animatedScale = cardSlideAnim.interpolate({
+                            inputRange: [-1, 0, 1],
+                            outputRange: [
+                              baseDiff === 1 ? 1.0 : baseDiff === 0 ? 0.90 : 0.85,
+                              baseDiff === 0 ? 1.0 : 0.90,
+                              baseDiff === -1 ? 1.0 : baseDiff === 0 ? 0.90 : 0.85,
+                            ],
+                          });
+
+                          const animatedOpacity = cardSlideAnim.interpolate({
+                            inputRange: [-1, 0, 1],
+                            outputRange: [
+                              baseDiff === 1 ? 1.0 : (baseDiff === 0 || baseDiff === 2) ? 0.70 : 0,
+                              baseDiff === 0 ? 1.0 : Math.abs(baseDiff) === 1 ? 0.70 : 0,
+                              baseDiff === -1 ? 1.0 : (baseDiff === 0 || baseDiff === -2) ? 0.70 : 0,
+                            ],
+                          });
+
+                          const zIndexVal = baseDiff === 0 ? 10 : Math.abs(baseDiff) === 1 ? 5 : 1;
+
+                          return (
+                            <Animated.View
+                              key={'vip-tier-card-' + tier.id}
+                              style={{
+                                position: 'absolute',
+                                left: animatedLeft,
+                                top: baseDiff === 0 ? 4 : 10,
+                                width: cardWidth,
+                                height: cardHeight,
+                                transform: [{ scale: animatedScale }],
+                                opacity: animatedOpacity,
+                                zIndex: zIndexVal,
+                              }}
+                            >
+                              <TouchableOpacity
+                                activeOpacity={baseDiff === 0 ? 0.95 : 0.75}
+                                onPress={() => {
+                                  if (baseDiff === -1) {
+                                    handlePrev();
+                                  } else if (baseDiff === 1) {
+                                    handleNext();
+                                  } else if (baseDiff === 0) {
+                                    setActiveCardTier(tier.id);
+                                    AsyncStorage.setItem('lockx_active_card_tier', tier.id).catch(() => {});
+                                    triggerToast(`✓ Đã kích hoạt thẻ "${tier.name}"!`, 'Thẻ VIP', 'success', 'sparkles', tier.accent);
+                                  }
+                                }}
+                                style={{
+                                  width: '100%',
+                                  height: '100%',
+                                  backgroundColor: tier.bg,
+                                  borderRadius: 20,
+                                  borderWidth: isThisTierActive ? 2 : 1.2,
+                                  borderColor: isThisTierActive ? tier.accent : tier.borderColor,
+                                  padding: 15,
+                                  overflow: 'hidden',
+                                  shadowColor: tier.accent,
+                                  shadowOffset: { width: 0, height: baseDiff === 0 ? 8 : 3 },
+                                  shadowOpacity: isThisTierActive ? 0.45 : 0.22,
+                                  shadowRadius: baseDiff === 0 ? 16 : 6,
+                                  elevation: baseDiff === 0 ? 10 : 3,
+                                }}
+                              >
+                                {/* Holographic Metallic Shimmer Sweep (Always active on all 5 cards) */}
+                                <Animated.View
+                                  pointerEvents="none"
+                                  style={{
+                                    position: 'absolute',
+                                    top: -60,
+                                    bottom: -60,
+                                    width: 90,
+                                    transform: [
+                                      { translateX: vipCardShimmerAnim },
+                                      { skewX: '-22deg' },
+                                    ],
+                                    zIndex: 15,
+                                  }}
+                                >
+                                  {/* Wide ambient colored glow */}
+                                  <View
+                                    style={{
+                                      position: 'absolute',
+                                      left: 0,
+                                      right: 0,
+                                      top: 0,
+                                      bottom: 0,
+                                      backgroundColor: tier.glowColor || `${tier.accent}30`,
+                                    }}
+                                  />
+                                  {/* Bright core metallic beam */}
+                                  <View
+                                    style={{
+                                      position: 'absolute',
+                                      left: 32,
+                                      width: 26,
+                                      top: 0,
+                                      bottom: 0,
+                                      backgroundColor: 'rgba(255, 255, 255, 0.55)',
+                                    }}
+                                  />
+                                  {/* Razor white center flare */}
+                                  <View
+                                    style={{
+                                      position: 'absolute',
+                                      left: 43,
+                                      width: 4,
+                                      top: 0,
+                                      bottom: 0,
+                                      backgroundColor: '#FFFFFF',
+                                    }}
+                                  />
+                                </Animated.View>
+
+                                {/* Sparkling Glitter Accent Stars */}
+                                <View
+                                  pointerEvents="none"
+                                  style={{
+                                    position: 'absolute',
+                                    top: 10,
+                                    right: 76,
+                                    opacity: 0.75,
+                                  }}
+                                >
+                                  <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
+                                    <SvgPath d="M12 0L14.59 9.41L24 12L14.59 14.59L12 24L9.41 14.59L0 12L9.41 9.41L12 0Z" fill={tier.accent} />
+                                  </Svg>
+                                </View>
+
+                                <View
+                                  pointerEvents="none"
+                                  style={{
+                                    position: 'absolute',
+                                    bottom: 28,
+                                    left: 140,
+                                    opacity: 0.55,
+                                  }}
+                                >
+                                  <Svg width={8} height={8} viewBox="0 0 24 24" fill="none">
+                                    <SvgPath d="M12 0L14.59 9.41L24 12L14.59 14.59L12 24L9.41 14.59L0 12L9.41 9.41L12 0Z" fill="#FFFFFF" />
+                                  </Svg>
+                                </View>
+
+                                {/* Top: Chip + NFC + Badge */}
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                    <View
+                                      style={{
+                                        width: 34,
+                                        height: 25,
+                                        borderRadius: 5,
+                                        backgroundColor: tier.chipColor,
+                                        borderWidth: 1,
+                                        borderColor: tier.chipBorder,
+                                        justifyContent: 'center',
+                                        alignItems: 'center',
+                                      }}
+                                    >
+                                      <Ionicons name="hardware-chip" size={16} color={tier.chipBorder} />
+                                    </View>
+                                    <Ionicons name="wifi" size={16} color={tier.accent} style={{ transform: [{ rotate: '90deg' }] }} />
+                                  </View>
+
+                                  <View
+                                    style={{
+                                      flexDirection: 'row',
+                                      alignItems: 'center',
+                                      gap: 4,
+                                      backgroundColor: `${tier.accent}20`,
+                                      borderWidth: 1,
+                                      borderColor: tier.accent,
+                                      paddingHorizontal: 8,
+                                      paddingVertical: 3,
+                                      borderRadius: 8,
+                                    }}
+                                  >
+                                    <Svg width={11} height={11} viewBox="0 0 24 24" fill="none">
+                                      <SvgPath d="M6 3h12l4 6-10 12L2 9l4-6zm1.5 2l-2.5 3.75h4.15L8.5 5h-.5zm2.85 0l-.65 3.75h4.6L13.65 5h-3.3zm4.65 0l-.65 3.75h4.15L16.5 5h-1.5zM4.12 10.25L12 19.68l7.88-9.43H4.12z" fill={tier.accent} />
+                                    </Svg>
+                                    <Text style={{ fontSize: 10, fontWeight: '800', color: tier.accent, letterSpacing: 0.6 }}>
+                                      {tier.badge}
+                                    </Text>
+                                  </View>
+                                </View>
+
+                                {/* Middle: User info with Avatar Ring */}
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
+                                  <View
+                                    style={{
+                                      width: 44,
+                                      height: 44,
+                                      borderRadius: 22,
+                                      borderWidth: 2,
+                                      borderColor: tier.accent,
+                                      overflow: 'hidden',
+                                      marginRight: 10,
+                                      backgroundColor: '#1E1B2E',
+                                    }}
+                                  >
+                                    {userProfile.avatarUri ? (
+                                      <Image source={{ uri: userProfile.avatarUri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                                    ) : (
+                                      renderProfileAvatar(userProfile.avatarType, userProfile.avatarUri, userProfile.avatarPresetId, userProfile.displayName, tier.accent, 40)
+                                    )}
+                                  </View>
+                                  <View style={{ flex: 1 }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                                      <Text style={{ fontSize: 14.5, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.3 }} numberOfLines={1}>
+                                        {userProfile.displayName || 'Quảng Trọng Tuấn'}
+                                      </Text>
+                                      <Ionicons name="sparkles" size={13} color={tier.accent} />
+                                    </View>
+                                    <Text style={{ fontSize: 10.5, color: tier.accent, fontWeight: '600', marginTop: 1 }} numberOfLines={1}>
+                                      {userProfile.username || '@lockx_user'} • {tier.badge}
+                                    </Text>
+                                  </View>
+                                </View>
+
+                                {/* Bottom: Code + Duration */}
+                                <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', paddingTop: 8, borderTopWidth: 1, borderTopColor: `${tier.accent}30` }}>
+                                  <View>
+                                    <Text style={{ fontSize: 8.5, color: '#A1A1AA', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 1 }}>
+                                      MÃ ĐỊNH DANH BẢO MẬT
+                                    </Text>
+                                    <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#F1F5F9', letterSpacing: 1.2, fontFamily: 'monospace' }}>
+                                      {tier.code}
+                                    </Text>
+                                  </View>
+                                  <View style={{ alignItems: 'flex-end' }}>
+                                    <Text style={{ fontSize: 8.5, color: '#A1A1AA', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 1 }}>
+                                      THỜI HẠN
+                                    </Text>
+                                    <Text style={{ fontSize: 11, fontWeight: '800', color: tier.accent, letterSpacing: 0.6 }}>
+                                      {tier.duration}
+                                    </Text>
+                                  </View>
+                                </View>
+                              </TouchableOpacity>
+                            </Animated.View>
+                          );
+                        })}
+
+                        {/* Left Navigation Arrow Button */}
+                        <TouchableOpacity
+                          activeOpacity={0.8}
+                          onPress={handlePrev}
+                          style={{
+                            position: 'absolute',
+                            left: 4,
+                            top: '50%',
+                            marginTop: -19,
+                            width: 38,
+                            height: 38,
+                            borderRadius: 19,
+                            backgroundColor: 'rgba(15, 23, 42, 0.88)',
+                            borderWidth: 1.5,
+                            borderColor: 'rgba(255, 255, 255, 0.35)',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            zIndex: 30,
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 3 },
+                            shadowOpacity: 0.6,
+                            shadowRadius: 5,
+                            elevation: 8,
+                          }}
+                        >
+                          <Ionicons name="chevron-back" size={21} color="#FFFFFF" />
+                        </TouchableOpacity>
+
+                        {/* Right Navigation Arrow Button */}
+                        <TouchableOpacity
+                          activeOpacity={0.8}
+                          onPress={handleNext}
+                          style={{
+                            position: 'absolute',
+                            right: 4,
+                            top: '50%',
+                            marginTop: -19,
+                            width: 38,
+                            height: 38,
+                            borderRadius: 19,
+                            backgroundColor: 'rgba(15, 23, 42, 0.88)',
+                            borderWidth: 1.5,
+                            borderColor: 'rgba(255, 255, 255, 0.35)',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            zIndex: 30,
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 3 },
+                            shadowOpacity: 0.6,
+                            shadowRadius: 5,
+                            elevation: 8,
+                          }}
+                        >
+                          <Ionicons name="chevron-forward" size={21} color="#FFFFFF" />
+                        </TouchableOpacity>
+                      </View>
+
+                      {/* Carousel Dots Indicator */}
+                      <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 10, marginBottom: 12 }}>
+                        {VIP_CARD_TIERS.map((tier, idx) => {
+                          const isSelected = carouselCardIndex === idx;
+                          return (
+                            <TouchableOpacity
+                              key={tier.id}
+                              onPress={() => jumpToTier(idx)}
+                              style={{
+                                width: isSelected ? 24 : 8,
+                                height: 8,
+                                borderRadius: 4,
+                                backgroundColor: isSelected ? tier.accent : (isLight ? '#CBD5E1' : '#3F3F46'),
+                              }}
+                            />
+                          );
+                        })}
+                      </View>
+
+                      {/* Button: Set as Active Card */}
+                      <TouchableOpacity
+                        activeOpacity={0.85}
+                        onPress={() => {
+                          setActiveCardTier(currentTier.id);
+                          AsyncStorage.setItem('lockx_active_card_tier', currentTier.id).catch(() => {});
+                          triggerToast(`✓ Đã kích hoạt thẻ "${currentTier.name}" làm thẻ hiển thị chính!`, 'Thẻ VIP', 'success', 'sparkles', currentTier.accent);
+                        }}
+                        style={{
+                          backgroundColor: isCurrentActive ? `${currentTier.accent}20` : currentTier.accent,
+                          borderWidth: 1.5,
+                          borderColor: currentTier.accent,
+                          borderRadius: 14,
+                          paddingVertical: 12,
+                          paddingHorizontal: 16,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 8,
+                        }}
+                      >
+                        <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                          <SvgPath d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z" fill={isCurrentActive ? currentTier.accent : '#000000'} />
+                        </Svg>
+                        <Text style={{ fontSize: 13.5, fontWeight: '800', color: isCurrentActive ? currentTier.accent : '#000000' }}>
+                          {isCurrentActive ? `✓ ĐANG SỬ DỤNG: ${currentTier.badge}` : `KÍCH HOẠT THẺ ${currentTier.badge}`}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })()}
+
+                {/* VIP CUSTOMIZATION ENTRY BUTTONS (QUICK ACTIONS) */}
+                <View style={{ flexDirection: 'row', gap: 10, marginBottom: 22 }}>
+                  {/* Button: Đổi Icon SVG */}
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => setProfileSubView('app_icons')}
+                    style={{
+                      flex: 1,
+                      backgroundColor: currentCardBg,
+                      borderRadius: 16,
+                      padding: 14,
+                      borderWidth: 1,
+                      borderColor: currentBorder,
+                      shadowColor: '#000000',
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.08,
+                      shadowRadius: 6,
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <View
+                        style={{
+                          width: 38,
+                          height: 38,
+                          borderRadius: 11,
+                          backgroundColor: 'rgba(245, 158, 11, 0.15)',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          borderWidth: 1,
+                          borderColor: 'rgba(245, 158, 11, 0.3)',
+                        }}
+                      >
+                        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+                          <SvgPath d="M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5zm-2 16l-4-4 1.41-1.41L10 15.17l6.59-6.59L18 10l-8 8z" fill="#F59E0B" />
+                        </Svg>
+                      </View>
+                      <Ionicons name="chevron-forward" size={16} color="#8E8E93" />
+                    </View>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
+                      Icon SVG (8 Mẫu)
+                    </Text>
+                    <Text style={{ fontSize: 11.5, color: '#8E8E93', marginTop: 2 }}>
+                      Prestige & Cyber
+                    </Text>
+                  </TouchableOpacity>
+
+                  {/* Button: Theme VIP */}
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => setProfileSubView('vip_themes')}
+                    style={{
+                      flex: 1,
+                      backgroundColor: currentCardBg,
+                      borderRadius: 16,
+                      padding: 14,
+                      borderWidth: 1,
+                      borderColor: currentBorder,
+                      shadowColor: '#000000',
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.08,
+                      shadowRadius: 6,
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <View
+                        style={{
+                          width: 38,
+                          height: 38,
+                          borderRadius: 11,
+                          backgroundColor: 'rgba(175, 82, 222, 0.15)',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          borderWidth: 1,
+                          borderColor: 'rgba(175, 82, 222, 0.3)',
+                        }}
+                      >
+                        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+                          <SvgPath d="M12 2C6.49 2 2 6.49 2 12c0 5.51 4.49 10 10 10 1.25 0 2.27-.97 2.27-2.17 0-.58-.23-1.1-.6-1.5-.38-.4-.6-.92-.6-1.5 0-1.2 1.02-2.17 2.27-2.17H17c2.76 0 5-2.24 5-5 0-5.51-4.49-10-10-10zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 8 6.5 8 8 8.67 8 9.5 7.33 11 6.5 11zm3-4c-.83 0-1.5-.67-1.5-1.5S8.67 4 9.5 4s1.5.67 1.5 1.5S10.33 7 9.5 7zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 4 14.5 4s1.5.67 1.5 1.5S15.33 7 14.5 7zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 8 17.5 8s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z" fill="#AF52DE" />
+                        </Svg>
+                      </View>
+                      <Ionicons name="chevron-forward" size={16} color="#8E8E93" />
+                    </View>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
+                      Theme VIP
+                    </Text>
+                    <Text style={{ fontSize: 11.5, color: '#8E8E93', marginTop: 2 }}>
+                      Màu Nền Toàn Diện
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* DANH SÁCH ĐẶC QUYỀN ĐỘC QUYỀN RIÊNG TỪNG THẺ (DÂY CHUYỀN THEO HẠNG THẺ ĐANG XEM) */}
+                {(() => {
+                  const currentTier = VIP_CARD_TIERS[carouselCardIndex] || VIP_CARD_TIERS[4];
+                  return (
+                    <View style={{ marginBottom: 20 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, marginLeft: 4 }}>
+                        <Text style={{ fontSize: 12.5, fontWeight: '800', color: isLight ? '#1C1C1E' : '#E2E8F0', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                          ĐẶC QUYỀN RIÊNG: {currentTier.badge}
+                        </Text>
+                        <View style={{ backgroundColor: `${currentTier.accent}20`, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, borderWidth: 1, borderColor: `${currentTier.accent}45` }}>
+                          <Text style={{ fontSize: 10, fontWeight: '800', color: currentTier.accent }}>
+                            {currentTier.perks.length} ĐẶC QUYỀN
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={{ fontSize: 12, color: '#8E8E93', marginBottom: 12, marginLeft: 4 }}>
+                        {currentTier.desc}
+                      </Text>
+
+                      <View style={{ gap: 10 }}>
+                        {currentTier.perks.map((perk, pIdx) => (
+                          <View
+                            key={pIdx}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'flex-start',
+                              gap: 13,
+                              backgroundColor: currentCardBg,
+                              borderRadius: 16,
+                              padding: 14,
+                              borderWidth: 1,
+                              borderColor: currentBorder,
+                              shadowColor: perk.color,
+                              shadowOffset: { width: 0, height: 2 },
+                              shadowOpacity: 0.06,
+                              shadowRadius: 6,
+                            }}
+                          >
+                            <View
+                              style={{
+                                width: 40,
+                                height: 40,
+                                borderRadius: 12,
+                                backgroundColor: `${perk.color}18`,
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                borderWidth: 1,
+                                borderColor: `${perk.color}35`,
+                              }}
+                            >
+                              {renderPerkSvgIcon(perk.svgType, perk.color)}
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                                <Text style={{ fontSize: 14, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF', flex: 1 }}>
+                                  {perk.title}
+                                </Text>
+                                <View style={{ backgroundColor: `${perk.color}20`, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
+                                  <Text style={{ fontSize: 9.5, fontWeight: '800', color: perk.color }}>
+                                    {perk.badge}
+                                  </Text>
+                                </View>
+                              </View>
+                              <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 4, lineHeight: 17 }}>
+                                {perk.desc}
+                              </Text>
+                            </View>
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  );
+                })()}
+              </ScrollView>
+            </KeyboardAvoidingView>
           ) : (
             /* MÀN HÌNH CÁ NHÂN (DARK MODERN CYBER UI - THEO MẪU THIẾT KẾ MỚI) */
             <ScrollView
@@ -16270,7 +19814,7 @@ function MainApp() {
                   paddingHorizontal: 16,
                   paddingTop: 10,
                   paddingBottom: 120,
-                  backgroundColor: isLight ? '#F2F2F7' : '#000000',
+                  backgroundColor: currentBg,
                 },
               ]}
             >
@@ -16296,9 +19840,9 @@ function MainApp() {
                       width: 40,
                       height: 40,
                       borderRadius: 20,
-                      backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                      backgroundColor: currentCardBg,
                       borderWidth: 1,
-                      borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                      borderColor: currentBorder,
                       justifyContent: 'center',
                       alignItems: 'center',
                     }}
@@ -16314,9 +19858,9 @@ function MainApp() {
                       width: 40,
                       height: 40,
                       borderRadius: 20,
-                      backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                      backgroundColor: currentCardBg,
                       borderWidth: 1,
-                      borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                      borderColor: currentBorder,
                       justifyContent: 'center',
                       alignItems: 'center',
                       position: 'relative',
@@ -16333,12 +19877,70 @@ function MainApp() {
                         borderRadius: 4,
                         backgroundColor: '#FF3B30',
                         borderWidth: 1.5,
-                        borderColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                        borderColor: currentCardBg,
                       }}
                     />
                   </TouchableOpacity>
                 </View>
               </View>
+
+              {/* VIP MEMBERSHIP ENTRY ROW (DYNAMIC TO ACTIVE CARD TIER) */}
+              {(() => {
+                const currentTier = VIP_CARD_TIERS.find(t => t.id === activeCardTier) || VIP_CARD_TIERS[3];
+                return (
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => setProfileSubView('vip_membership')}
+                    style={{
+                      backgroundColor: currentCardBg,
+                      borderRadius: 18,
+                      padding: 14,
+                      borderWidth: 1.2,
+                      borderColor: currentTier.accent,
+                      marginBottom: 16,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 12,
+                      shadowColor: currentTier.accent,
+                      shadowOffset: { width: 0, height: 3 },
+                      shadowOpacity: 0.18,
+                      shadowRadius: 8,
+                      elevation: 4,
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 44,
+                        height: 44,
+                        borderRadius: 12,
+                        backgroundColor: `${currentTier.accent}20`,
+                        borderWidth: 1,
+                        borderColor: currentTier.accent,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+                        <SvgPath d="M6 3h12l4 6-10 12L2 9l4-6zm1.5 2l-2.5 3.75h4.15L8.5 5h-.5zm2.85 0l-.65 3.75h4.6L13.65 5h-3.3zm4.65 0l-.65 3.75h4.15L16.5 5h-1.5zM4.12 10.25L12 19.68l7.88-9.43H4.12z" fill={currentTier.accent} />
+                      </Svg>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={{ fontSize: 15, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF' }}>
+                          Hội Viên {currentTier.badge}
+                        </Text>
+                        <View style={{ backgroundColor: currentTier.accent, paddingHorizontal: 6, paddingVertical: 1.5, borderRadius: 6 }}>
+                          <Text style={{ fontSize: 9.5, fontWeight: '900', color: '#000000' }}>ACTIVE</Text>
+                        </View>
+                      </View>
+                      <Text style={{ fontSize: 11.5, color: '#8E8E93', marginTop: 2 }}>
+                        {currentTier.desc}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={currentTier.accent} />
+                  </TouchableOpacity>
+                );
+              })()}
 
               {/* USER PROFILE CARD */}
               <View
@@ -16416,7 +20018,9 @@ function MainApp() {
                       <Text style={{ fontSize: 18, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF' }}>
                         {userProfile.displayName || 'Quảng Trọng Tuấn'}
                       </Text>
-                      <Ionicons name="checkmark-circle" size={17} color="#007AFF" />
+                      {userProfile.isVerified && (
+                        <Ionicons name="checkmark-circle" size={17} color="#007AFF" />
+                      )}
                     </View>
                     <Text style={{ fontSize: 13, color: '#94A3B8', marginTop: 3 }}>
                       {userProfile.username || '@lockx_user'}
@@ -16519,21 +20123,26 @@ function MainApp() {
                 </View>
               </View>
 
-              {/* LOCKX VERIFIED CARD */}
-              <View
+              {/* LOCKX VERIFIED CARD (TÍCH XANH BẢO MẬT APPLE FACE ID) */}
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => setProfileSubView('verify_id')}
                 style={{
                   backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
                   borderRadius: 20,
                   padding: 16,
                   borderWidth: 1,
-                  borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                  borderColor: userProfile.isVerified
+                    ? 'rgba(0, 122, 255, 0.45)'
+                    : (isLight ? '#E5E5EA' : '#2C2C2E'),
                   flexDirection: 'row',
                   alignItems: 'center',
                   marginBottom: 20,
-                  shadowColor: '#007AFF',
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.15,
-                  shadowRadius: 8,
+                  shadowColor: userProfile.isVerified ? '#007AFF' : '#000000',
+                  shadowOffset: { width: 0, height: 3 },
+                  shadowOpacity: userProfile.isVerified ? 0.22 : 0.08,
+                  shadowRadius: 10,
+                  elevation: 4,
                 }}
               >
                 <View
@@ -16541,23 +20150,54 @@ function MainApp() {
                     width: 50,
                     height: 50,
                     borderRadius: 15,
-                    backgroundColor: 'rgba(0, 122, 255, 0.2)',
+                    backgroundColor: userProfile.isVerified ? 'rgba(0, 122, 255, 0.22)' : 'rgba(142, 142, 147, 0.15)',
                     justifyContent: 'center',
                     alignItems: 'center',
                     marginRight: 14,
-                    borderWidth: 1,
-                    borderColor: 'rgba(0, 122, 255, 0.4)',
+                    borderWidth: 1.2,
+                    borderColor: userProfile.isVerified ? '#007AFF' : 'rgba(142, 142, 147, 0.3)',
+                    position: 'relative',
                   }}
                 >
-                  <Ionicons name="shield-checkmark" size={28} color="#007AFF" />
+                  <Ionicons
+                    name={userProfile.isVerified ? "shield-checkmark" : "shield-outline"}
+                    size={28}
+                    color={userProfile.isVerified ? "#007AFF" : "#8E8E93"}
+                  />
+                  {userProfile.isVerified && (
+                    <View
+                      style={{
+                        position: 'absolute',
+                        bottom: -3,
+                        right: -3,
+                        backgroundColor: '#10B981',
+                        width: 16,
+                        height: 16,
+                        borderRadius: 8,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        borderWidth: 1.5,
+                        borderColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                      }}
+                    >
+                      <Ionicons name="checkmark" size={10} color="#FFFFFF" />
+                    </View>
+                  )}
                 </View>
 
                 <View style={{ flex: 1, marginRight: 10 }}>
-                  <Text style={{ fontSize: 16, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF' }}>
-                    LockX Verified
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={{ fontSize: 16, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF' }}>
+                      LockX Verified
+                    </Text>
+                    {userProfile.isVerified && (
+                      <Ionicons name="checkmark-circle" size={16} color="#007AFF" />
+                    )}
+                  </View>
                   <Text style={{ fontSize: 11.5, color: '#94A3B8', marginTop: 2, lineHeight: 16 }}>
-                    Tăng độ tin cậy, bảo vệ tài khoản và mở khóa nhiều tính năng cao cấp hơn.
+                    {userProfile.isVerified
+                      ? 'Tài khoản chính chủ đã xác minh an toàn bởi Apple Face ID TrueDepth.'
+                      : 'Tăng độ tin cậy, bảo vệ tài khoản và mở khóa nhiều tính năng cao cấp hơn.'}
                   </Text>
                 </View>
 
@@ -16569,42 +20209,50 @@ function MainApp() {
                       gap: 4,
                       backgroundColor: userProfile.isVerified ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
                       paddingHorizontal: 8,
-                      paddingVertical: 3,
+                      paddingVertical: 3.5,
                       borderRadius: 10,
+                      borderWidth: 0.8,
+                      borderColor: userProfile.isVerified ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)',
                     }}
                   >
-                    <View
-                      style={{
-                        width: 6,
-                        height: 6,
-                        borderRadius: 3,
-                        backgroundColor: userProfile.isVerified ? '#10B981' : '#F59E0B',
-                      }}
+                    <Ionicons
+                      name={userProfile.isVerified ? "checkmark-circle" : "ellipse"}
+                      size={userProfile.isVerified ? 12 : 7}
+                      color={userProfile.isVerified ? '#10B981' : '#F59E0B'}
                     />
                     <Text style={{ fontSize: 10.5, fontWeight: '700', color: userProfile.isVerified ? '#10B981' : '#F59E0B' }}>
                       {userProfile.isVerified ? 'Đã xác minh' : 'Chưa xác minh'}
                     </Text>
                   </View>
 
-                  <TouchableOpacity
-                    activeOpacity={0.8}
-                    onPress={() => setProfileSubView('verify_id')}
+                  <View
                     style={{
-                      backgroundColor: '#007AFF',
-                      paddingHorizontal: 12,
-                      paddingVertical: 7,
+                      backgroundColor: userProfile.isVerified ? 'rgba(0, 122, 255, 0.15)' : '#007AFF',
+                      borderWidth: userProfile.isVerified ? 1 : 0,
+                      borderColor: '#007AFF',
+                      paddingHorizontal: 11,
+                      paddingVertical: 6,
                       borderRadius: 12,
                       flexDirection: 'row',
                       alignItems: 'center',
-                      gap: 2,
+                      gap: 4,
                     }}
                   >
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFFFFF' }}>
-                      {userProfile.isVerified ? 'Xem chi tiết >' : 'Xác minh ngay >'}
-                    </Text>
-                  </TouchableOpacity>
+                    {userProfile.isVerified ? (
+                      <>
+                        <Ionicons name="shield-checkmark" size={13} color="#007AFF" />
+                        <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#007AFF' }}>
+                          Chứng chỉ &gt;
+                        </Text>
+                      </>
+                    ) : (
+                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#FFFFFF' }}>
+                        Xác minh ngay &gt;
+                      </Text>
+                    )}
+                  </View>
                 </View>
-              </View>
+              </TouchableOpacity>
 
               {/* SECTION: THÔNG TIN CÁ NHÂN */}
               <View style={{ marginBottom: 20 }}>
@@ -18074,232 +21722,600 @@ function MainApp() {
       </View>
 
       {/* Bottom Native Tab Bar (Ẩn khi đang ở phòng chat với bạn bè để tránh xung đột bàn phím) */}
-      {!(currentTab === 'chat' && activeChatFriend) && (
-        <View style={styles.tabBar}>
-          {[
-            { key: 'vault', label: 'Trang chủ', icon: 'home' },
-            { key: 'apps', label: 'Tệp', icon: 'folder' },
-            { key: 'chat', label: 'Bạn Bè', icon: 'people' },
-            { key: 'profile', label: 'Cá Nhân', icon: 'shield-checkmark' },
-            { key: 'settings', label: 'Cài đặt', icon: 'settings' },
-          ].map((tab) => {
-            const isLocked = isOfflineOnlyMode && (tab.key === 'apps' || tab.key === 'chat');
-            const isActive = currentTab === tab.key;
-            return (
-              <TouchableOpacity
-                key={tab.key}
-                style={[styles.tabItem, isLocked && { opacity: 0.45 }]}
-                activeOpacity={0.7}
-                onPress={() => handleNavigateTab(tab.key as any)}
-              >
-                <View style={{ position: 'relative' }}>
-                  <Ionicons
-                    name={(tab.icon + (isActive ? '' : '-outline')) as any}
-                    size={22}
-                    color={isActive ? appSettings.accentColor : '#8E8E93'}
-                  />
-                  {isLocked && (
-                    <View
-                      style={{
-                        position: 'absolute',
-                        top: -3,
-                        right: -6,
-                        backgroundColor: '#FF3B30',
-                        borderRadius: 6,
-                        width: 13,
-                        height: 13,
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        borderWidth: 1,
-                        borderColor: isLight ? '#FFFFFF' : '#000000',
-                      }}
-                    >
-                      <Ionicons name="lock-closed" size={7.5} color="#FFFFFF" />
-                    </View>
-                  )}
-                </View>
-                <Text
-                  style={[
-                    styles.tabLabel,
-                    isActive && { color: appSettings.accentColor, fontWeight: '700' },
-                    isLocked && { color: '#8E8E93' },
-                  ]}
+      {!(currentTab === 'chat' && activeChatFriend) && !showLuckyEvent && (() => {
+        const defaultBarWidth = Platform.OS === 'web' && typeof window !== 'undefined'
+          ? Math.min(window.innerWidth, 480)
+          : Dimensions.get('window').width;
+        const effectiveWidth = tabBarLayoutWidth || defaultBarWidth;
+        const tabSlotWidth = effectiveWidth / 5;
+
+        const bubbleTranslateX = bottomTabAnim.interpolate({
+          inputRange: [0, 1, 2, 3, 4],
+          outputRange: [
+            tabSlotWidth * 0 + tabSlotWidth / 2 - 26,
+            tabSlotWidth * 1 + tabSlotWidth / 2 - 26,
+            tabSlotWidth * 2 + tabSlotWidth / 2 - 26,
+            tabSlotWidth * 3 + tabSlotWidth / 2 - 26,
+            tabSlotWidth * 4 + tabSlotWidth / 2 - 26,
+          ],
+        });
+
+        const activeTabInfo = {
+          apps: { icon: 'folder', label: 'Tệp' },
+          chat: { icon: 'people', label: 'Bạn Bè' },
+          vault: { icon: 'home', label: 'Trang chủ' },
+          profile: { icon: 'shield-checkmark', label: 'Cá Nhân' },
+          settings: { icon: 'settings', label: 'Cài đặt' },
+        }[currentTab] || { icon: 'home', label: 'Trang chủ' };
+
+        const bottomTabs = [
+          { key: 'apps', label: 'Tệp', icon: 'folder', outlineIcon: 'folder-outline' },
+          { key: 'chat', label: 'Bạn Bè', icon: 'people', outlineIcon: 'people-outline' },
+          { key: 'vault', label: 'Trang chủ', icon: 'home', outlineIcon: 'home-outline' },
+          { key: 'profile', label: 'Cá Nhân', icon: 'shield-checkmark', outlineIcon: 'shield-checkmark-outline' },
+          { key: 'settings', label: 'Cài đặt', icon: 'settings', outlineIcon: 'settings-outline' },
+        ] as const;
+
+        return (
+          <View
+            onLayout={(e) => {
+              const w = e.nativeEvent.layout.width;
+              if (w > 0 && Math.abs(w - tabBarLayoutWidth) > 1) {
+                setTabBarLayoutWidth(w);
+              }
+            }}
+            style={styles.tabBar}
+          >
+            {/* ANIMATED SLIDING FLOATING CIRCULAR BUBBLE */}
+            <Animated.View
+              pointerEvents="none"
+              style={{
+                position: 'absolute',
+                top: -22,
+                left: 0,
+                transform: [{ translateX: bubbleTranslateX }],
+                width: 52,
+                height: 52,
+                borderRadius: 26,
+                backgroundColor: appSettings.accentColor,
+                justifyContent: 'center',
+                alignItems: 'center',
+                borderWidth: 4,
+                borderColor: isLight ? '#FFFFFF' : '#161618',
+                shadowColor: appSettings.accentColor,
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.45,
+                shadowRadius: 8,
+                elevation: 10,
+                zIndex: 99,
+              }}
+            >
+              <Ionicons name={activeTabInfo.icon as any} size={24} color="#FFFFFF" />
+            </Animated.View>
+
+            {bottomTabs.map((tab) => {
+              const isActive = currentTab === tab.key;
+              return (
+                <TouchableOpacity
+                  key={tab.key}
+                  activeOpacity={0.7}
+                  style={styles.tabItem}
+                  onPress={() => {
+                    if (tab.key === 'vault' && currentTab === 'vault') {
+                      setVaultSubView('list');
+                      setSelectedAccount(null);
+                    }
+                    if (tab.key === 'profile' && currentTab === 'profile') {
+                      setProfileSubView('main');
+                    }
+                    if (tab.key === 'chat' && currentTab === 'chat') {
+                      setActiveChatFriend(null);
+                    }
+                    setCurrentTab(tab.key as any);
+                  }}
                 >
-                  {tab.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      )}
+                  <View style={{ height: 26, justifyContent: 'center', alignItems: 'center' }}>
+                    {!isActive && (
+                      <Ionicons
+                        name={tab.outlineIcon as any}
+                        size={21}
+                        color="#8E8E93"
+                      />
+                    )}
+                  </View>
+                  <Text
+                    style={[
+                      styles.tabLabel,
+                      isActive && { color: appSettings.accentColor, fontWeight: '700' },
+                      { marginTop: 2 },
+                    ]}
+                  >
+                    {tab.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        );
+      })()}
         </>
       )}
 
       {/* ========================================================================= */}
-      {/* POPUP MODAL: THÔNG BÁO OFFLINE (CẦN KẾT NỐI INTERNET / WI-FI CHO TỆP & BẠN BÈ) */}
+      {/* MODAL: ĐÃ XÓA GẦN ĐÂY (RECENTLY DELETED / TRASH MANAGEMENT) */}
       {/* ========================================================================= */}
-      <Modal visible={showOfflineNoticeModal} animationType="fade" transparent onRequestClose={() => setShowOfflineNoticeModal(false)}>
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: 'rgba(0, 0, 0, 0.72)',
-            justifyContent: 'center',
-            alignItems: 'center',
-            padding: 24,
-            zIndex: 999999,
-          }}
-        >
-          <View
-            style={{
-              width: '100%',
-              maxWidth: 340,
-              backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
-              borderRadius: 24,
-              padding: 22,
-              alignItems: 'center',
-              borderWidth: 1,
-              borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
-              shadowColor: '#000000',
-              shadowOffset: { width: 0, height: 16 },
-              shadowOpacity: 0.45,
-              shadowRadius: 28,
-              elevation: 20,
-            }}
-          >
-            {/* Offline Icon Badge with Pulsing Glow */}
+      <Modal visible={showTrashModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowTrashModal(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: isLight ? '#F2F2F7' : '#000000' }}>
+          {/* Header */}
+          <View style={[styles.fullScreenNavBar, isLight && { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E5EA' }]}>
+            <TouchableOpacity onPress={() => setShowTrashModal(false)} style={styles.fullScreenNavBtn} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+              <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor }]}>Đóng</Text>
+            </TouchableOpacity>
+            <Text style={[styles.fullScreenNavTitle, isLight && { color: '#000000' }]}>
+              Đã Xóa Gần Đây
+            </Text>
+            {((trashActiveTab === 'accounts' && deletedAccounts.length > 0) || (trashActiveTab === 'files' && deletedFiles.length > 0)) ? (
+              <TouchableOpacity onPress={handleEmptyTrash} style={styles.fullScreenNavBtn} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+                <Text style={[styles.fullScreenNavBtnText, { color: '#FF3B30', fontWeight: '700' }]}>Dọn sạch</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={{ width: 44 }} />
+            )}
+          </View>
+
+          {/* Segmented Control Selector */}
+          <View style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 10 }}>
             <View
               style={{
-                width: 68,
-                height: 68,
-                borderRadius: 34,
-                backgroundColor: 'rgba(255, 149, 0, 0.14)',
-                borderWidth: 2,
-                borderColor: 'rgba(255, 149, 0, 0.35)',
-                justifyContent: 'center',
-                alignItems: 'center',
-                marginBottom: 14,
-              }}
-            >
-              <Ionicons name="cloud-offline" size={34} color="#FF9500" />
-            </View>
-
-            {/* Title */}
-            <Text
-              style={{
-                fontSize: 20,
-                fontWeight: '800',
-                color: isLight ? '#000000' : '#FFFFFF',
-                textAlign: 'center',
-                marginBottom: 6,
-                letterSpacing: -0.3,
-              }}
-            >
-              Oops! Bạn đang offline
-            </Text>
-
-            {/* Description */}
-            <Text
-              style={{
-                fontSize: 13.5,
-                color: isLight ? '#6C6C70' : '#8E8E93',
-                textAlign: 'center',
-                lineHeight: 20,
-                marginBottom: 16,
-              }}
-            >
-              Tính năng {pendingOfflineTab === 'apps' ? 'Tệp' : pendingOfflineTab === 'chat' ? 'Bạn Bè' : 'Tệp & Bạn Bè'} yêu cầu kết nối Wi-Fi hoặc Internet để đồng bộ và truy cập.
-            </Text>
-
-            {/* Status Note Pill */}
-            <View
-              style={{
-                width: '100%',
-                backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E',
-                borderRadius: 12,
-                paddingVertical: 10,
-                paddingHorizontal: 12,
                 flexDirection: 'row',
-                alignItems: 'center',
-                gap: 8,
-                marginBottom: 20,
+                backgroundColor: isLight ? '#E5E5EA' : '#1C1C1E',
+                borderRadius: 12,
+                padding: 3,
+                borderWidth: 1,
+                borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
               }}
             >
-              <Ionicons name="checkmark-circle" size={17} color="#34C759" />
-              <Text
-                style={{
-                  flex: 1,
-                  fontSize: 12,
-                  color: isLight ? '#3C3C43' : '#E5E5EA',
-                  fontWeight: '500',
-                  lineHeight: 16,
-                }}
-              >
-                Trang chủ, Cá nhân và Cài đặt vẫn hoạt động 100% không cần mạng.
-              </Text>
-            </View>
-
-            {/* 2 Action Buttons */}
-            <View style={{ width: '100%', gap: 10 }}>
-              {/* Button 1: Kiểm tra lại */}
               <TouchableOpacity
                 activeOpacity={0.8}
-                onPress={handleCheckConnection}
-                disabled={isCheckingConnection}
+                onPress={() => setTrashActiveTab('accounts')}
                 style={{
-                  backgroundColor: '#007AFF',
-                  paddingVertical: 13,
-                  borderRadius: 14,
-                  flexDirection: 'row',
+                  flex: 1,
+                  paddingVertical: 8,
+                  borderRadius: 10,
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 8,
-                  shadowColor: '#007AFF',
-                  shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.3,
-                  shadowRadius: 8,
+                  backgroundColor: trashActiveTab === 'accounts' ? (isLight ? '#FFFFFF' : '#2C2C2E') : 'transparent',
                 }}
               >
-                {isCheckingConnection ? (
-                  <>
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                    <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '700' }}>
-                      Đang kiểm tra kết nối...
-                    </Text>
-                  </>
-                ) : (
-                  <>
-                    <Ionicons name="refresh" size={18} color="#FFFFFF" />
-                    <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '700' }}>
-                      Kiểm tra lại
-                    </Text>
-                  </>
-                )}
+                <Text
+                  style={{
+                    fontSize: 13.5,
+                    fontWeight: trashActiveTab === 'accounts' ? '700' : '500',
+                    color: trashActiveTab === 'accounts' ? (isLight ? '#000000' : '#FFFFFF') : '#8E8E93',
+                  }}
+                >
+                  Tài khoản ({deletedAccounts.length})
+                </Text>
               </TouchableOpacity>
 
-              {/* Button 2: Sử dụng không cần internet */}
               <TouchableOpacity
-                activeOpacity={0.75}
-                onPress={handleUseWithoutInternet}
+                activeOpacity={0.8}
+                onPress={() => setTrashActiveTab('files')}
                 style={{
-                  backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E',
-                  borderWidth: 1,
-                  borderColor: isLight ? '#E5E5EA' : '#3A3A3C',
-                  paddingVertical: 13,
-                  borderRadius: 14,
-                  flexDirection: 'row',
+                  flex: 1,
+                  paddingVertical: 8,
+                  borderRadius: 10,
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 6,
+                  backgroundColor: trashActiveTab === 'files' ? (isLight ? '#FFFFFF' : '#2C2C2E') : 'transparent',
                 }}
               >
-                <Ionicons name="phone-portrait-outline" size={17} color={isLight ? '#000000' : '#FFFFFF'} />
-                <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 14.5, fontWeight: '600' }}>
-                  Sử dụng không cần internet
+                <Text
+                  style={{
+                    fontSize: 13.5,
+                    fontWeight: trashActiveTab === 'files' ? '700' : '500',
+                    color: trashActiveTab === 'files' ? (isLight ? '#000000' : '#FFFFFF') : '#8E8E93',
+                  }}
+                >
+                  Tệp tin ({deletedFiles.length})
                 </Text>
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+
+          {/* Notice Banner */}
+          <View style={{ paddingHorizontal: 16, marginBottom: 12 }}>
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+                backgroundColor: isLight ? '#FEF3C7' : 'rgba(245, 158, 11, 0.12)',
+                borderRadius: 12,
+                paddingHorizontal: 12,
+                paddingVertical: 9,
+                borderWidth: 1,
+                borderColor: isLight ? '#FDE68A' : 'rgba(245, 158, 11, 0.25)',
+              }}
+            >
+              <Ionicons name="information-circle" size={16} color="#F59E0B" />
+              <Text style={{ flex: 1, fontSize: 12, color: isLight ? '#92400E' : '#FBBF24', lineHeight: 16 }}>
+                Các mục trong Thùng rác sẽ được lưu trữ 30 ngày trước khi bị hệ thống xóa vĩnh viễn.
+              </Text>
+            </View>
+          </View>
+
+          {/* Actions Toolbar when items exist */}
+          {((trashActiveTab === 'accounts' && deletedAccounts.length > 0) || (trashActiveTab === 'files' && deletedFiles.length > 0)) && (
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 18, marginBottom: 10 }}>
+              <TouchableOpacity activeOpacity={0.7} onPress={handleRestoreAll} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                <Ionicons name="arrow-undo-outline" size={15} color="#007AFF" />
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#007AFF' }}>
+                  Khôi phục tất cả
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity activeOpacity={0.7} onPress={handleEmptyTrash} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                <Ionicons name="trash-outline" size={15} color="#FF3B30" />
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#FF3B30' }}>
+                  Xóa tất cả
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Main List */}
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 60 }}>
+            {trashActiveTab === 'accounts' ? (
+              deletedAccounts.length === 0 ? (
+                /* Empty Accounts Trash */
+                <View style={{ alignItems: 'center', paddingVertical: 50, paddingHorizontal: 24 }}>
+                  <View
+                    style={{
+                      width: 68,
+                      height: 68,
+                      borderRadius: 34,
+                      backgroundColor: isLight ? '#E5E5EA' : '#1C1C1E',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      marginBottom: 14,
+                    }}
+                  >
+                    <Ionicons name="trash-outline" size={32} color="#8E8E93" />
+                  </View>
+                  <Text style={{ fontSize: 16, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF', marginBottom: 6 }}>
+                    Không có tài khoản đã xóa
+                  </Text>
+                  <Text style={{ fontSize: 13, color: '#8E8E93', textAlign: 'center', lineHeight: 18 }}>
+                    Các tài khoản bạn xóa sẽ xuất hiện tại đây và có thể khôi phục trong vòng 30 ngày.
+                  </Text>
+                </View>
+              ) : (
+                /* Deleted Accounts List */
+                <View style={{ gap: 10 }}>
+                  {deletedAccounts.map((acc) => {
+                    const plat = getPlatformInfo(acc.game, acc.category);
+                    const daysPassed = Math.floor((Date.now() - new Date(acc.deletedAt || Date.now()).getTime()) / (1000 * 60 * 60 * 24));
+                    const daysLeft = Math.max(1, 30 - daysPassed);
+
+                    return (
+                      <View
+                        key={acc.id}
+                        style={{
+                          backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                          borderRadius: 16,
+                          padding: 13,
+                          borderWidth: 1,
+                          borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 12,
+                        }}
+                      >
+                        {/* Platform App Logo / Icon */}
+                        {plat.logoUrl ? (
+                          <Image
+                            source={{ uri: plat.logoUrl }}
+                            style={{
+                              width: 48,
+                              height: 48,
+                              borderRadius: 14,
+                              backgroundColor: isLight ? '#F2F2F7' : '#2C2C2E',
+                              borderWidth: 1,
+                              borderColor: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)',
+                            }}
+                            resizeMode="cover"
+                          />
+                        ) : (
+                          <View
+                            style={{
+                              width: 48,
+                              height: 48,
+                              borderRadius: 14,
+                              backgroundColor: plat.color,
+                              justifyContent: 'center',
+                              alignItems: 'center',
+                              borderWidth: 1,
+                              borderColor: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)',
+                            }}
+                          >
+                            <Ionicons name={plat.icon as any} size={24} color="#FFFFFF" />
+                          </View>
+                        )}
+
+                        {/* Info */}
+                        <View style={{ flex: 1, minWidth: 0, justifyContent: 'center' }}>
+                          <Text
+                            style={{
+                              fontSize: 15.5,
+                              fontWeight: '700',
+                              color: isLight ? '#000000' : '#FFFFFF',
+                              marginBottom: 3,
+                            }}
+                            numberOfLines={1}
+                          >
+                            {plat.name || acc.game || acc.title}
+                          </Text>
+
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 5 }}>
+                            <Ionicons name="person-circle-outline" size={13} color="#8E8E93" />
+                            <Text style={{ fontSize: 12.5, color: '#8E8E93', flexShrink: 1 }} numberOfLines={1}>
+                              {acc.username || 'Chưa đặt tên đăng nhập'}
+                            </Text>
+                          </View>
+
+                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <View
+                              style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 4,
+                                backgroundColor: daysLeft <= 3 ? 'rgba(239, 68, 68, 0.12)' : 'rgba(245, 158, 11, 0.12)',
+                                paddingHorizontal: 7,
+                                paddingVertical: 2,
+                                borderRadius: 6,
+                                borderWidth: 1,
+                                borderColor: daysLeft <= 3 ? 'rgba(239, 68, 68, 0.25)' : 'rgba(245, 158, 11, 0.22)',
+                              }}
+                            >
+                              <Ionicons
+                                name={daysLeft <= 3 ? 'warning-outline' : 'time-outline'}
+                                size={11}
+                                color={daysLeft <= 3 ? '#EF4444' : '#F59E0B'}
+                              />
+                              <Text
+                                style={{
+                                  fontSize: 10.5,
+                                  fontWeight: '700',
+                                  color: daysLeft <= 3 ? '#EF4444' : '#F59E0B',
+                                }}
+                              >
+                                {daysLeft <= 1 ? 'Xóa trong 24h tới' : `Còn ${daysLeft} ngày`}
+                              </Text>
+                            </View>
+                          </View>
+                        </View>
+
+                        {/* Action Buttons */}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          {/* Restore */}
+                          <TouchableOpacity
+                            activeOpacity={0.7}
+                            onPress={() => handleRestoreAccount(acc.id)}
+                            style={{
+                              backgroundColor: isLight ? 'rgba(0, 122, 255, 0.1)' : 'rgba(10, 132, 255, 0.16)',
+                              paddingHorizontal: 10,
+                              paddingVertical: 7,
+                              borderRadius: 10,
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 4,
+                              borderWidth: 1,
+                              borderColor: isLight ? 'rgba(0, 122, 255, 0.25)' : 'rgba(10, 132, 255, 0.35)',
+                            }}
+                          >
+                            <Ionicons name="arrow-undo" size={13} color="#007AFF" />
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: '#007AFF' }}>
+                              Khôi phục
+                            </Text>
+                          </TouchableOpacity>
+
+                          {/* Permanent Delete */}
+                          <TouchableOpacity
+                            activeOpacity={0.7}
+                            onPress={() => handlePermanentDeleteAccount(acc.id)}
+                            style={{
+                              backgroundColor: isLight ? 'rgba(255, 59, 48, 0.1)' : 'rgba(239, 68, 68, 0.16)',
+                              width: 32,
+                              height: 32,
+                              borderRadius: 10,
+                              justifyContent: 'center',
+                              alignItems: 'center',
+                              borderWidth: 1,
+                              borderColor: isLight ? 'rgba(255, 59, 48, 0.25)' : 'rgba(239, 68, 68, 0.35)',
+                            }}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          >
+                            <Ionicons name="trash-outline" size={15} color="#FF3B30" />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              )
+            ) : (
+              deletedFiles.length === 0 ? (
+                /* Empty Files Trash */
+                <View style={{ alignItems: 'center', paddingVertical: 50, paddingHorizontal: 24 }}>
+                  <View
+                    style={{
+                      width: 68,
+                      height: 68,
+                      borderRadius: 34,
+                      backgroundColor: isLight ? '#E5E5EA' : '#1C1C1E',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      marginBottom: 14,
+                    }}
+                  >
+                    <Ionicons name="folder-open-outline" size={32} color="#8E8E93" />
+                  </View>
+                  <Text style={{ fontSize: 16, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF', marginBottom: 6 }}>
+                    Không có tệp đã xóa
+                  </Text>
+                  <Text style={{ fontSize: 13, color: '#8E8E93', textAlign: 'center', lineHeight: 18 }}>
+                    Các tệp tin bạn xóa sẽ được lưu trữ tại đây và có thể khôi phục lại bất kỳ lúc nào trong 30 ngày.
+                  </Text>
+                </View>
+              ) : (
+                /* Deleted Files List */
+                <View style={{ gap: 10 }}>
+                  {deletedFiles.map((file) => {
+                    const daysPassed = Math.floor((Date.now() - new Date(file.deletedAt || Date.now()).getTime()) / (1000 * 60 * 60 * 24));
+                    const daysLeft = Math.max(1, 30 - daysPassed);
+                    const fileIcon = file.category === 'image' ? 'image' : file.category === 'video' ? 'videocam' : file.category === 'audio' ? 'musical-notes' : 'document-text';
+                    const fileColor = file.category === 'image' ? '#007AFF' : file.category === 'video' ? '#AF52DE' : file.category === 'audio' ? '#FF2D55' : '#10B981';
+
+                    return (
+                      <View
+                        key={file.id}
+                        style={{
+                          backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                          borderRadius: 16,
+                          padding: 13,
+                          borderWidth: 1,
+                          borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 12,
+                        }}
+                      >
+                        {/* File Category Icon */}
+                        <View
+                          style={{
+                            width: 48,
+                            height: 48,
+                            borderRadius: 14,
+                            backgroundColor: `${fileColor}22`,
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            borderWidth: 1,
+                            borderColor: `${fileColor}33`,
+                          }}
+                        >
+                          <Ionicons name={fileIcon as any} size={24} color={fileColor} />
+                        </View>
+
+                        {/* Info */}
+                        <View style={{ flex: 1, minWidth: 0, justifyContent: 'center' }}>
+                          <Text
+                            style={{
+                              fontSize: 15,
+                              fontWeight: '700',
+                              color: isLight ? '#000000' : '#FFFFFF',
+                              marginBottom: 3,
+                            }}
+                            numberOfLines={1}
+                          >
+                            {file.name}
+                          </Text>
+
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 5 }}>
+                            <Text style={{ fontSize: 12, color: '#8E8E93' }}>
+                              {file.sizeFormatted || '1.2 MB'}
+                            </Text>
+                            {file.extension && (
+                              <>
+                                <Text style={{ fontSize: 11, color: '#64748B' }}>•</Text>
+                                <Text style={{ fontSize: 11, color: '#8E8E93', textTransform: 'uppercase' }}>
+                                  {file.extension}
+                                </Text>
+                              </>
+                            )}
+                          </View>
+
+                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <View
+                              style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 4,
+                                backgroundColor: daysLeft <= 3 ? 'rgba(239, 68, 68, 0.12)' : 'rgba(245, 158, 11, 0.12)',
+                                paddingHorizontal: 7,
+                                paddingVertical: 2,
+                                borderRadius: 6,
+                                borderWidth: 1,
+                                borderColor: daysLeft <= 3 ? 'rgba(239, 68, 68, 0.25)' : 'rgba(245, 158, 11, 0.22)',
+                              }}
+                            >
+                              <Ionicons
+                                name={daysLeft <= 3 ? 'warning-outline' : 'time-outline'}
+                                size={11}
+                                color={daysLeft <= 3 ? '#EF4444' : '#F59E0B'}
+                              />
+                              <Text
+                                style={{
+                                  fontSize: 10.5,
+                                  fontWeight: '700',
+                                  color: daysLeft <= 3 ? '#EF4444' : '#F59E0B',
+                                }}
+                              >
+                                {daysLeft <= 1 ? 'Xóa trong 24h tới' : `Còn ${daysLeft} ngày`}
+                              </Text>
+                            </View>
+                          </View>
+                        </View>
+
+                        {/* Action Buttons */}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          {/* Restore */}
+                          <TouchableOpacity
+                            activeOpacity={0.7}
+                            onPress={() => handleRestoreFile(file.id)}
+                            style={{
+                              backgroundColor: isLight ? 'rgba(0, 122, 255, 0.1)' : 'rgba(10, 132, 255, 0.16)',
+                              paddingHorizontal: 10,
+                              paddingVertical: 7,
+                              borderRadius: 10,
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 4,
+                              borderWidth: 1,
+                              borderColor: isLight ? 'rgba(0, 122, 255, 0.25)' : 'rgba(10, 132, 255, 0.35)',
+                            }}
+                          >
+                            <Ionicons name="arrow-undo" size={13} color="#007AFF" />
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: '#007AFF' }}>
+                              Khôi phục
+                            </Text>
+                          </TouchableOpacity>
+
+                          {/* Permanent Delete */}
+                          <TouchableOpacity
+                            activeOpacity={0.7}
+                            onPress={() => handlePermanentDeleteFile(file.id)}
+                            style={{
+                              backgroundColor: isLight ? 'rgba(255, 59, 48, 0.1)' : 'rgba(239, 68, 68, 0.16)',
+                              width: 32,
+                              height: 32,
+                              borderRadius: 10,
+                              justifyContent: 'center',
+                              alignItems: 'center',
+                              borderWidth: 1,
+                              borderColor: isLight ? 'rgba(255, 59, 48, 0.25)' : 'rgba(239, 68, 68, 0.35)',
+                            }}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          >
+                            <Ionicons name="trash-outline" size={15} color="#FF3B30" />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              )
+            )}
+          </ScrollView>
+        </SafeAreaView>
       </Modal>
 
       {/* MODAL: TRANG CÁ NHÂN NGƯỜI DÙNG KHÁC (VIEW OTHER USER'S PROFILE) */}
@@ -22269,7 +26285,7 @@ function MainApp() {
 
                           // 2. Gửi thông báo hệ thống qua Backend API MySQL
                           const themeNotice = `🎨 Đã đổi chủ đề cuộc trò chuyện thành ${th.name}`;
-                          fetch('https://aecongnghe.online/api/messages/send.php', {
+                          fetch('https://quangtrongtuan.id.vn/api/messages/send.php', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
@@ -22386,7 +26402,7 @@ function MainApp() {
 
                           // 2. Gửi thông báo hệ thống qua Backend API MySQL
                           const emojiNotice = `✨ Đã đổi biểu tượng cảm xúc nhanh thành ${emoji}`;
-                          fetch('https://aecongnghe.online/api/messages/send.php', {
+                          fetch('https://quangtrongtuan.id.vn/api/messages/send.php', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
@@ -22423,6 +26439,119 @@ function MainApp() {
             </ScrollView>
           </SafeAreaView>
         </View>
+      </Modal>
+
+      {/* MODAL: THAO TÁC NHẤN GIỮ TÀI KHOẢN */}
+      <Modal
+        visible={!!accountActionTarget}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setAccountActionTarget(null)}
+      >
+        <Pressable
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0, 0, 0, 0.55)',
+            justifyContent: 'flex-end',
+            padding: 12,
+          }}
+          onPress={() => setAccountActionTarget(null)}
+        >
+          <Pressable
+            onPress={(event) => event.stopPropagation()}
+            style={{
+              width: '100%',
+              maxWidth: 430,
+              alignSelf: 'center',
+              backgroundColor: isLight ? '#F2F2F7' : '#1C1C1E',
+              borderRadius: 24,
+              padding: 14,
+              paddingBottom: 14,
+              borderWidth: 1,
+              borderColor: isLight ? '#E5E5EA' : '#38383A',
+              shadowColor: '#000000',
+              shadowOffset: { width: 0, height: 8 },
+              shadowOpacity: 0.35,
+              shadowRadius: 18,
+            }}
+          >
+            <View style={{ alignItems: 'center', paddingTop: 2, paddingBottom: 14 }}>
+              <View style={{ width: 38, height: 4, borderRadius: 2, backgroundColor: isLight ? '#C7C7CC' : '#636366', marginBottom: 14 }} />
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                {getPlatformInfo(accountActionTarget?.game, accountActionTarget?.category).logoUrl ? (
+                  <Image
+                    source={{ uri: getPlatformInfo(accountActionTarget?.game, accountActionTarget?.category).logoUrl }}
+                    style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: '#2C2C2E' }}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: getPlatformInfo(accountActionTarget?.game, accountActionTarget?.category).color, justifyContent: 'center', alignItems: 'center' }}>
+                    <Ionicons name={getPlatformInfo(accountActionTarget?.game, accountActionTarget?.category).icon} size={20} color="#FFFFFF" />
+                  </View>
+                )}
+                <View style={{ alignItems: 'flex-start' }}>
+                  <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '700' }} numberOfLines={1}>
+                    {accountActionTarget?.game || accountActionTarget?.title || 'Tài khoản'}
+                  </Text>
+                  <Text style={{ color: '#8E8E93', fontSize: 12, marginTop: 2 }} numberOfLines={1}>
+                    {accountActionTarget?.username || ''}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              activeOpacity={0.75}
+              onPress={() => {
+                if (!accountActionTarget) return;
+                const target = accountActionTarget;
+                setAccountActionTarget(null);
+                toggleAccountFavorite(target);
+              }}
+              style={{
+                minHeight: 52,
+                borderRadius: 14,
+                backgroundColor: isLight ? '#FFFFFF' : '#2C2C2E',
+                borderWidth: 1,
+                borderColor: isLight ? '#E5E5EA' : '#3A3A3C',
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingHorizontal: 15,
+                marginBottom: 9,
+              }}
+            >
+              <Ionicons name={accountActionTarget?.isFavorite ? 'star' : 'star-outline'} size={22} color="#FFB800" />
+              <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 15, fontWeight: '600', marginLeft: 12 }}>
+                {accountActionTarget?.isFavorite ? 'Bỏ yêu thích' : 'Thêm vào yêu thích'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.75}
+              onPress={() => {
+                if (!accountActionTarget) return;
+                const id = accountActionTarget.id;
+                setAccountActionTarget(null);
+                handleDeleteAccount(id);
+              }}
+              style={{
+                minHeight: 52,
+                borderRadius: 14,
+                backgroundColor: isLight ? '#FFF5F4' : 'rgba(255, 59, 48, 0.14)',
+                borderWidth: 1,
+                borderColor: isLight ? '#FFD7D4' : 'rgba(255, 69, 58, 0.3)',
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingHorizontal: 15,
+                marginBottom: 9,
+              }}
+            >
+              <Ionicons name="trash-outline" size={22} color="#FF3B30" />
+              <Text style={{ color: '#FF3B30', fontSize: 15, fontWeight: '700', marginLeft: 12 }}>Xóa tài khoản</Text>
+            </TouchableOpacity>
+
+          </Pressable>
+        </Pressable>
       </Modal>
 
       {/* MODAL FULL TRANG: GIỚI THIỆU TÍNH NĂNG WEB DÀNH CHO USER MỚI */}
@@ -24035,16 +28164,28 @@ const getStyles = (
   },
   tabBar: {
     flexDirection: 'row',
-    height: 64,
-    backgroundColor: isLight ? 'rgba(248, 248, 248, 0.96)' : '#000000',
-    borderTopWidth: 0.5,
-    borderTopColor: isLight ? 'rgba(0, 0, 0, 0.12)' : '#2C2C2E',
+    height: Platform.OS === 'ios' ? 70 : 64,
+    backgroundColor: isLight ? '#FFFFFF' : '#161618',
+    borderTopWidth: 1,
+    borderTopColor: isLight ? 'rgba(0, 0, 0, 0.08)' : 'rgba(255, 255, 255, 0.08)',
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
     justifyContent: 'space-around',
     alignItems: 'center',
-    paddingBottom: 8,
+    paddingBottom: Platform.OS === 'ios' ? 18 : 6,
+    paddingHorizontal: 6,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: isLight ? 0.08 : 0.45,
+    shadowRadius: 12,
+    elevation: 20,
+    marginBottom: Platform.OS === 'ios' ? -18 : 0,
+    overflow: 'visible',
   },
   tabItem: {
+    flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 3,
   },
   tabLabel: {

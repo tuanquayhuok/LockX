@@ -2,7 +2,7 @@
 /**
  * ==============================================================================
  * LockX Vault - Telegram Bot Webhook 2 Chiều Chuẩn Giao Diện Đẹp (Nút Bấm Trực Quan)
- * Tự động đồng bộ với Web aecongnghe.online & Mobile App GVault
+ * Tự động đồng bộ với Web quangtrongtuan.id.vn & Mobile App GVault
  * ==============================================================================
  */
 
@@ -80,7 +80,7 @@ function getMainMenuButtons() {
             ['text' => '📞 Nhật Ký Cuộc Gọi', 'callback_data' => 'btn_calls']
         ],
         [
-            ['text' => '🌐 Mở Web Dashboard (aecongnghe.online)', 'url' => 'https://aecongnghe.online/']
+            ['text' => '🌐 Mở Web Dashboard (quangtrongtuan.id.vn)', 'url' => 'https://quangtrongtuan.id.vn/']
         ]
     ];
 }
@@ -154,7 +154,7 @@ if (isset($update['callback_query'])) {
 
             $buttons[] = [
                 ['text' => '🔙 Quay Lại Menu Chính', 'callback_data' => 'btn_main'],
-                ['text' => '🌐 Duyệt Trên Web', 'url' => 'https://aecongnghe.online/']
+                ['text' => '🌐 Duyệt Trên Web', 'url' => 'https://quangtrongtuan.id.vn/']
             ];
 
             sendTelegramWithButtons($chatId, $msg, $buttons);
@@ -304,9 +304,37 @@ if (!$message) { http_response_code(200); echo "OK"; exit(); }
 $chatId = $message['chat']['id'] ?? '';
 $text   = trim($message['text'] ?? '');
 $from   = $message['from']['first_name'] ?? 'User';
+$teleUser = strtolower($message['from']['username'] ?? '');
+
+// Tự động đồng bộ Chat ID vào hệ thống
+if (!empty($chatId)) {
+    try {
+        Database::getInstance()->setSetting('telegram_chat_id', (string)$chatId, 'Telegram Chat ID quản trị viên / thiết bị nhận');
+        if (!empty($teleUser)) {
+            $db->prepare("UPDATE users SET telegram_chat_id = ? WHERE LOWER(username) = ? OR LOWER(username) = ?")->execute([$chatId, $teleUser, '@' . $teleUser]);
+        }
+    } catch (Exception $e) {}
+}
+
+// 2.0. Lệnh liên kết tài khoản LockX với Telegram (/link username)
+if (strpos($text, '/link') === 0) {
+    $parts = explode(' ', $text);
+    $targetUsername = strtolower(ltrim(trim($parts[1] ?? ''), '@'));
+    if (!empty($targetUsername)) {
+        try {
+            $stmt = $db->prepare("UPDATE users SET telegram_chat_id = ? WHERE LOWER(username) = ?");
+            $stmt->execute([$chatId, $targetUsername]);
+            sendTelegramWithButtons($chatId, "✅ <b>LIÊN KẾT THÀNH CÔNG!</b>\n━━━━━━━━━━━━━━━━━━━━\nTài khoản <b>@{$targetUsername}</b> đã được kết nối với Telegram này.\nTừ bây giờ, tất cả thông báo từ Admin sẽ được đẩy trực tiếp ra màn hình khóa iPhone của bạn!", getMainMenuButtons());
+        } catch (Exception $e) {
+            sendTelegramWithButtons($chatId, "❌ Lỗi: " . $e->getMessage(), getMainMenuButtons());
+        }
+    } else {
+        sendTelegramWithButtons($chatId, "👉 Vui lòng nhập cú pháp: <code>/link username</code>\nVí dụ: <code>/link tuan</code>", getMainMenuButtons());
+    }
+}
 
 // 2.1. Lệnh /start hoặc /menu
-if (strpos($text, '/start') === 0 || strpos($text, '/menu') === 0) {
+elseif (strpos($text, '/start') === 0 || strpos($text, '/menu') === 0) {
     // Kiểm tra nếu có tham số deep-linking: /start otp_username hoặc /start forgot_username
     $deepParam = '';
     if (preg_match('/\/start\s+(otp_|forgot_)(.+)/i', $text, $matches)) {
@@ -338,7 +366,7 @@ if (strpos($text, '/start') === 0 || strpos($text, '/menu') === 0) {
         $headerBanner .= "👋 <b>Xin chào {$from}!</b>\n";
         $headerBanner .= "🛡️ <b>Vai trò:</b> Quản Trị Viên Két Sắt\n";
         $headerBanner .= "🟢 <b>Trạng thái máy chủ:</b> Đang hoạt động\n";
-        $headerBanner .= "🌐 <b>Website:</b> aecongnghe.online\n";
+        $headerBanner .= "🌐 <b>Website:</b> quangtrongtuan.id.vn\n";
         $headerBanner .= "━━━━━━━━━━━━━━━━━━━━\n\n";
         $headerBanner .= "👇 <b>Hệ thống đang hoạt động • Chọn chức năng bên dưới:</b>";
 

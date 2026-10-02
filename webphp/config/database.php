@@ -23,7 +23,13 @@ class Database {
 
             $this->pdo = new PDO($dsn, DB_USER, DB_PASS, $options);
         } catch (PDOException $e) {
-            // Khi không kết nối được database, trả về thông báo lỗi dạng JSON rõ ràng
+            // Nếu là trang Dashboard Web (index.php, admin.php), ném exception để giao diện xử lý
+            $scriptName = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
+            if (strpos($scriptName, 'index.php') !== false || strpos($scriptName, 'admin.php') !== false || (isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'text/html') !== false)) {
+                throw $e;
+            }
+
+            // Khi là API không kết nối được database, trả về thông báo lỗi dạng JSON rõ ràng
             header('Content-Type: application/json; charset=utf-8');
             http_response_code(500);
             echo json_encode([

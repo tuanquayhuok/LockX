@@ -57,7 +57,8 @@
         "UIFileSharingEnabled": true,
         "LSSupportsOpeningDocumentsInPlace": true,
         "UIBackgroundModes": [
-          "audio"
+          "audio",
+          "remote-notification"
         ],
         "UIViewControllerBasedStatusBarAppearance": false
       }
@@ -81,7 +82,14 @@
           "faceIDPermission": "LockX sử dụng Face ID để xác thực và bảo vệ an toàn cho tài khoản và két sắt của bạn."
         }
       ],
-      "expo-audio"
+      "expo-audio",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#0A84FF"
+        }
+      ]
     ]
   }
 }

@@ -10,6 +10,7 @@ require_once __DIR__ . '/../../config/config.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../helpers/response.php';
 require_once __DIR__ . '/../../helpers/push.php';
+require_once __DIR__ . '/../../helpers/telegram.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
@@ -55,6 +56,10 @@ try {
         INDEX `idx_created` (`created_at`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
+    try {
+        $db->exec("ALTER TABLE `users` ADD COLUMN `telegram_chat_id` VARCHAR(64) DEFAULT NULL");
+    } catch (Exception $e) {}
+
     $insStmt = $db->prepare("INSERT INTO app_notifications (recipient, title, body, type, data, created_at) VALUES (?, ?, ?, ?, ?, NOW())");
     $insStmt->execute([$recipient, $title, $body, $style, json_encode($data, JSON_UNESCAPED_UNICODE)]);
 } catch (Exception $e) {}
@@ -73,6 +78,25 @@ if ($type === 'broadcast') {
     }
     $res = PushNotificationService::sendToUser($username, $title, $body, array_merge($data, ['style' => $style]));
 }
+
+// 3. Gửi đồng thời qua Telegram Bot (@LockXOTP_bot) để báo màn hình khóa iOS kể cả khi tắt app
+try {
+    $teleChatId = null;
+    if ($type === 'user' && !empty($username)) {
+        $cleanUser = strtolower(ltrim($username, '@'));
+        $stmtU = $db->prepare("SELECT telegram_chat_id FROM users WHERE LOWER(username) = ? LIMIT 1");
+        $stmtU->execute([$cleanUser]);
+        $rowU = $stmtU->fetch();
+        if (!empty($rowU['telegram_chat_id'])) {
+            $teleChatId = $rowU['telegram_chat_id'];
+        }
+    }
+    TelegramService::sendAlert("📢 {$title}", [
+        'Nội dung'  => $body,
+        'Đối tượng' => ($type === 'broadcast') ? '🌐 Tất cả người dùng' : "@{$username}",
+        'Chế độ'    => strtoupper($style)
+    ], $teleChatId);
+} catch (Exception $e) {}
 
 if ($res['success']) {
     jsonResponse(true, $res, 'Đã gửi thông báo đẩy (Push Notification) thành công tới thiết bị.');

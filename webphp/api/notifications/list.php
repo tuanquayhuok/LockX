@@ -40,7 +40,7 @@ try {
         INDEX `idx_created` (`created_at`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
-    $query = "SELECT * FROM app_notifications WHERE (recipient = 'all' OR recipient = ?)";
+    $query = "SELECT * FROM app_notifications WHERE (LOWER(recipient) = 'all' OR LOWER(recipient) = LOWER(?))";
     $params = [$cleanUser];
 
     if ($since > 0) {
