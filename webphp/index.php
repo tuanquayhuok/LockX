@@ -35,6 +35,10 @@ $stats = [
     'calls'                 => 0,
     'otps'                  => 0,
     'notifications'         => 0,
+    'orders_total'          => 0,
+    'orders_completed'      => 0,
+    'orders_pending'        => 0,
+    'revenue_total'         => 0,
 ];
 
 try {
@@ -52,6 +56,22 @@ try {
         `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         INDEX `idx_recipient` (`recipient`),
         INDEX `idx_created` (`created_at`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    // Đảm bảo bảng `storage_orders` luôn tồn tại để lưu trữ đơn hàng & thanh toán
+    $db->exec("CREATE TABLE IF NOT EXISTS `storage_orders` (
+        `id` VARCHAR(64) PRIMARY KEY,
+        `username` VARCHAR(64) NOT NULL,
+        `plan_id` VARCHAR(32) NOT NULL,
+        `plan_name` VARCHAR(128) NOT NULL,
+        `amount` INT NOT NULL,
+        `status` ENUM('pending', 'waiting_verification', 'waiting_3ds', 'completed', 'cancelled') DEFAULT 'pending',
+        `transfer_content` VARCHAR(128) NOT NULL,
+        `payment_method` VARCHAR(32) DEFAULT 'vietqr',
+        `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        `paid_at` DATETIME DEFAULT NULL,
+        INDEX `idx_order_user` (`username`),
+        INDEX `idx_order_status` (`status`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
     // ==========================================================================
@@ -458,6 +478,77 @@ try {
                 $actionType = 'error';
             }
         }
+
+        // 10. KIỂM DUYỆT ĐƠN HÀNG: DUYỆT THANH TOÁN (APPROVE ORDER)
+        elseif ($act === 'approve_order') {
+            $orderId = trim($_POST['order_id'] ?? '');
+            if (!empty($orderId)) {
+                $stmt = $db->prepare("SELECT * FROM storage_orders WHERE id = ? LIMIT 1");
+                $stmt->execute([$orderId]);
+                $order = $stmt->fetch();
+
+                if ($order) {
+                    $up = $db->prepare("UPDATE storage_orders SET status = 'completed', paid_at = NOW() WHERE id = ?");
+                    $up->execute([$orderId]);
+
+                    $targetUsername = $order['username'];
+                    $planName = $order['plan_name'];
+                    $amountFmt = number_format($order['amount'], 0, ',', '.') . 'đ';
+
+                    // Gửi thông báo Push & App Notification tới người mua
+                    $notifTitle = '🎉 Đơn Hàng Đã Được Duyệt Thành Công!';
+                    $notifBody = "Đơn hàng #{$orderId} ({$planName}) số tiền {$amountFmt} đã được Quản trị viên phê duyệt kích hoạt!";
+
+                    $insNotif = $db->prepare("INSERT INTO app_notifications (recipient, title, body, type, created_at) VALUES (?, ?, ?, 'payment', NOW())");
+                    $insNotif->execute([$targetUsername, $notifTitle, $notifBody]);
+
+                    try {
+                        PushNotificationService::sendToUser(
+                            $targetUsername,
+                            $notifTitle,
+                            $notifBody,
+                            ['action' => 'payment_approved', 'order_id' => $orderId, 'plan_id' => $order['plan_id']]
+                        );
+                    } catch (Exception $e) {}
+
+                    // Gửi Telegram alert
+                    try {
+                        TelegramService::sendAlert('✅ ADMIN PHÊ DUYỆT ĐƠN HÀNG THÀNH CÔNG', [
+                            'Mã Đơn'      => $orderId,
+                            'Khách Hàng'  => "@{$targetUsername}",
+                            'Gói/Thẻ'     => $planName,
+                            'Số Tiền'     => $amountFmt,
+                            'Admin Duyệt' => $_SESSION['admin_user'] ?? 'admin_lockx',
+                            'Thời Gian'   => date('d/m/Y H:i:s')
+                        ]);
+                    } catch (Exception $e) {}
+
+                    $actionMessage = "✓ Đã phê duyệt kích hoạt thành công đơn hàng #{$orderId} ({$planName}) cho @{$targetUsername}!";
+                    $actionType = 'success';
+                }
+            }
+        }
+
+        // 11. HỦY ĐƠN HÀNG (CANCEL ORDER)
+        elseif ($act === 'cancel_order') {
+            $orderId = trim($_POST['order_id'] ?? '');
+            if (!empty($orderId)) {
+                $up = $db->prepare("UPDATE storage_orders SET status = 'cancelled' WHERE id = ?");
+                $up->execute([$orderId]);
+                $actionMessage = "✓ Đã chuyển trạng thái đơn hàng #{$orderId} sang Đã Hủy.";
+                $actionType = 'warning';
+            }
+        }
+
+        // 12. XÓA ĐƠN HÀNG (DELETE ORDER)
+        elseif ($act === 'delete_order') {
+            $orderId = trim($_POST['order_id'] ?? '');
+            if (!empty($orderId)) {
+                $db->prepare("DELETE FROM storage_orders WHERE id = ?")->execute([$orderId]);
+                $actionMessage = "✓ Đã xóa vĩnh viễn đơn hàng #{$orderId} khỏi cơ sở dữ liệu.";
+                $actionType = 'info';
+            }
+        }
     }
 
     // ==========================================================================
@@ -472,6 +563,10 @@ try {
     $stats['calls']                 = (int)$db->query("SELECT COUNT(*) FROM call_logs")->fetchColumn();
     $stats['otps']                  = (int)$db->query("SELECT COUNT(*) FROM password_resets")->fetchColumn();
     $stats['notifications']         = (int)$db->query("SELECT COUNT(*) FROM app_notifications")->fetchColumn();
+    $stats['orders_total']          = (int)$db->query("SELECT COUNT(*) FROM storage_orders")->fetchColumn();
+    $stats['orders_completed']      = (int)$db->query("SELECT COUNT(*) FROM storage_orders WHERE status = 'completed'")->fetchColumn();
+    $stats['orders_pending']        = (int)$db->query("SELECT COUNT(*) FROM storage_orders WHERE status IN ('pending', 'waiting_verification', 'waiting_3ds')")->fetchColumn();
+    $stats['revenue_total']         = (int)$db->query("SELECT COALESCE(SUM(amount), 0) FROM storage_orders WHERE status = 'completed'")->fetchColumn();
 
     // Tìm kiếm & Lọc danh sách người dùng
     $searchQuery = trim($_GET['q'] ?? '');
@@ -508,6 +603,31 @@ try {
     $userStmt = $db->prepare("SELECT * FROM users WHERE {$userWhereSql} ORDER BY id DESC LIMIT 100");
     $userStmt->execute($userParams);
     $allUsers = $userStmt->fetchAll();
+
+    // Tìm kiếm & Lọc danh sách Đơn Hàng & Thanh Toán
+    $orderSearch = trim($_GET['oq'] ?? '');
+    $orderStatus = trim($_GET['ostatus'] ?? '');
+    $orderMethod = trim($_GET['omethod'] ?? '');
+
+    $orderWhere = ["1=1"];
+    $orderParams = [];
+    if (!empty($orderSearch)) {
+        $orderWhere[] = "(id LIKE ? OR username LIKE ? OR plan_name LIKE ? OR transfer_content LIKE ?)";
+        $st = "%{$orderSearch}%";
+        $orderParams = array_merge($orderParams, [$st, $st, $st, $st]);
+    }
+    if (!empty($orderStatus)) {
+        $orderWhere[] = "status = ?";
+        $orderParams[] = $orderStatus;
+    }
+    if (!empty($orderMethod)) {
+        $orderWhere[] = "payment_method = ?";
+        $orderParams[] = $orderMethod;
+    }
+    $orderWhereSql = implode(' AND ', $orderWhere);
+    $orderStmt = $db->prepare("SELECT * FROM storage_orders WHERE {$orderWhereSql} ORDER BY created_at DESC LIMIT 100");
+    $orderStmt->execute($orderParams);
+    $allOrders = $orderStmt->fetchAll();
 
     // Danh sách Yêu cầu cấp Tích Xanh
     $pendingRequests = $db->query("SELECT * FROM verification_requests ORDER BY created_at DESC LIMIT 25")->fetchAll();
@@ -979,6 +1099,11 @@ $currentAdmin = $_SESSION['admin_user'] ?? 'admin_lockx';
             color: var(--warning);
             border: 1px solid rgba(255, 159, 10, 0.3);
         }
+        .badge-purple {
+            background: var(--purple-soft);
+            color: var(--purple);
+            border: 1px solid rgba(191, 90, 242, 0.3);
+        }
 
         /* Avatar */
         .user-avatar {
@@ -1309,6 +1434,7 @@ $currentAdmin = $_SESSION['admin_user'] ?? 'admin_lockx';
         <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16 16 5 5"/></symbol>
         <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
         <symbol id="i-api" viewBox="0 0 24 24"><path d="M8 8 4 12l4 4M16 8l4 4-4 4M14 5l-4 14"/></symbol>
+        <symbol id="i-card" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M7 15h2"/></symbol>
     </svg>
     <!-- Toast Container -->
     <div id="toastContainer"></div>
@@ -1391,6 +1517,14 @@ $currentAdmin = $_SESSION['admin_user'] ?? 'admin_lockx';
             <button class="tab-btn active" onclick="switchTab('dashboard', this)">
                 <svg class="ui-icon"><use href="#i-dashboard"></use></svg> Tổng Quan
             </button>
+            <button class="tab-btn" onclick="switchTab('orders', this)">
+                <svg class="ui-icon"><use href="#i-card"></use></svg> Đơn Hàng & Duyệt Thanh Toán
+                <?php if ($stats['orders_pending'] > 0): ?>
+                    <span class="tab-badge" style="background:var(--warning); color:#000; font-weight:800;"><?= $stats['orders_pending'] ?> chờ</span>
+                <?php else: ?>
+                    <span class="tab-badge"><?= $stats['orders_total'] ?></span>
+                <?php endif; ?>
+            </button>
             <button class="tab-btn" onclick="switchTab('users', this)">
                 <svg class="ui-icon"><use href="#i-users"></use></svg> Quản Lý User & Cấp MK
                 <span class="tab-badge"><?= $stats['users'] ?></span>
@@ -1422,6 +1556,20 @@ $currentAdmin = $_SESSION['admin_user'] ?? 'admin_lockx';
         <div id="tab-dashboard" class="tab-content">
             <!-- Stats Summary Grid -->
             <div class="stats-grid">
+                <div class="stat-card c-green">
+                    <div class="stat-title">Doanh Thu Đã Thu</div>
+                    <div class="stat-val" style="color:var(--success);"><?= number_format($stats['revenue_total'], 0, ',', '.') ?>đ</div>
+                    <div class="stat-sub">
+                        <span style="color:var(--success);"><svg class="ui-icon sm"><use href="#i-check"></use></svg> <?= $stats['orders_completed'] ?> đơn hoàn tất</span>
+                    </div>
+                </div>
+
+                <div class="stat-card c-orange">
+                    <div class="stat-title">Đơn Chờ Kiểm Duyệt</div>
+                    <div class="stat-val" style="color:var(--warning);"><?= number_format($stats['orders_pending']) ?></div>
+                    <div class="stat-sub"><?= $stats['orders_total'] ?> tổng đơn hàng</div>
+                </div>
+
                 <div class="stat-card">
                     <div class="stat-title">Tổng Người Dùng</div>
                     <div class="stat-val"><?= number_format($stats['users']) ?></div>
@@ -1468,13 +1616,16 @@ $currentAdmin = $_SESSION['admin_user'] ?? 'admin_lockx';
                     <span style="font-size: 12px; color: var(--text-muted);">Xử lý tác vụ một chạm</span>
                 </div>
                 <div class="card-body" style="display: flex; gap: 12px; flex-wrap: wrap;">
+                    <button type="button" class="btn btn-warning" onclick="switchTab('orders', document.querySelectorAll('.tab-btn')[1])">
+                        <svg class="ui-icon"><use href="#i-card"></use></svg> Kiểm Duyệt Thanh Toán (<?= $stats['orders_pending'] ?>)
+                    </button>
                     <button type="button" class="btn btn-primary" onclick="openCreateUserModal()">
                         <svg class="ui-icon"><use href="#i-plus"></use></svg> Cấp Tài Khoản Mới
                     </button>
-                    <button type="button" class="btn btn-success" onclick="switchTab('push', document.querySelectorAll('.tab-btn')[2])">
+                    <button type="button" class="btn btn-success" onclick="switchTab('push', document.querySelectorAll('.tab-btn')[3])">
                         <svg class="ui-icon"><use href="#i-bell"></use></svg> Bắn Thông Báo Đến App
                     </button>
-                    <button type="button" class="btn btn-warning" onclick="switchTab('verified', document.querySelectorAll('.tab-btn')[3])">
+                    <button type="button" class="btn btn-warning" onclick="switchTab('verified', document.querySelectorAll('.tab-btn')[4])">
                         <svg class="ui-icon"><use href="#i-shield"></use></svg> Xem Yêu Cầu Tích Xanh (<?= $stats['pending_verifications'] ?>)
                     </button>
                     <button type="button" class="btn btn-outline" onclick="openAdminPasswordModal()">
@@ -1566,7 +1717,221 @@ $currentAdmin = $_SESSION['admin_user'] ?? 'admin_lockx';
         </div>
 
         <!-- =================================================================== -->
-        <!-- TAB 2: QUẢN LÝ NGƯỜI DÙNG & ĐỔI / CẤP MẬT KHẨU (USERS) -->
+        <!-- TAB 2: QUẢN LÝ ĐƠN HÀNG & KIỂM DUYỆT THANH TOÁN (ORDERS) -->
+        <!-- =================================================================== -->
+        <div id="tab-orders" class="tab-content" style="display: none;">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <span><svg class="ui-icon"><use href="#i-card"></use></svg> Quản Lý & Kiểm Duyệt Đơn Hàng Thanh Toán</span>
+                        <span class="badge badge-verified"><?= count($allOrders) ?> đơn hàng</span>
+                        <?php if ($stats['orders_pending'] > 0): ?>
+                            <span class="badge badge-pending">⚠️ <?= $stats['orders_pending'] ?> đơn cần duyệt</span>
+                        <?php endif; ?>
+                    </div>
+                    <div>
+                        <a href="?#orders" class="btn btn-outline btn-sm" title="Tải lại danh sách đơn hàng">
+                            <svg class="ui-icon"><use href="#i-refresh"></use></svg> Làm Mới
+                        </a>
+                    </div>
+                </div>
+
+                <div class="card-body" style="padding-bottom: 0;">
+                    <!-- Filter and Search Form -->
+                    <form method="GET" class="filter-bar">
+                        <input type="hidden" name="tab" value="orders">
+                        <div class="search-box">
+                            <span class="search-icon"><svg class="ui-icon"><use href="#i-search"></use></svg></span>
+                            <input type="text" name="oq" value="<?= htmlspecialchars($orderSearch) ?>" placeholder="Tìm mã đơn LX..., username, tên gói/thẻ VIP, nội dung chuyển khoản..." class="form-control">
+                        </div>
+
+                        <select name="ostatus" class="form-control" style="width: auto;">
+                            <option value="">-- Tất cả trạng thái --</option>
+                            <option value="waiting_verification" <?= $orderStatus === 'waiting_verification' ? 'selected' : '' ?>>🟡 Chờ duyệt (Khách báo đã CK)</option>
+                            <option value="waiting_3ds" <?= $orderStatus === 'waiting_3ds' ? 'selected' : '' ?>>🟣 Chờ OTP 3D-Secure</option>
+                            <option value="pending" <?= $orderStatus === 'pending' ? 'selected' : '' ?>>⚪ Chờ thanh toán</option>
+                            <option value="completed" <?= $orderStatus === 'completed' ? 'selected' : '' ?>>🟢 Đã duyệt hoàn tất</option>
+                            <option value="cancelled" <?= $orderStatus === 'cancelled' ? 'selected' : '' ?>>🔴 Đã hủy</option>
+                        </select>
+
+                        <select name="omethod" class="form-control" style="width: auto;">
+                            <option value="">-- Cổng thanh toán --</option>
+                            <option value="vietqr" <?= $orderMethod === 'vietqr' ? 'selected' : '' ?>>VietQR MBBank</option>
+                            <option value="visa" <?= $orderMethod === 'visa' ? 'selected' : '' ?>>Visa / Mastercard</option>
+                        </select>
+
+                        <button type="submit" class="btn btn-primary">
+                            <svg class="ui-icon"><use href="#i-search"></use></svg> Lọc
+                        </button>
+
+                        <?php if (!empty($orderSearch) || !empty($orderStatus) || !empty($orderMethod)): ?>
+                            <a href="?#orders" class="btn btn-outline" style="text-decoration: none;">Đặt lại</a>
+                        <?php endif; ?>
+                    </form>
+                </div>
+
+                <!-- Orders Table -->
+                <div class="table-responsive" style="margin-top: 14px;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Mã Đơn</th>
+                                <th>Khách Hàng</th>
+                                <th>Gói / Thẻ VIP</th>
+                                <th>Số Tiền</th>
+                                <th>Cổng TT</th>
+                                <th>Nội Dung CK / Giao Dịch</th>
+                                <th>Trạng Thái</th>
+                                <th>Thời Gian</th>
+                                <th style="text-align: right; min-width: 170px;">Kiểm Duyệt</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if (empty($allOrders)): ?>
+                                <tr>
+                                    <td colspan="9" style="text-align: center; color: var(--text-muted); padding: 40px 20px;">
+                                        <div style="font-size: 32px; margin-bottom: 8px;">💳</div>
+                                        <b style="font-size: 15px;">Chưa có đơn hàng thanh toán nào phù hợp</b>
+                                        <p style="font-size: 12.5px; margin-top: 4px;">Các đơn mua gói dung lượng hoặc thẻ VIP sẽ tự động xuất hiện tại đây khi người dùng tạo đơn.</p>
+                                    </td>
+                                </tr>
+                            <?php else: ?>
+                                <?php foreach ($allOrders as $o): ?>
+                                    <tr style="<?= $o['status'] === 'waiting_verification' ? 'background: rgba(255, 159, 10, 0.05);' : '' ?>">
+                                        <!-- Mã đơn -->
+                                        <td>
+                                            <div style="display: flex; align-items: center; gap: 6px;">
+                                                <span class="badge" style="font-family: monospace; font-size: 12px; font-weight: 800; background: rgba(255, 255, 255, 0.08); letter-spacing: 0.5px;">
+                                                    #<?= htmlspecialchars($o['id']) ?>
+                                                </span>
+                                                <button type="button" class="btn btn-outline btn-sm" style="padding: 2px 6px;" onclick="copyText('<?= htmlspecialchars($o['id']) ?>', 'Đã sao chép mã đơn!')" title="Sao chép mã đơn">
+                                                    <svg class="ui-icon sm"><use href="#i-copy"></use></svg>
+                                                </button>
+                                            </div>
+                                        </td>
+
+                                        <!-- Khách hàng -->
+                                        <td>
+                                            <div style="display: flex; align-items: center; gap: 8px;">
+                                                <div class="user-avatar" style="width: 30px; height: 30px; font-size: 12px; background: #0A84FF;">
+                                                    <?= mb_substr($o['username'], 0, 1) ?>
+                                                </div>
+                                                <b>@<?= htmlspecialchars($o['username']) ?></b>
+                                            </div>
+                                        </td>
+
+                                        <!-- Gói / Thẻ VIP -->
+                                        <td>
+                                            <span style="font-weight: 700; color: var(--text-primary); font-size: 13px;">
+                                                <?= htmlspecialchars($o['plan_name'] ?: $o['plan_id']) ?>
+                                            </span>
+                                        </td>
+
+                                        <!-- Số tiền -->
+                                        <td>
+                                            <b style="color: var(--success); font-size: 14.5px; font-weight: 800;">
+                                                <?= number_format($o['amount'], 0, ',', '.') ?>đ
+                                            </b>
+                                        </td>
+
+                                        <!-- Cổng TT -->
+                                        <td>
+                                            <?php if ($o['payment_method'] === 'visa'): ?>
+                                                <span class="badge" style="background: rgba(255, 215, 0, 0.15); color: #FFD700; border: 1px solid rgba(255, 215, 0, 0.35); font-weight: 800;">
+                                                    <svg class="ui-icon sm"><use href="#i-card"></use></svg> Visa / Master
+                                                </span>
+                                            <?php else: ?>
+                                                <span class="badge" style="background: rgba(10, 132, 255, 0.15); color: #0A84FF; border: 1px solid rgba(10, 132, 255, 0.35); font-weight: 800;">
+                                                    <svg class="ui-icon sm"><use href="#i-shield"></use></svg> VietQR MBBank
+                                                </span>
+                                            <?php endif; ?>
+                                        </td>
+
+                                        <!-- Nội dung CK -->
+                                        <td>
+                                            <div style="display: flex; align-items: center; gap: 4px;">
+                                                <code style="font-size: 11px; background: rgba(255, 255, 255, 0.05); padding: 3px 6px; border-radius: 4px; color: var(--warning); font-weight: 700;">
+                                                    <?= htmlspecialchars($o['transfer_content'] ?: '-') ?>
+                                                </code>
+                                                <?php if (!empty($o['transfer_content'])): ?>
+                                                    <button type="button" class="btn btn-outline btn-sm" style="padding: 1px 5px;" onclick="copyText('<?= htmlspecialchars($o['transfer_content']) ?>', 'Đã chép cú pháp CK!')" title="Sao chép nội dung">
+                                                        <svg class="ui-icon sm"><use href="#i-copy"></use></svg>
+                                                    </button>
+                                                <?php endif; ?>
+                                            </div>
+                                        </td>
+
+                                        <!-- Trạng thái -->
+                                        <td>
+                                            <?php if ($o['status'] === 'completed'): ?>
+                                                <span class="badge badge-active" style="font-weight: 800;">
+                                                    <svg class="ui-icon sm"><use href="#i-check"></use></svg> ĐÃ DUYỆT
+                                                </span>
+                                            <?php elseif ($o['status'] === 'waiting_verification'): ?>
+                                                <span class="badge badge-pending" style="font-weight: 800;">
+                                                    ⏳ CHỜ DUYỆT (ĐÃ CK)
+                                                </span>
+                                            <?php elseif ($o['status'] === 'waiting_3ds'): ?>
+                                                <span class="badge badge-purple" style="font-weight: 800;">
+                                                    🔐 CHỜ OTP 3DS
+                                                </span>
+                                            <?php elseif ($o['status'] === 'cancelled'): ?>
+                                                <span class="badge badge-banned" style="font-weight: 800;">
+                                                    ✕ ĐÃ HỦY
+                                                </span>
+                                            <?php else: ?>
+                                                <span class="badge" style="background: rgba(255, 255, 255, 0.06); color: var(--text-muted); font-weight: 700;">
+                                                    ⚪ CHỜ THANH TOÁN
+                                                </span>
+                                            <?php endif; ?>
+                                        </td>
+
+                                        <!-- Thời gian -->
+                                        <td>
+                                            <small style="color: var(--text-secondary); display: block; font-size: 11px;">
+                                                Tạo: <?= date('H:i d/m/Y', strtotime($o['created_at'])) ?>
+                                            </small>
+                                            <?php if (!empty($o['paid_at'])): ?>
+                                                <small style="color: var(--success); font-weight: 700; font-size: 11px;">
+                                                    ✓ Duyệt: <?= date('H:i d/m', strtotime($o['paid_at'])) ?>
+                                                </small>
+                                            <?php endif; ?>
+                                        </td>
+
+                                        <!-- Hành động kiểm duyệt -->
+                                        <td style="text-align: right;">
+                                            <form method="POST" style="display: inline-flex; align-items: center; gap: 6px;">
+                                                <input type="hidden" name="order_id" value="<?= htmlspecialchars($o['id']) ?>">
+                                                
+                                                <?php if ($o['status'] !== 'completed'): ?>
+                                                    <button type="submit" name="admin_action" value="approve_order" class="btn btn-success btn-sm" style="font-weight: 700;" onclick="return confirm('XÁC NHẬN DUYỆT ĐƠN HÀNG #<?= $o['id'] ?>?\nSố tiền: <?= number_format($o['amount'], 0, ',', '.') ?>đ\nTài khoản @<?= htmlspecialchars($o['username']) ?> sẽ được kích hoạt gói ngay lập tức!')" title="Duyệt đơn và kích hoạt">
+                                                        <svg class="ui-icon sm"><use href="#i-check"></use></svg> Duyệt Ngay
+                                                    </button>
+                                                    <button type="submit" name="admin_action" value="cancel_order" class="btn btn-outline btn-sm" style="color: var(--warning); padding: 5px 8px;" onclick="return confirm('Bạn có chắc muốn HỦY đơn hàng #<?= $o['id'] ?>?')" title="Hủy đơn này">
+                                                        <svg class="ui-icon sm"><use href="#i-close"></use></svg>
+                                                    </button>
+                                                <?php else: ?>
+                                                    <span style="color: var(--success); font-size: 11.5px; font-weight: 800; display: inline-flex; align-items: center; gap: 3px;">
+                                                        <svg class="ui-icon sm"><use href="#i-check"></use></svg> Hoàn Tất
+                                                    </span>
+                                                <?php endif; ?>
+
+                                                <button type="submit" name="admin_action" value="delete_order" class="btn btn-outline btn-sm" style="color: var(--danger); padding: 5px 8px;" onclick="return confirm('CẢNH BÁO: Xóa vĩnh viễn đơn hàng #<?= $o['id'] ?> khỏi cơ sở dữ liệu?')" title="Xóa đơn">
+                                                    <svg class="ui-icon sm"><use href="#i-close"></use></svg>
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- =================================================================== -->
+        <!-- TAB 3: QUẢN LÝ NGƯỜI DÙNG & ĐỔI / CẤP MẬT KHẨU (USERS) -->
         <!-- =================================================================== -->
         <div id="tab-users" class="tab-content" style="display: none;">
             <div class="card">

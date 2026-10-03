@@ -21,20 +21,30 @@ $input = getRequestData();
 $username = trim($input['username'] ?? ($_GET['username'] ?? 'User'));
 $planId = trim($input['plan_id'] ?? ($_GET['plan_id'] ?? '50GB'));
 
-// Định nghĩa bảng giá chuẩn theo gói dung lượng
+// Định nghĩa bảng giá chuẩn theo gói dung lượng & Thẻ VIP
 $planPrices = [
-    '50GB'  => ['name' => 'Gói LockX+ Cá Nhân (50 GB)', 'amount' => 19000, 'quota_bytes' => 53687091200],
-    '200GB' => ['name' => 'Gói LockX Pro Nâng Cao (200 GB)', 'amount' => 59000, 'quota_bytes' => 214748364800],
-    '2TB'   => ['name' => 'Gói LockX Max Ultra (2 TB)', 'amount' => 199000, 'quota_bytes' => 2199023255552],
+    '50GB'      => ['name' => 'Gói LockX+ Cá Nhân (50 GB)', 'amount' => 19000, 'quota_bytes' => 53687091200],
+    '200GB'     => ['name' => 'Gói LockX Pro Nâng Cao (200 GB)', 'amount' => 59000, 'quota_bytes' => 214748364800],
+    '2TB'       => ['name' => 'Gói LockX Max Ultra (2 TB)', 'amount' => 199000, 'quota_bytes' => 2199023255552],
+    'silver'    => ['name' => 'Thẻ VIP Bạc (Silver Card)', 'amount' => 69000, 'type' => 'vip_card'],
+    'gold'      => ['name' => 'Thẻ VIP Vàng (Gold Card)', 'amount' => 199000, 'type' => 'vip_card'],
+    'diamond'   => ['name' => 'Thẻ VIP Kim Cương (Diamond Card)', 'amount' => 399000, 'type' => 'vip_card'],
+    'titanium'  => ['name' => 'Thẻ VIP Titanium (Titanium Card)', 'amount' => 799000, 'type' => 'vip_card'],
+    'uranium'   => ['name' => 'Thẻ VIP Uranium Vô Cực (Uranium Card)', 'amount' => 1499000, 'type' => 'vip_card'],
 ];
 
-if (!isset($planPrices[$planId])) {
-    jsonResponse(false, null, 'Gói dung lượng không hợp lệ hoặc miễn phí.', 400);
-}
+$paymentMethod = trim($input['payment_method'] ?? ($_GET['payment_method'] ?? 'vietqr'));
 
-$planInfo = $planPrices[$planId];
-$amount = $planInfo['amount'];
-$planName = $planInfo['name'];
+if (isset($input['amount']) && (int)$input['amount'] > 0) {
+    $amount = (int)$input['amount'];
+    $planName = trim($input['plan_name'] ?? ($planPrices[$planId]['name'] ?? 'Đơn hàng LockX'));
+} else if (isset($planPrices[$planId])) {
+    $planInfo = $planPrices[$planId];
+    $amount = $planInfo['amount'];
+    $planName = $planInfo['name'];
+} else {
+    jsonResponse(false, null, 'Gói dung lượng hoặc thẻ VIP không hợp lệ.', 400);
+}
 
 // Tạo mã đơn hàng duy nhất: LX + 6 số ngẫu nhiên
 $orderId = 'LX' . strtoupper(substr(md5(uniqid(mt_rand(), true)), 0, 6));
@@ -68,22 +78,23 @@ try {
         ");
 
         $stmt = $db->prepare("
-            INSERT INTO `storage_orders` (`id`, `username`, `plan_id`, `plan_name`, `amount`, `status`, `transfer_content`, `created_at`)
-            VALUES (?, ?, ?, ?, ?, 'pending', ?, NOW())
+            INSERT INTO `storage_orders` (`id`, `username`, `plan_id`, `plan_name`, `amount`, `status`, `transfer_content`, `payment_method`, `created_at`)
+            VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, NOW())
         ");
-        $stmt->execute([$orderId, $username, $planId, $planName, $amount, $transferContent]);
+        $stmt->execute([$orderId, $username, $planId, $planName, $amount, $transferContent, $paymentMethod]);
     }
 } catch (Exception $e) {}
 
-// Gửi thông báo Telegram khi có khách tạo đơn mua dung lượng
+// Gửi thông báo Telegram khi có khách tạo đơn mua dung lượng hoặc Thẻ VIP
 try {
-    TelegramService::sendAlert('🛒 ĐƠN HÀNG MUA DUNG LƯỢNG MỚI', [
-        'Mã Đơn'     => $orderId,
-        'Người Mua'  => $username,
-        'Gói Mua'    => $planName,
-        'Số Tiền'    => number_format($amount, 0, ',', '.') . 'đ',
-        'Nội Dung CK' => $transferContent,
-        'STK Nhận'   => PAYMENT_ACCOUNT_NO . ' (' . PAYMENT_BANK_NAME . ')'
+    TelegramService::sendAlert('🛒 ĐƠN HÀNG MỚI ĐƯỢC TẠO', [
+        'Mã Đơn'         => $orderId,
+        'Người Mua'      => $username,
+        'Gói / Thẻ VIP'  => $planName,
+        'Phương Thức'    => strtoupper($paymentMethod),
+        'Số Tiền'        => number_format($amount, 0, ',', '.') . 'đ',
+        'Nội Dung CK'    => $transferContent,
+        'STK Nhận'       => PAYMENT_ACCOUNT_NO . ' (' . PAYMENT_BANK_NAME . ')'
     ]);
 } catch (Exception $e) {}
 

@@ -22,12 +22,17 @@ if (empty($orderId)) {
 }
 
 $planLabels = [
-    '50GB'  => '50 GB',
-    '200GB' => '200 GB',
-    '2TB'   => '2.0 TB',
+    '50GB'      => '50 GB',
+    '200GB'     => '200 GB',
+    '2TB'       => '2.0 TB',
+    'silver'    => 'Thẻ VIP Bạc (Silver)',
+    'gold'      => 'Thẻ VIP Vàng (Gold)',
+    'diamond'   => 'Thẻ VIP Kim Cương (Diamond)',
+    'titanium'  => 'Thẻ VIP Titanium',
+    'uranium'   => 'Thẻ VIP Uranium Vô Cực',
 ];
 
-$quotaLabel = $planLabels[$planId] ?? '50 GB';
+$quotaLabel = $planLabels[$planId] ?? ($existingOrder['plan_name'] ?? $planId);
 
 $db = null;
 $existingOrder = null;
