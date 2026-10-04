@@ -15334,7 +15334,39 @@ function MainApp() {
         return;
       }
 
-      // Live search qua iTunes Search API (256kbps AAC stream + 600x600 artwork)
+      // 1. Cào FULL BÀI HÁT qua Full Song Engine (100% Full bài, không giới hạn 30s)
+      try {
+        const fullMusicRes = await fetch(`http://localhost:3333/music/search?q=${encodeURIComponent(q)}`);
+        if (fullMusicRes.ok) {
+          const fullData = await fullMusicRes.json();
+          if (fullData.success && fullData.results && fullData.results.length > 0) {
+            const first = fullData.results[0];
+            setMusicResult({
+              title: first.title,
+              artist: first.artist || 'Nghệ Sĩ Việt Nam',
+              album: 'Bản Đầy Đủ (Full Song)',
+              cover: first.cover,
+              duration: first.duration || 'Full Song',
+              genre: 'Nhạc Trẻ HD',
+              platform: 'full',
+              streamUrl: first.playerUrl,
+              backupStreamUrl: first.embedUrl,
+              embedUrl: first.embedUrl,
+              watchUrl: first.watchUrl,
+              allCandidates: fullData.results.slice(0, 5),
+            });
+            setMusicPlayerMode('stream');
+            triggerToast(`Đã bóc tách trọn vẹn full bài: ${first.title}`, 'Cào Full Bài Thành Công', 'success', 'musical-notes');
+            playAppleNotificationSound('success');
+            setIsScrapingMusic(false);
+            return;
+          }
+        }
+      } catch (localErr) {
+        console.warn('Local proxy search err, falling back:', localErr);
+      }
+
+      // 2. Dự phòng: Live search qua iTunes Search API
       const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=song&limit=6`);
       if (res.ok) {
         const data = await res.json();
@@ -30479,72 +30511,102 @@ function MainApp() {
 
                   {/* Player Content */}
                   {musicPlayerMode === 'stream' && musicResult.streamUrl ? (
-                    <View
-                      style={{
-                        backgroundColor: isLight ? '#F2F2F7' : '#0B0B0E',
-                        borderRadius: 16,
-                        padding: 14,
-                        marginBottom: 14,
-                        borderWidth: 1,
-                        borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
-                      }}
-                    >
-                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                          <TouchableOpacity
-                            onPress={handleTogglePlayMusic}
-                            style={{
-                              width: 44,
-                              height: 44,
-                              borderRadius: 22,
-                              backgroundColor: '#1DB954',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              shadowColor: '#1DB954',
-                              shadowOpacity: 0.4,
-                              shadowRadius: 8,
-                              elevation: 4,
-                            }}
-                          >
-                            <Ionicons name={musicPlaying ? "pause" : "play"} size={22} color="#FFFFFF" />
-                          </TouchableOpacity>
-                          <View>
-                            <Text style={{ fontSize: 13, fontWeight: '800', color: isLight ? '#000' : '#FFF' }}>
-                              {musicPlaying ? 'Đang phát âm thanh trực tiếp' : 'Sẵn sàng phát'}
+                    musicResult.streamUrl.includes('localhost:3333/music/player') ? (
+                      <View
+                        style={{
+                          height: 260,
+                          borderRadius: 18,
+                          overflow: 'hidden',
+                          marginBottom: 14,
+                          backgroundColor: '#0B0B0E',
+                          borderWidth: 1.5,
+                          borderColor: '#1DB954',
+                        }}
+                      >
+                        {Platform.OS === 'web' ? (
+                          React.createElement('iframe', {
+                            key: `vinyl-${musicResult.streamUrl}`,
+                            src: musicResult.streamUrl,
+                            style: { width: '100%', height: '100%', border: 'none', backgroundColor: '#0B0B0E' },
+                            allow: 'autoplay; clipboard-write; encrypted-media; picture-in-picture',
+                          })
+                        ) : (
+                          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+                            <Ionicons name="musical-notes" size={40} color="#1DB954" />
+                            <Text style={{ color: '#FFFFFF', marginTop: 8, fontSize: 13, fontWeight: '700' }}>
+                              Bản Full Đầy Đủ ({musicResult.duration})
                             </Text>
-                            <Text style={{ fontSize: 10.5, color: '#8E8E93' }}>
-                              Định dạng AAC HD • 256/320kbps
+                          </View>
+                        )}
+                      </View>
+                    ) : (
+                      <View
+                        style={{
+                          backgroundColor: isLight ? '#F2F2F7' : '#0B0B0E',
+                          borderRadius: 16,
+                          padding: 14,
+                          marginBottom: 14,
+                          borderWidth: 1,
+                          borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                        }}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <TouchableOpacity
+                              onPress={handleTogglePlayMusic}
+                              style={{
+                                width: 44,
+                                height: 44,
+                                borderRadius: 22,
+                                backgroundColor: '#1DB954',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                shadowColor: '#1DB954',
+                                shadowOpacity: 0.4,
+                                shadowRadius: 8,
+                                elevation: 4,
+                              }}
+                            >
+                              <Ionicons name={musicPlaying ? "pause" : "play"} size={22} color="#FFFFFF" />
+                            </TouchableOpacity>
+                            <View>
+                              <Text style={{ fontSize: 13, fontWeight: '800', color: isLight ? '#000' : '#FFF' }}>
+                                {musicPlaying ? 'Đang phát âm thanh trực tiếp' : 'Sẵn sàng phát'}
+                              </Text>
+                              <Text style={{ fontSize: 10.5, color: '#8E8E93' }}>
+                                Luồng phát trực tiếp • {musicResult.duration}
+                              </Text>
+                            </View>
+                          </View>
+                          <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: musicPlaying ? 'rgba(52,199,89,0.15)' : 'rgba(142,142,147,0.15)' }}>
+                            <Text style={{ fontSize: 10.5, fontWeight: '800', color: musicPlaying ? '#34C759' : '#8E8E93' }}>
+                              {musicPlaying ? 'LIVE PLAYING' : 'IDLE'}
                             </Text>
                           </View>
                         </View>
-                        <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: musicPlaying ? 'rgba(52,199,89,0.15)' : 'rgba(142,142,147,0.15)' }}>
-                          <Text style={{ fontSize: 10.5, fontWeight: '800', color: musicPlaying ? '#34C759' : '#8E8E93' }}>
-                            {musicPlaying ? 'LIVE PLAYING' : 'IDLE'}
-                          </Text>
+
+                        {/* Waveform */}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, height: 26, justifyContent: 'center' }}>
+                          {[8, 14, 22, 10, 18, 26, 12, 20, 16, 24, 14, 22, 18, 10, 25, 14, 19, 12, 24, 16, 22, 12, 18, 10, 24, 16].map((h, i) => (
+                            <View
+                              key={i}
+                              style={{
+                                width: 4,
+                                height: musicPlaying ? Math.max(6, (h * ((i % 3) + 1)) % 26) : 6,
+                                borderRadius: 2,
+                                backgroundColor: musicPlaying ? '#1DB954' : '#8E8E93',
+                                opacity: musicPlaying ? 0.9 : 0.35,
+                              }}
+                            />
+                          ))}
                         </View>
                       </View>
-
-                      {/* Fake Waveform Visualizer */}
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, height: 26, justifyContent: 'center' }}>
-                        {[8, 14, 22, 10, 18, 26, 12, 20, 16, 24, 14, 22, 18, 10, 25, 14, 19, 12, 24, 16, 22, 12, 18, 10, 24, 16].map((h, i) => (
-                          <View
-                            key={i}
-                            style={{
-                              width: 4,
-                              height: musicPlaying ? Math.max(6, (h * ((i % 3) + 1)) % 26) : 6,
-                              borderRadius: 2,
-                              backgroundColor: musicPlaying ? '#1DB954' : '#8E8E93',
-                              opacity: musicPlaying ? 0.9 : 0.35,
-                            }}
-                          />
-                        ))}
-                      </View>
-                    </View>
+                    )
                   ) : (
                     <View
                       style={{
-                        height: 152,
-                        borderRadius: 16,
+                        height: 200,
+                        borderRadius: 18,
                         overflow: 'hidden',
                         marginBottom: 14,
                         backgroundColor: '#000000',
@@ -30554,6 +30616,7 @@ function MainApp() {
                     >
                       {Platform.OS === 'web' ? (
                         React.createElement('iframe', {
+                          key: `embed-${musicResult.embedUrl}`,
                           src: musicResult.embedUrl,
                           style: { width: '100%', height: '100%', border: 'none' },
                           allow: 'autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture',
@@ -30572,37 +30635,36 @@ function MainApp() {
 
                   {/* Actions Row */}
                   <View style={{ flexDirection: 'row', gap: 8 }}>
-                    {musicResult.streamUrl && (
-                      <TouchableOpacity
-                        onPress={() => {
-                          if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                            navigator.clipboard.writeText(musicResult.streamUrl);
-                          }
-                          triggerToast('Đã sao chép liên kết stream nhạc trực tiếp!', 'Sao Chép Thành Công', 'success', 'copy');
-                        }}
-                        style={{
-                          flex: 1,
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          paddingVertical: 10,
-                          borderRadius: 12,
-                          backgroundColor: isLight ? '#F2F2F7' : '#0B0B0E',
-                          gap: 6,
-                          borderWidth: 1,
-                          borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
-                        }}
-                      >
-                        <Ionicons name="copy-outline" size={15} color="#1DB954" />
-                        <Text style={{ fontSize: 12, fontWeight: '800', color: isLight ? '#000' : '#FFF' }}>
-                          Copy Stream Link
-                        </Text>
-                      </TouchableOpacity>
-                    )}
+                    <TouchableOpacity
+                      onPress={() => {
+                        const toCopy = musicResult.watchUrl || musicResult.embedUrl || musicResult.streamUrl;
+                        if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                          navigator.clipboard.writeText(toCopy);
+                        }
+                        triggerToast('Đã sao chép liên kết bài hát đầy đủ!', 'Sao Chép Thành Công', 'success', 'copy');
+                      }}
+                      style={{
+                        flex: 1,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        paddingVertical: 10,
+                        borderRadius: 12,
+                        backgroundColor: isLight ? '#F2F2F7' : '#0B0B0E',
+                        gap: 6,
+                        borderWidth: 1,
+                        borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                      }}
+                    >
+                      <Ionicons name="copy-outline" size={15} color="#1DB954" />
+                      <Text style={{ fontSize: 12, fontWeight: '800', color: isLight ? '#000' : '#FFF' }}>
+                        Copy Link Bài Hát
+                      </Text>
+                    </TouchableOpacity>
 
                     <TouchableOpacity
                       onPress={() => {
-                        const openTarget = musicResult.embedUrl || musicResult.streamUrl;
+                        const openTarget = musicResult.watchUrl || musicResult.embedUrl || musicResult.streamUrl;
                         if (Platform.OS === 'web' && typeof window !== 'undefined') {
                           window.open(openTarget, '_blank');
                         } else {
@@ -30631,31 +30693,37 @@ function MainApp() {
                   {musicResult.allCandidates && musicResult.allCandidates.length > 1 && (
                     <View style={{ marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: isLight ? '#E5E5EA' : '#2C2C2E' }}>
                       <Text style={{ fontSize: 11, fontWeight: '800', color: '#8E8E93', marginBottom: 8, textTransform: 'uppercase' }}>
-                        Các Bản Nhạc Khác Cùng Tên:
+                        Các Bản Thu & Phiên Bản Khác (Full Bài):
                       </Text>
                       <View style={{ gap: 6 }}>
-                        {musicResult.allCandidates.slice(1, 4).map((cand: any, cIdx: number) => (
+                        {musicResult.allCandidates.slice(1, 5).map((cand: any, cIdx: number) => (
                           <TouchableOpacity
                             key={cIdx}
                             onPress={() => {
-                              const cover = cand.artworkUrl100 ? cand.artworkUrl100.replace('100x100', '600x600') : musicResult.cover;
-                              const dMin = Math.floor((cand.trackTimeMillis || 180000) / 60000);
-                              const dSec = Math.floor(((cand.trackTimeMillis || 180000) % 60000) / 1000).toString().padStart(2, '0');
+                              const title = cand.title || cand.trackName;
+                              const artist = cand.artist || cand.artistName;
+                              const cover = cand.cover || (cand.artworkUrl100 ? cand.artworkUrl100.replace('100x100', '600x600') : musicResult.cover);
+                              const duration = cand.duration || 'Full Song';
+                              const streamUrl = cand.playerUrl || cand.previewUrl || cand.streamUrl;
+                              const embedUrl = cand.embedUrl;
+                              const watchUrl = cand.watchUrl;
+
                               setMusicResult({
                                 ...musicResult,
-                                title: cand.trackName,
-                                artist: cand.artistName,
-                                album: cand.collectionName || 'Single HD',
+                                title,
+                                artist,
                                 cover,
-                                duration: `${dMin}:${dSec}`,
-                                streamUrl: cand.previewUrl,
+                                duration,
+                                streamUrl,
+                                embedUrl: embedUrl || musicResult.embedUrl,
+                                watchUrl: watchUrl || musicResult.watchUrl,
                               });
                               if (musicAudioRef.current) {
                                 musicAudioRef.current.pause();
                                 musicAudioRef.current = null;
                                 setMusicPlaying(false);
                               }
-                              triggerToast(`Đã chọn: ${cand.trackName} - ${cand.artistName}`, 'Đổi Bài Hát', 'info');
+                              triggerToast(`Đã chọn bản Full: ${title}`, 'Đổi Bài Hát', 'info');
                             }}
                             style={{
                               flexDirection: 'row',
@@ -30669,13 +30737,13 @@ function MainApp() {
                             <Ionicons name="musical-note" size={14} color="#1DB954" />
                             <View style={{ flex: 1 }}>
                               <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: '700', color: isLight ? '#000' : '#FFF' }}>
-                                {cand.trackName}
+                                {cand.title || cand.trackName}
                               </Text>
                               <Text numberOfLines={1} style={{ fontSize: 10.5, color: '#8E8E93' }}>
-                                {cand.artistName}
+                                {cand.artist || cand.artistName} {cand.duration ? `• ⏱ ${cand.duration}` : ''}
                               </Text>
                             </View>
-                            <Ionicons name="chevron-forward" size={14} color="#8E8E93" />
+                            <Ionicons name="play-circle" size={18} color="#1DB954" />
                           </TouchableOpacity>
                         ))}
                       </View>
