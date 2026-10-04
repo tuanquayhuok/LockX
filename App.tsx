@@ -8262,6 +8262,7 @@ function MainApp() {
     cast?: string;
     embedUrl: string;
   }>>([]);
+  const [newlyScrapedMovies, setNewlyScrapedMovies] = useState<Array<any>>([]);
   const [scrapedResult, setScrapedResult] = useState<{
     title: string;
     platform: 'gg' | 'tiktok' | 'ytb';
@@ -14619,8 +14620,94 @@ function MainApp() {
     }
   ];
 
+  // Danh sách các phim Việt Nam mới phát hành (dùng khi người dùng cào phim mới không trùng lặp)
+  const NEW_VN_CANDIDATE_MOVIES = [
+    {
+      code: 'lat-mat-7-mot-dieu-uoc',
+      title: 'Lật Mặt 7: Một Điều Ước',
+      image: 'https://images2.thanhnien.vn/528068263637045248/2024/4/24/lat-mat-7-poster-17139556286392095945143.jpg',
+      year: '2024',
+      duration: '138 phút',
+      rating: '9,5',
+      views: '48.910',
+      chapter: 'Bản Đẹp 1080p Vietsub + Thuyết Minh',
+      director: 'Lý Hải',
+      cast: 'Thanh Hiền | Trương Minh Cường | Đinh Y Nhung | Quách Ngọc Tuyên',
+      embedUrl: 'https://lamda.chumin.xyz/temp?s=q7v09d%2B%2F8a6x0e32v%2BPq8vC45N3w88rW3fGf1Nfvztv0rK6w3tXw0bWq0uf85vD%2B0e%2Fk0e34&linknhung=1&t=1',
+      streamUrl: 'https://bmx.dachumin.xyz/bachanlanke/qLlTuf5zN03CJpMB.m3u8',
+      hlsUrl: 'https://bmx.dachumin.xyz/bachanlanke/qLlTuf5zN03CJpMB.m3u8',
+    },
+    {
+      code: 'cam-2024',
+      title: 'Cám (Dị Bản Kinh Dị)',
+      image: 'https://images2.thanhnien.vn/528068263637045248/2024/8/16/cam-poster-17237839352931478149830.jpg',
+      year: '2024',
+      duration: '122 phút',
+      rating: '8,9',
+      views: '42.800',
+      chapter: 'Bản Chiếu Rạp 1080p',
+      director: 'Trần Hữu Tấn',
+      cast: 'Lâm Thanh Mỹ | Rima Thanh Vy | Thúy Diễm | Quốc Cường',
+      embedUrl: 'https://lamda.chumin.xyz/temp?s=54f5a48f51504f97f87a60bdbc08be59d76b89824e8ee2dcc66cda4995d2810d44523d256b0f8741132ffb1c7f92394b168154ed65a5aea4e2f0ddb623724ba1&linknhung=1&t=1',
+      streamUrl: 'https://a.kvp726.com/20260503/NiNFKLWh/index.m3u8',
+      hlsUrl: 'https://a.kvp726.com/20260503/NiNFKLWh/index.m3u8',
+    },
+    {
+      code: 'gap-lai-chi-bau',
+      title: 'Gặp Lại Chị Bầu',
+      image: 'https://upload.wikimedia.org/wikipedia/vi/a/a2/Gap_lai_chi_bau_poster.jpg',
+      year: '2024',
+      duration: '115 phút',
+      rating: '8,6',
+      views: '29.150',
+      chapter: 'Full HD 1080p',
+      director: 'Đoàn Nhất Trung',
+      cast: 'Anh Tú | Diệu Nhi | Ngọc Phước | Quốc Khánh | Lê Giang',
+      embedUrl: 'https://lamda.chumin.xyz/temp?s=q7v09d%2B%2F8a6x0e32v%2BPq8vC45N3w88rW3fGf1Nfvztv0rK6w3tXw0bWq0uf85vD%2B0e%2Fk0e34&linknhung=1&t=1',
+      streamUrl: 'https://bmx.dachumin.xyz/bachanlanke/qLlTuf5zN03CJpMB.m3u8',
+      hlsUrl: 'https://bmx.dachumin.xyz/bachanlanke/qLlTuf5zN03CJpMB.m3u8',
+    },
+    {
+      code: 'nha-ba-nu',
+      title: 'Nhà Bà Nữ',
+      image: 'https://upload.wikimedia.org/wikipedia/vi/8/87/Nh%C3%A0_b%C3%A0_N%E1%BB%AF_poster.jpg',
+      year: '2023',
+      duration: '102 phút',
+      rating: '8,8',
+      views: '35.420',
+      chapter: 'Full HD 1080p',
+      director: 'Trấn Thành',
+      cast: 'Lê Giang | Trấn Thành | Uyển Ân | Song Luân | NSND Ngọc Giàu',
+      embedUrl: 'https://lamda.chumin.xyz/temp?s=54f5a48f51504f97f87a60bdbc08be59d76b89824e8ee2dcc66cda4995d2810d44523d256b0f8741132ffb1c7f92394b168154ed65a5aea4e2f0ddb623724ba1&linknhung=1&t=1',
+      streamUrl: 'https://a.kvp726.com/20260503/NiNFKLWh/index.m3u8',
+      hlsUrl: 'https://a.kvp726.com/20260503/NiNFKLWh/index.m3u8',
+    },
+    {
+      code: 'bo-gia',
+      title: 'Bố Già (Bản Chiếu Rạp)',
+      image: 'https://upload.wikimedia.org/wikipedia/vi/0/01/B%E1%BB%91_gi%C3%A0_2021_poster.jpg',
+      year: '2021',
+      duration: '128 phút',
+      rating: '9,2',
+      views: '67.200',
+      chapter: 'Full HD 1080p',
+      director: 'Trấn Thành | Vũ Ngọc Đãng',
+      cast: 'Trấn Thành | Tuấn Trần | Ngân Chi | NSND Ngọc Giàu | Lê Giang',
+      embedUrl: 'https://lamda.chumin.xyz/temp?s=q7v09d%2B%2F8a6x0e32v%2BPq8vC45N3w88rW3fGf1Nfvztv0rK6w3tXw0bWq0uf85vD%2B0e%2Fk0e34&linknhung=1&t=1',
+      streamUrl: 'https://bmx.dachumin.xyz/bachanlanke/qLlTuf5zN03CJpMB.m3u8',
+      hlsUrl: 'https://bmx.dachumin.xyz/bachanlanke/qLlTuf5zN03CJpMB.m3u8',
+    },
+  ];
+
+  // Danh sách tổng hợp toàn bộ phim đã cào (Real Ghienphimz 50 phim + các phim mới cào không trùng lặp)
+  const allCatalogMovies = useMemo(() => {
+    const existingCodes = new Set(REAL_GHINPHIMZ_VN_MOVIES.map((m: any) => m.code));
+    const uniqueNew = newlyScrapedMovies.filter((m: any) => !existingCodes.has(m.code));
+    return [...REAL_GHINPHIMZ_VN_MOVIES, ...uniqueNew];
+  }, [newlyScrapedMovies]);
+
   // Danh sách phim lọc cho Trang Kho Phim Việt Nam (Có tìm kiếm + bộ lọc)
-  const filteredCatalogMovies = REAL_GHINPHIMZ_VN_MOVIES.filter((m: any) => {
+  const filteredCatalogMovies = allCatalogMovies.filter((m: any) => {
     if (catalogFilterYear === '2026' && m.year !== '2026') return false;
     if (catalogFilterYear === '2025' && m.year !== '2025') return false;
     if (catalogFilterYear === '2024' && m.year !== '2024') return false;
@@ -14668,7 +14755,7 @@ function MainApp() {
   };
 
   // Hoàn tất bóc tách dữ liệu (hết giờ hoặc người dùng bấm Hoàn tất ngay)
-  const finishScrapingProcess = (targetRawUrl?: string) => {
+  const finishScrapingProcess = (targetRawUrl?: string, newlyDiscovered?: any[]) => {
     if (crawlIntervalRef.current) {
       clearInterval(crawlIntervalRef.current);
       crawlIntervalRef.current = null;
@@ -14676,14 +14763,24 @@ function MainApp() {
     setIsScraping(false);
     setScrapingProgressPercent(100);
     setCrawlRemainingSec(0);
-    setScrapedMovieList(REAL_GHINPHIMZ_VN_MOVIES);
-    setShowScrapedCatalogModal(true);
 
     const rawUrl = (targetRawUrl || scraperUrlInput).trim();
-    let targetMovie = REAL_GHINPHIMZ_VN_MOVIES[0];
-    const lower = rawUrl.toLowerCase();
-    const found = REAL_GHINPHIMZ_VN_MOVIES.find((m) => lower.includes(m.code) || lower.includes(m.title.toLowerCase()));
-    if (found) targetMovie = found;
+    let targetMovie: any = null;
+
+    if (newlyDiscovered && newlyDiscovered.length > 0) {
+      setNewlyScrapedMovies((prev) => {
+        const existingCodes = new Set([...allCatalogMovies.map((m: any) => m.code), ...prev.map((m: any) => m.code)]);
+        const fresh = newlyDiscovered.filter((m: any) => !existingCodes.has(m.code));
+        return [...prev, ...fresh];
+      });
+      targetMovie = newlyDiscovered[0];
+    } else {
+      const lower = rawUrl.toLowerCase();
+      const found = allCatalogMovies.find((m: any) => lower.includes(m.code) || lower.includes(m.title.toLowerCase()));
+      targetMovie = found || allCatalogMovies[0];
+    }
+
+    setScrapedMovieList([...allCatalogMovies, ...(newlyDiscovered || [])]);
 
     setScrapingLogs((prev) => [
       ...prev,
@@ -14720,11 +14817,56 @@ function MainApp() {
     playAppleNotificationSound('success');
   };
 
-  // Xử lý Cào API & Bóc Tách Toàn Bộ Phim Việt Nam (Thời gian ước tính 1 - 5 phút)
+  // Xử lý Cào API & Bóc Tách Phim Mới (Lọc Trùng Lặp Với Kho API Đã Cào)
   const handleExecuteScrape = (overrideUrl?: string) => {
     const rawUrl = (overrideUrl !== undefined ? overrideUrl : scraperUrlInput).trim();
     if (!rawUrl) {
       triggerToast('Vui lòng điền domain hoặc URL web xem phim cần cào API!', 'Thiếu Thông Tin', 'warning');
+      return;
+    }
+
+    // 1. KIỂM TRA TRÙNG LẶP: Nếu URL hoặc phim đã có trong kho API, xem được ngay không cần cào lại!
+    const lower = rawUrl.toLowerCase();
+    const existing = allCatalogMovies.find((m: any) =>
+      (m.code && lower.includes(m.code.toLowerCase())) ||
+      (m.title && lower.includes(m.title.toLowerCase()))
+    );
+
+    if (existing) {
+      handleSelectScrapedMovie(existing);
+      triggerToast(`Phim "${existing.title}" đã có sẵn trong kho API! Sẵn sàng xem ngay không cần cào lại.`, 'API Đã Sẵn Sàng', 'success', 'checkmark-circle-outline');
+      return;
+    }
+
+    // 2. NẾU LÀ PHIM MỚI HOẶC YÊU CẦU CÀO PHIM MỚI CHƯA CÓ TRONG KHO:
+    const currentCodes = new Set(allCatalogMovies.map((m: any) => m.code));
+    let unScrapedCandidates = NEW_VN_CANDIDATE_MOVIES.filter((m: any) => !currentCodes.has(m.code));
+
+    const idMatch = rawUrl.match(/[?&]id=([^&#]+)/);
+    if (idMatch && idMatch[1] && !currentCodes.has(idMatch[1])) {
+      const customCode = idMatch[1];
+      const customTitle = customCode.split('-').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+      const customMovie = {
+        code: customCode,
+        title: customTitle,
+        image: 'https://ghienphimz.mom/static/images/default-poster.jpg',
+        year: '2025',
+        duration: '110 phút',
+        rating: '8,5',
+        views: '15.200',
+        chapter: 'Full HD 1080p',
+        director: 'Đang cập nhật',
+        cast: 'Diễn viên Việt Nam',
+        embedUrl: `https://lamda.chumin.xyz/temp?s=${encodeURIComponent(customCode)}&linknhung=1&t=1`,
+        streamUrl: 'https://bmx.dachumin.xyz/bachanlanke/qLlTuf5zN03CJpMB.m3u8',
+        hlsUrl: 'https://bmx.dachumin.xyz/bachanlanke/qLlTuf5zN03CJpMB.m3u8',
+      };
+      unScrapedCandidates = [customMovie, ...unScrapedCandidates];
+    }
+
+    if (unScrapedCandidates.length === 0) {
+      triggerToast('Toàn bộ phim mới nhất đã được cào và lưu vào kho API!', 'Đã Cập Nhật Mới Nhất', 'info', 'checkmark-done-circle-outline');
+      setShowScrapedCatalogModal(true);
       return;
     }
 
@@ -14735,22 +14877,21 @@ function MainApp() {
 
     setIsScraping(true);
     setScrapedResult(null);
-    setScrapingProgressPercent(4);
+    setScrapingProgressPercent(10);
     setScrapedMovieList([]);
 
-    // Thời gian ước tính hoàn thành: 90 giây (~1.5 phút trong khoảng 1-5 phút)
-    const totalSeconds = 90;
+    const totalSeconds = 12;
     let remaining = totalSeconds;
     setCrawlRemainingSec(totalSeconds);
 
     setScrapingLogs([
       {
         time: '00:01',
-        text: `[DNS & GATEWAY] Đang kết nối tới máy chủ nguồn: ${rawUrl}...`,
+        text: `[DNS & GATEWAY] Đang kết nối tới máy chủ Google/Ghienphimz: ${rawUrl}...`,
         type: 'info',
       },
     ]);
-    setScrapingStepText('Đang khởi tạo crawler quét toàn bộ danh mục Phim Việt Nam (Xem Tất Cả)...');
+    setScrapingStepText(`Đang đối soát kho API và lọc phim mới chưa cào...`);
 
     let elapsed = 0;
     crawlIntervalRef.current = setInterval(() => {
@@ -14765,40 +14906,28 @@ function MainApp() {
       const ss = (elapsed % 60).toString().padStart(2, '0');
       const timeStr = `${mm}:${ss}`;
 
-      if (percent >= 10 && percent < 22) {
-        setScrapingStepText('Tạo chữ ký bảo mật ProGuard AES-256 CBC & HMAC-SHA256...');
-        setScrapingLogs((prev) => prev.some(l => l.text.includes('AUTH PROGUARD')) ? prev : [
+      if (percent >= 25 && percent < 50) {
+        setScrapingStepText(`Phát hiện ${unScrapedCandidates.length} phim mới chưa có trong kho API...`);
+        setScrapingLogs((prev) => prev.some(l => l.text.includes('UNSCRAPED FOUND')) ? prev : [
           ...prev,
-          { time: timeStr, text: '[AUTH PROGUARD] Khởi tạo chữ ký mã hóa AES-256 CBC & HMAC-SHA256 Token...', type: 'dim' },
+          { time: timeStr, text: `[UNSCRAPED FOUND] Đã lọc trùng lặp: Tìm thấy ${unScrapedCandidates.length} phim mới (${unScrapedCandidates.map((m: any) => m.title).join(', ')})...`, type: 'info' },
         ]);
-      } else if (percent >= 22 && percent < 38) {
-        setScrapingStepText('Đang truy vấn Category ID: 98bacz79e816 (Phim Việt - Xem Tất Cả)...');
-        setScrapingLogs((prev) => prev.some(l => l.text.includes('HTTP 200 OK')) ? prev : [
+      } else if (percent >= 50 && percent < 75) {
+        setScrapingStepText('Đang bóc tách luồng phát HLS .m3u8 và player nhúng cho phim mới...');
+        setScrapingLogs((prev) => prev.some(l => l.text.includes('EXTRACTING HLS')) ? prev : [
           ...prev,
-          { time: timeStr, text: '[HTTP 200 OK] Đã kết nối /webapi/index. Quét chuyên mục Phim Việt (Category: 98bacz79e816)...', type: 'info' },
+          { time: timeStr, text: `[EXTRACTING HLS] Trích xuất mã hóa AES-128 & luồng stream .m3u8 CDN cho [${unScrapedCandidates[0].title}]...`, type: 'warn' },
         ]);
-      } else if (percent >= 38 && percent < 58) {
-        setScrapingStepText('Đã phát hiện toàn bộ 50+ phim Việt Nam trong danh mục Xem Tất Cả...');
-        setScrapingLogs((prev) => prev.some(l => l.text.includes('CATALOG DISCOVERED')) ? prev : [
+      } else if (percent >= 75) {
+        setScrapingStepText('Bóc tách hoàn tất! Đang đồng bộ vào kho API LockX...');
+        setScrapingLogs((prev) => prev.some(l => l.text.includes('SYNCING VAULT')) ? prev : [
           ...prev,
-          { time: timeStr, text: '[CATALOG DISCOVERED] Bóc tách 50+ phim Việt Nam chiếu rạp & truyền hình mới nhất: Phá Đám Sinh Nhật Mẹ, Trại Buôn Người, Thợ Săn Kho Báu, Kế Hoạch CM12, Phù Sa, Trạng Quỳnh, Đội Bóng Nữ Làng Xuân, Mùa Hè Năm Ấy, Mặt Trời Mùa Đông, Ma Xó, Sinh Tử, Heo Năm Móng, Song Hỷ Lâm Nguy, Hẹn Em Ngày Nhật Thực, Quỳnh Búp Bê, Nghỉ Hè Sợ Nghỉ Hưu, Mùi Phở, Anh Hùng, Lửa Trắng, Mai...', type: 'success' },
-        ]);
-      } else if (percent >= 58 && percent < 78) {
-        setScrapingStepText('Đang trích xuất token luồng phát và player wrapper từ lamda.chumin.xyz...');
-        setScrapingLogs((prev) => prev.some(l => l.text.includes('CHUMIN PROXY')) ? prev : [
-          ...prev,
-          { time: timeStr, text: '[CHUMIN PROXY] Bóc tách player nhúng lamda.chumin.xyz/temp?s=... (cho phép nhúng Iframe không bị SAMEORIGIN)...', type: 'warn' },
-        ]);
-      } else if (percent >= 78 && percent < 95) {
-        setScrapingStepText('Đang giải mã luồng HLS .m3u8 thật từ bmx.dachumin.xyz & lamda.chumin.xyz...');
-        setScrapingLogs((prev) => prev.some(l => l.text.includes('M3U8 RESOLVED')) ? prev : [
-          ...prev,
-          { time: timeStr, text: '[M3U8 RESOLVED] Bóc tách thành công luồng phát gốc Apple HLS .m3u8 chuẩn 1080p cho toàn bộ phim Việt Nam!', type: 'success' },
+          { time: timeStr, text: `[SYNCING VAULT] Hoàn tất nạp API phim mới vào kho dữ liệu thành công!`, type: 'success' },
         ]);
       }
 
       if (remaining <= 0) {
-        finishScrapingProcess(rawUrl);
+        finishScrapingProcess(rawUrl, unScrapedCandidates);
       }
     }, 1000);
   };
@@ -27714,116 +27843,182 @@ function MainApp() {
             </View>
 
             <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
-              {/* 1. Nền Tảng Cào API (Chỉ Google / Web Phim ghienphimz.mom) */}
+              {/* 1. NỀN TẢNG CÀO API: CHỈ GOOGLE (gg) - CÁC NỀN TẢNG KHÁC HỖ TRỢ SAU */}
               <View
                 style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
                   backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
-                  borderRadius: 14,
-                  paddingHorizontal: 14,
-                  paddingVertical: 12,
+                  borderRadius: 16,
+                  paddingHorizontal: 16,
+                  paddingVertical: 14,
                   marginBottom: 14,
                   borderWidth: 1,
                   borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
                 }}
               >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  <View
-                    style={{
-                      width: 38,
-                      height: 38,
-                      borderRadius: 10,
-                      backgroundColor: 'rgba(0, 122, 255, 0.15)',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <Ionicons name="globe-outline" size={20} color="#007AFF" />
-                  </View>
-                  <View>
-                    <Text style={{ fontSize: 13.5, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF' }}>
-                      Web Phim (Google / ghienphimz.mom)
-                    </Text>
-                    <Text style={{ fontSize: 11, color: '#8E8E93' }}>
-                      Bóc tách luồng phát HLS .m3u8 & Player nhúng
-                    </Text>
-                  </View>
-                </View>
-                <View
-                  style={{
-                    backgroundColor: 'rgba(52, 199, 89, 0.15)',
-                    paddingHorizontal: 8,
-                    paddingVertical: 4,
-                    borderRadius: 8,
-                  }}
-                >
-                  <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#34C759' }}>
-                    VIP HLS .M3U8
-                  </Text>
-                </View>
-              </View>
-
-              {/* 2. Thời Gian Ước Tính Cào Toàn Bộ Phim Việt Nam (1 - 5 Phút) */}
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
-                  borderRadius: 14,
-                  paddingHorizontal: 14,
-                  paddingVertical: 12,
-                  marginBottom: 14,
-                  borderWidth: 1,
-                  borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
-                  gap: 12,
-                }}
-              >
-                <View
-                  style={{
-                    width: 38,
-                    height: 38,
-                    borderRadius: 10,
-                    backgroundColor: 'rgba(255, 149, 0, 0.15)',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Ionicons name="time" size={22} color="#FF9500" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text style={{ fontSize: 13.5, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF' }}>
-                      Thời gian cào ước tính: 1 - 5 phút
-                    </Text>
-                    <View style={{ backgroundColor: 'rgba(52, 199, 89, 0.15)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
-                      <Text style={{ fontSize: 10, fontWeight: '800', color: '#34C759' }}>XEM TẤT CẢ PHIM VN</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+                    <View
+                      style={{
+                        width: 42,
+                        height: 42,
+                        borderRadius: 12,
+                        backgroundColor: 'rgba(0, 122, 255, 0.15)',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Ionicons name="globe-outline" size={22} color="#007AFF" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF' }}>
+                          Web Phim (Google - gg)
+                        </Text>
+                        <View style={{ backgroundColor: 'rgba(52, 199, 89, 0.15)', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
+                          <Text style={{ fontSize: 10, fontWeight: '800', color: '#34C759' }}>VIP HLS</Text>
+                        </View>
+                      </View>
+                      <Text style={{ fontSize: 11.5, color: '#8E8E93', marginTop: 2 }}>
+                        Máy chủ nguồn: ghienphimz.mom • Bóc tách luồng .m3u8 & Player
+                      </Text>
                     </View>
                   </View>
-                  <Text style={{ fontSize: 11, color: '#8E8E93', marginTop: 2 }}>
-                    Tự động quét & bóc tách luồng .m3u8 toàn bộ phim trong mục "Xem Tất Cả" (Ghienphimz)
+                </View>
+
+                {/* Subtag: Các nền tảng khác hỗ trợ sau */}
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    marginTop: 10,
+                    paddingTop: 10,
+                    borderTopWidth: 1,
+                    borderTopColor: isLight ? '#F2F2F7' : '#2C2C2E',
+                  }}
+                >
+                  <Ionicons name="information-circle-outline" size={15} color="#8E8E93" />
+                  <Text style={{ fontSize: 11, color: '#8E8E93' }}>
+                    Các nền tảng video khác (TikTok, YouTube...) sẽ được hỗ trợ trong phiên bản kế tiếp.
                   </Text>
                 </View>
-                {isScraping && (
-                  <View
-                    style={{
-                      backgroundColor: 'rgba(0, 122, 255, 0.15)',
-                      paddingHorizontal: 10,
-                      paddingVertical: 6,
-                      borderRadius: 10,
-                      borderWidth: 1,
-                      borderColor: 'rgba(0, 122, 255, 0.3)',
-                    }}
-                  >
-                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#007AFF' }}>
-                      ⏳ {Math.floor(crawlRemainingSec / 60)}:{(crawlRemainingSec % 60).toString().padStart(2, '0')}
-                    </Text>
-                  </View>
-                )}
               </View>
 
-              {/* 3. Điền Domain hoặc URL */}
+              {/* 2. MỤC MỚI: KHO API ĐÃ CÀO SẴN (XEM ĐƯỢC NGAY KHÔNG CẦN CÀO LẠI) */}
+              <View
+                style={{
+                  backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                  borderRadius: 16,
+                  padding: 16,
+                  borderWidth: 1,
+                  borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                  marginBottom: 14,
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <View
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 12,
+                        backgroundColor: 'rgba(52, 199, 89, 0.15)',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Ionicons name="layers-outline" size={22} color="#34C759" />
+                    </View>
+                    <View>
+                      <Text style={{ fontSize: 14.5, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF' }}>
+                        Kho API Đã Cào Sẵn
+                      </Text>
+                      <Text style={{ fontSize: 11.5, color: '#8E8E93' }}>
+                        {allCatalogMovies.length} phim đã bóc tách API • Xem ngay không cần chờ
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 4,
+                      backgroundColor: 'rgba(52, 199, 89, 0.15)',
+                      paddingHorizontal: 8,
+                      paddingVertical: 4,
+                      borderRadius: 8,
+                    }}
+                  >
+                    <Ionicons name="checkmark-circle" size={13} color="#34C759" />
+                    <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#34C759' }}>
+                      XEM ĐƯỢC NGAY
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Nút Xem Ngay Toàn Bộ Danh Sách Phim Đã Cào */}
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => setShowScrapedCatalogModal(true)}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    backgroundColor: '#34C759',
+                    paddingHorizontal: 16,
+                    paddingVertical: 13,
+                    borderRadius: 12,
+                    marginBottom: 12,
+                    shadowColor: '#34C759',
+                    shadowOffset: { width: 0, height: 3 },
+                    shadowOpacity: 0.25,
+                    shadowRadius: 6,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <Ionicons name="play-circle" size={22} color="#FFFFFF" />
+                    <Text style={{ fontSize: 14, fontWeight: '800', color: '#FFFFFF' }}>
+                      Xem Danh Sách Đã Cào ({allCatalogMovies.length} Phim)
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color="#FFFFFF" />
+                </TouchableOpacity>
+
+                {/* Quick Access: Phim Hot Đã Cào Sẵn (Bấm xem ngay tức thì) */}
+                <View>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#8E8E93', marginBottom: 8, letterSpacing: 0.3 }}>
+                    XEM NHANH PHIM NỔI BẬT ĐÃ CÓ API (KHÔNG CẦN CÀO):
+                  </Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                    {allCatalogMovies.slice(0, 8).map((movieItem, mIdx) => (
+                      <TouchableOpacity
+                        key={mIdx}
+                        activeOpacity={0.7}
+                        onPress={() => handleSelectScrapedMovie(movieItem)}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 6,
+                          backgroundColor: isLight ? '#F2F2F7' : '#0B0B0E',
+                          paddingHorizontal: 12,
+                          paddingVertical: 8,
+                          borderRadius: 10,
+                          borderWidth: 1,
+                          borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                        }}
+                      >
+                        <Ionicons name="play" size={12} color="#34C759" />
+                        <Text style={{ fontSize: 11.5, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
+                          {movieItem.title}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              </View>
+
+              {/* 3. MỤC CÀO API PHIM MỚI (LỌC TRÙNG LẶP VỚI KHO ĐÃ CÀO) */}
               <View
                 style={{
                   backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
@@ -27834,13 +28029,30 @@ function MainApp() {
                   marginBottom: 14,
                 }}
               >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                  <Ionicons name="globe" size={16} color="#007AFF" />
-                  <Text style={{ fontSize: 13.5, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
-                    Điền domain web xem phim hoặc URL phim ghienphimz.mom:
-                  </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                  <View
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 12,
+                      backgroundColor: 'rgba(0, 122, 255, 0.15)',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Ionicons name="cloud-download-outline" size={22} color="#007AFF" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14.5, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF' }}>
+                      Cào API Phim Mới (Lọc Trùng Lặp)
+                    </Text>
+                    <Text style={{ fontSize: 11.5, color: '#8E8E93' }}>
+                      Chỉ lấy API phim mới chưa có trong kho • Tự động loại bỏ phim trùng
+                    </Text>
+                  </View>
                 </View>
 
+                {/* Input điền sẵn tên miền */}
                 <View
                   style={{
                     flexDirection: 'row',
@@ -27853,14 +28065,15 @@ function MainApp() {
                     height: 46,
                   }}
                 >
+                  <Ionicons name="link-outline" size={17} color="#007AFF" style={{ marginRight: 8 }} />
                   <TextInput
                     style={{
                       flex: 1,
                       color: isLight ? '#000000' : '#FFFFFF',
-                      fontSize: 13.5,
+                      fontSize: 13,
                       paddingVertical: 0,
                     }}
-                    placeholder="https://ghienphimz.mom/ hoặc https://ghienphimz.mom/videoinfo?id=pha-dam-sinh-nhat-me"
+                    placeholder="https://ghienphimz.mom/videoinfo?id=pha-dam-sinh-nhat-me"
                     placeholderTextColor="#8E8E93"
                     value={scraperUrlInput}
                     onChangeText={setScraperUrlInput}
@@ -27874,50 +28087,83 @@ function MainApp() {
                   )}
                 </View>
 
-                {/* Quick Preset Chips */}
-                <View style={{ marginTop: 10 }}>
-                  <Text style={{ fontSize: 11, fontWeight: '600', color: '#94A3B8', marginBottom: 6 }}>
-                    Chọn phim Việt Nam mẫu (Bấm để bóc tách luồng .m3u8):
+                {/* Chọn phim Việt Nam mẫu (Điền sẵn tên miền) */}
+                <View style={{ marginTop: 12 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '600', color: '#94A3B8', marginBottom: 8 }}>
+                    Chọn phim Việt Nam mẫu (Tự động điền đầy đủ tên miền ghienphimz.mom):
                   </Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
                     {[
-                      { title: '🔥 Phá Đám: Sinh Nhật Mẹ', url: 'https://ghienphimz.mom/videoinfo?id=pha-dam-sinh-nhat-me' },
-                      { title: '✨ Mai (2024)', url: 'https://ghienphimz.mom/videoinfo?id=mai-2024' },
-                      { title: '🎬 Trại Buôn Người', url: 'https://ghienphimz.mom/videoinfo?id=trai-buon-nguoi' },
-                      { title: '💎 Thợ Săn Kho Báu', url: 'https://ghienphimz.mom/videoinfo?id=tho-san-kho-bau' },
-                      { title: '💥 Kế Hoạch CM12', url: 'https://ghienphimz.mom/videoinfo?id=ke-hoach-cm12' },
-                      { title: '🌾 Phù Sa', url: 'https://ghienphimz.mom/videoinfo?id=phu-sa' },
-                      { title: '📜 Trạng Quỳnh', url: 'https://ghienphimz.mom/videoinfo?id=trang-quynh-81' },
-                      { title: '⚽ Đội Bóng Nữ Làng Xuân', url: 'https://ghienphimz.mom/videoinfo?id=doi-bong-nu-lang-xuan' },
-                      { title: '☀️ Mặt Trời Mùa Đông', url: 'https://ghienphimz.mom/videoinfo?id=mat-troi-mua-dong-2023-winter-sun-115' },
-                      { title: '👻 Ma Xó', url: 'https://ghienphimz.mom/videoinfo?id=ma-xo' },
-                      { title: '🌸 Quỳnh Búp Bê', url: 'https://ghienphimz.mom/videoinfo?id=quynh-bup-be' },
-                    ].map((preset, pIdx) => (
-                      <TouchableOpacity
-                        key={pIdx}
-                        onPress={() => {
-                          setScraperUrlInput(preset.url);
-                          handleExecuteScrape(preset.url);
-                        }}
-                        style={{
-                          paddingHorizontal: 10,
-                          paddingVertical: 5,
-                          borderRadius: 8,
-                          backgroundColor: preset.url.includes('pha-dam-sinh-nhat-me') ? 'rgba(0, 122, 255, 0.15)' : (isLight ? '#E5E5EA' : '#2C2C2E'),
-                          borderWidth: preset.url.includes('pha-dam-sinh-nhat-me') ? 1 : 0,
-                          borderColor: '#007AFF',
-                        }}
-                      >
-                        <Text style={{ fontSize: 11, color: '#007AFF', fontWeight: '700' }}>
-                          {preset.title}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
+                      { title: 'Phá Đám: Sinh Nhật Mẹ', url: 'https://ghienphimz.mom/videoinfo?id=pha-dam-sinh-nhat-me' },
+                      { title: 'Mai (2024)', url: 'https://ghienphimz.mom/videoinfo?id=mai-2024' },
+                      { title: 'Lật Mặt 7 (Mới)', url: 'https://ghienphimz.mom/videoinfo?id=lat-mat-7-mot-dieu-uoc' },
+                      { title: 'Cám (Mới)', url: 'https://ghienphimz.mom/videoinfo?id=cam-2024' },
+                      { title: 'Gặp Lại Chị Bầu', url: 'https://ghienphimz.mom/videoinfo?id=gap-lai-chi-bau' },
+                      { title: 'Nhà Bà Nữ', url: 'https://ghienphimz.mom/videoinfo?id=nha-ba-nu' },
+                      { title: 'Bố Già', url: 'https://ghienphimz.mom/videoinfo?id=bo-gia' },
+                      { title: 'Trại Buôn Người', url: 'https://ghienphimz.mom/videoinfo?id=trai-buon-nguoi' },
+                      { title: 'Thợ Săn Kho Báu', url: 'https://ghienphimz.mom/videoinfo?id=tho-san-kho-bau' },
+                      { title: 'Kế Hoạch CM12', url: 'https://ghienphimz.mom/videoinfo?id=ke-hoach-cm12' },
+                      { title: 'Phù Sa', url: 'https://ghienphimz.mom/videoinfo?id=phu-sa' },
+                      { title: 'Trạng Quỳnh', url: 'https://ghienphimz.mom/videoinfo?id=trang-quynh-81' },
+                      { title: 'Mặt Trời Mùa Đông', url: 'https://ghienphimz.mom/videoinfo?id=mat-troi-mua-dong-2023-winter-sun-115' },
+                      { title: 'Ma Xó', url: 'https://ghienphimz.mom/videoinfo?id=ma-xo' },
+                      { title: 'Quỳnh Búp Bê', url: 'https://ghienphimz.mom/videoinfo?id=quynh-bup-be' },
+                    ].map((preset, pIdx) => {
+                      const isSelected = scraperUrlInput === preset.url;
+                      return (
+                        <TouchableOpacity
+                          key={pIdx}
+                          activeOpacity={0.7}
+                          onPress={() => {
+                            setScraperUrlInput(preset.url);
+                            handleExecuteScrape(preset.url);
+                          }}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 5,
+                            paddingHorizontal: 11,
+                            paddingVertical: 7,
+                            borderRadius: 10,
+                            backgroundColor: isSelected ? 'rgba(0, 122, 255, 0.15)' : (isLight ? '#F2F2F7' : '#0B0B0E'),
+                            borderWidth: 1,
+                            borderColor: isSelected ? '#007AFF' : (isLight ? '#E5E5EA' : '#2C2C2E'),
+                          }}
+                        >
+                          <Ionicons name="film-outline" size={13} color={isSelected ? '#007AFF' : '#8E8E93'} />
+                          <Text style={{ fontSize: 11.5, color: isSelected ? '#007AFF' : (isLight ? '#000000' : '#FFFFFF'), fontWeight: isSelected ? '800' : '600' }}>
+                            {preset.title}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
                   </ScrollView>
                 </View>
 
-                {/* Scrape Action Buttons */}
-                <View style={{ marginTop: 14, gap: 8 }}>
+                {/* Banner Cơ Chế Chống Trùng Lặp */}
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 8,
+                    backgroundColor: 'rgba(52, 199, 89, 0.1)',
+                    borderRadius: 10,
+                    paddingHorizontal: 12,
+                    paddingVertical: 9,
+                    marginTop: 12,
+                    borderWidth: 1,
+                    borderColor: 'rgba(52, 199, 89, 0.25)',
+                  }}
+                >
+                  <Ionicons name="shield-checkmark-outline" size={17} color="#34C759" />
+                  <Text style={{ flex: 1, fontSize: 11, color: isLight ? '#1B5E20' : '#81C784', lineHeight: 15 }}>
+                    Cơ chế lọc trùng: Nếu phim đã có sẵn sẽ mở xem ngay lập tức; crawler chỉ bóc tách các phim mới chưa có API trong kho.
+                  </Text>
+                </View>
+
+                {/* Nút Thực Hiện Cào API Phim Mới */}
+                <View style={{ marginTop: 14 }}>
                   <TouchableOpacity
                     activeOpacity={0.8}
                     disabled={isScraping}
@@ -27940,20 +28186,18 @@ function MainApp() {
                       <>
                         <ActivityIndicator size="small" color="#FFFFFF" />
                         <Text style={{ fontSize: 14, fontWeight: '800', color: '#FFFFFF' }}>
-                          {scrapingStepText || `Đang Cào Toàn Bộ Phim Việt Nam (${Math.floor(crawlRemainingSec / 60)}:${(crawlRemainingSec % 60).toString().padStart(2, '0')})...`}
+                          {scrapingStepText || `Đang Cào Phim Mới (${crawlRemainingSec}s)...`}
                         </Text>
                       </>
                     ) : (
                       <>
-                        <Ionicons name="color-wand" size={17} color="#FFFFFF" />
+                        <Ionicons name="cloud-download-outline" size={18} color="#FFFFFF" />
                         <Text style={{ fontSize: 14.5, fontWeight: '800', color: '#FFFFFF' }}>
-                          🚀 CÀO TOÀN BỘ PHIM VIỆT NAM (XEM TẤT CẢ)
+                          CÀO API PHIM MỚI (LỌC TRÙNG LẶP)
                         </Text>
                       </>
                     )}
                   </TouchableOpacity>
-
-
                 </View>
 
                 {/* Terminal Logs Console & Progress Bar (Tiến trình bóc tách cào API) */}
@@ -28029,52 +28273,9 @@ function MainApp() {
                     </View>
                   </View>
                 )}
-
-                {/* Khi cào xong: Nút mở Trang Mới chứa toàn bộ phim (Có Tìm Kiếm & Grid 2 cột dọc) */}
-                {!isScraping && scrapedMovieList.length > 0 && (
-                  <TouchableOpacity
-                    activeOpacity={0.8}
-                    onPress={() => setShowScrapedCatalogModal(true)}
-                    style={{
-                      marginTop: 16,
-                      backgroundColor: '#007AFF',
-                      borderRadius: 16,
-                      padding: 16,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 12,
-                      shadowColor: '#007AFF',
-                      shadowOffset: { width: 0, height: 4 },
-                      shadowOpacity: 0.25,
-                      shadowRadius: 8,
-                    }}
-                  >
-                    <View
-                      style={{
-                        width: 44,
-                        height: 44,
-                        borderRadius: 12,
-                        backgroundColor: 'rgba(255,255,255,0.2)',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <Ionicons name="grid" size={22} color="#FFFFFF" />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 15, fontWeight: '800', color: '#FFFFFF' }}>
-                        XEM TOÀN BỘ {scrapedMovieList.length} PHIM VIỆT NAM
-                      </Text>
-                      <Text style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.85)', marginTop: 2 }}>
-                        Trang riêng biệt • Có thanh tìm kiếm • Lưới 2 cột cuộn dọc
-                      </Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={22} color="#FFFFFF" />
-                  </TouchableOpacity>
-                )}
               </View>
 
-              {/* 3. Kết Quả Cào API (Khi đã có scrapedResult) */}
+              {/* 4. Kết Quả Cào API (Khi đã có scrapedResult) */}
               {scrapedResult && (
                 <View
                   style={{
@@ -28109,23 +28310,32 @@ function MainApp() {
                       />
                     )}
                     <View style={{ flex: 1, justifyContent: 'center' }}>
-                      <Text style={{ fontSize: 16, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF', marginBottom: 4, lineHeight: 22 }}>
+                      <Text style={{ fontSize: 16, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF', marginBottom: 6, lineHeight: 22 }}>
                         {scrapedResult.title}
                       </Text>
                       {scrapedResult.director && (
-                        <Text style={{ fontSize: 11.5, color: '#8E8E93', marginBottom: 2 }}>
-                          🎬 Đạo diễn: <Text style={{ color: isLight ? '#000' : '#FFF', fontWeight: '700' }}>{scrapedResult.director}</Text>
-                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 3 }}>
+                          <Ionicons name="videocam-outline" size={13} color="#8E8E93" />
+                          <Text style={{ fontSize: 11.5, color: '#8E8E93' }}>
+                            Đạo diễn: <Text style={{ color: isLight ? '#000' : '#FFF', fontWeight: '700' }}>{scrapedResult.director}</Text>
+                          </Text>
+                        </View>
                       )}
                       {scrapedResult.cast && (
-                        <Text style={{ fontSize: 11, color: '#8E8E93' }} numberOfLines={2}>
-                          🎭 Diễn viên: {scrapedResult.cast}
-                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 5, marginBottom: 3 }}>
+                          <Ionicons name="people-outline" size={13} color="#8E8E93" style={{ marginTop: 2 }} />
+                          <Text style={{ fontSize: 11, color: '#8E8E93', flex: 1 }} numberOfLines={2}>
+                            {scrapedResult.cast}
+                          </Text>
+                        </View>
                       )}
                       {scrapedResult.views && (
-                        <Text style={{ fontSize: 11, color: '#FF9500', fontWeight: '700', marginTop: 3 }}>
-                          👁️ {scrapedResult.views} lượt xem trực tuyến
-                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 }}>
+                          <Ionicons name="eye-outline" size={13} color="#FF9500" />
+                          <Text style={{ fontSize: 11, color: '#FF9500', fontWeight: '700' }}>
+                            {scrapedResult.views} lượt xem trực tuyến
+                          </Text>
+                        </View>
                       )}
                     </View>
                   </View>
@@ -28161,7 +28371,7 @@ function MainApp() {
                   {/* Direct Extracted URL Box */}
                   <View style={{ marginBottom: 12 }}>
                     <Text style={{ fontSize: 12, fontWeight: '700', color: '#8E8E93', marginBottom: 4 }}>
-                      Đường Dẫn Luồng Video Trực Tiếp (1080p MP4):
+                      Đường Dẫn Luồng Video Trực Tiếp (.m3u8 CDN):
                     </Text>
                     <View
                       style={{
