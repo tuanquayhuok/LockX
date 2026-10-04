@@ -28856,15 +28856,18 @@ function MainApp() {
                     </View>
                   )}
 
-                  {/* 3 USER-REQUESTED ACTIONS: XEM TRỰC TIẾP, TẢI VỀ, LƯU */}
+                  {/* USER-REQUESTED ACTIONS: XEM LUỒNG 1, XEM LUỒNG 2, TẢI VỀ */}
                   <Text style={{ fontSize: 13, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF', marginBottom: 8 }}>
-                    Chọn Thao Tác Với Tệp Phim:
+                    Chọn Luồng Phát & Thao Tác (2 Luồng API Chống Lỗi):
                   </Text>
                   <View style={{ gap: 8 }}>
-                    {/* 1. XEM TRỰC TIẾP */}
+                    {/* 1. XEM LUỒNG 1 */}
                     <TouchableOpacity
                       activeOpacity={0.8}
-                      onPress={() => handleWatchDirectly(scrapedResult)}
+                      onPress={() => {
+                        setPreviewPlayerMode('stream');
+                        handleWatchDirectly(scrapedResult);
+                      }}
                       style={{
                         flexDirection: 'row',
                         alignItems: 'center',
@@ -28875,16 +28878,19 @@ function MainApp() {
                         gap: 8,
                       }}
                     >
-                      <Ionicons name="play-circle" size={18} color="#FFFFFF" />
-                      <Text style={{ fontSize: 14.5, fontWeight: '800', color: '#FFFFFF' }}>
-                        1. XEM TRỰC TIẾP (LUỒNG / EMBED)
+                      <Ionicons name="flash" size={17} color="#FFFFFF" />
+                      <Text style={{ fontSize: 14, fontWeight: '800', color: '#FFFFFF' }}>
+                        1. XEM LUỒNG 1 (HLS .M3U8 CHÍNH)
                       </Text>
                     </TouchableOpacity>
 
-                    {/* 2. TẢI VỀ */}
+                    {/* 2. XEM LUỒNG 2 */}
                     <TouchableOpacity
                       activeOpacity={0.8}
-                      onPress={() => handleDownloadScraped(scrapedResult)}
+                      onPress={() => {
+                        setPreviewPlayerMode('embed');
+                        handleWatchDirectly(scrapedResult);
+                      }}
                       style={{
                         flexDirection: 'row',
                         alignItems: 'center',
@@ -28895,29 +28901,31 @@ function MainApp() {
                         gap: 8,
                       }}
                     >
-                      <Ionicons name="download" size={18} color="#FFFFFF" />
-                      <Text style={{ fontSize: 14.5, fontWeight: '800', color: '#FFFFFF' }}>
-                        2. TẢI VỀ MÁY
+                      <Ionicons name="play-skip-forward" size={17} color="#FFFFFF" />
+                      <Text style={{ fontSize: 14, fontWeight: '800', color: '#FFFFFF' }}>
+                        2. XEM LUỒNG 2 (PLAYER DỰ PHÒNG)
                       </Text>
                     </TouchableOpacity>
 
-                    {/* 3. LƯU */}
+                    {/* 3. TẢI VỀ */}
                     <TouchableOpacity
                       activeOpacity={0.8}
-                      onPress={() => handleSaveScrapedToVault(scrapedResult)}
+                      onPress={() => handleDownloadScraped(scrapedResult)}
                       style={{
                         flexDirection: 'row',
                         alignItems: 'center',
                         justifyContent: 'center',
                         paddingVertical: 12,
-                        backgroundColor: '#34C759',
+                        backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E',
                         borderRadius: 14,
                         gap: 8,
+                        borderWidth: 1,
+                        borderColor: isLight ? '#D1D1D6' : '#3A3A3C',
                       }}
                     >
-                      <Ionicons name="lock-closed" size={17} color="#FFFFFF" />
-                      <Text style={{ fontSize: 14.5, fontWeight: '800', color: '#FFFFFF' }}>
-                        3. LƯU VÀO KÉT SẮT LOCKX
+                      <Ionicons name="download-outline" size={17} color={isLight ? '#000000' : '#FFFFFF'} />
+                      <Text style={{ fontSize: 14, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF' }}>
+                        3. TẢI VỀ MÁY
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -29296,6 +29304,90 @@ function MainApp() {
 
             <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 48 }} showsVerticalScrollIndicator={false}>
 
+              {/* ── BỘ CHỌN 2 LUỒNG PHÁT (DỰ PHÒNG CHỐNG LỖI) ── */}
+              <View
+                style={{
+                  backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                  borderRadius: 14,
+                  padding: 10,
+                  marginBottom: 12,
+                  borderWidth: 1,
+                  borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Ionicons name="swap-horizontal" size={15} color="#007AFF" />
+                    <Text style={{ fontSize: 12, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF' }}>
+                      Chọn Luồng Phát Video (2 Luồng API):
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: previewPlayerMode === 'stream' ? 'rgba(0,122,255,0.15)' : 'rgba(175,82,222,0.15)', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
+                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: previewPlayerMode === 'stream' ? '#007AFF' : '#AF52DE' }} />
+                    <Text style={{ fontSize: 10.5, fontWeight: '800', color: previewPlayerMode === 'stream' ? '#007AFF' : '#AF52DE' }}>
+                      {previewPlayerMode === 'stream' ? 'Luồng 1 (HLS)' : 'Luồng 2 (Dự phòng)'}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {/* Luồng 1 (Chính) */}
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      setPreviewPlayerMode('stream');
+                      triggerToast('Đã chuyển sang Luồng 1 (HLS .m3u8 CDN)', 'Chuyển Luồng', 'info', 'flash');
+                    }}
+                    style={{
+                      flex: 1,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      paddingVertical: 10,
+                      borderRadius: 11,
+                      backgroundColor: previewPlayerMode === 'stream' ? '#007AFF' : (isLight ? '#F2F2F7' : '#0B0B0E'),
+                      gap: 6,
+                      borderWidth: 1.5,
+                      borderColor: previewPlayerMode === 'stream' ? '#007AFF' : (isLight ? '#E5E5EA' : '#2C2C2E'),
+                    }}
+                  >
+                    <Ionicons name="flash" size={14} color={previewPlayerMode === 'stream' ? '#FFFFFF' : '#8E8E93'} />
+                    <Text style={{ fontSize: 12, fontWeight: '800', color: previewPlayerMode === 'stream' ? '#FFFFFF' : (isLight ? '#000000' : '#CCCCCC') }}>
+                      Luồng 1: HLS Direct
+                    </Text>
+                  </TouchableOpacity>
+
+                  {/* Luồng 2 (Dự phòng) */}
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      setPreviewPlayerMode('embed');
+                      triggerToast('Đã chuyển sang Luồng 2 (Web Player Embed)', 'Chuyển Luồng', 'info', 'play-skip-forward');
+                    }}
+                    style={{
+                      flex: 1,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      paddingVertical: 10,
+                      borderRadius: 11,
+                      backgroundColor: previewPlayerMode === 'embed' ? '#AF52DE' : (isLight ? '#F2F2F7' : '#0B0B0E'),
+                      gap: 6,
+                      borderWidth: 1.5,
+                      borderColor: previewPlayerMode === 'embed' ? '#AF52DE' : (isLight ? '#E5E5EA' : '#2C2C2E'),
+                    }}
+                  >
+                    <Ionicons name="play-skip-forward" size={14} color={previewPlayerMode === 'embed' ? '#FFFFFF' : '#8E8E93'} />
+                    <Text style={{ fontSize: 12, fontWeight: '800', color: previewPlayerMode === 'embed' ? '#FFFFFF' : (isLight ? '#000000' : '#CCCCCC') }}>
+                      Luồng 2: Embed Player
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={{ fontSize: 10.5, color: '#8E8E93', marginTop: 6, textAlign: 'center' }}>
+                  💡 Khi 1 luồng bị quay tròn hoặc lỗi CDN, bạn chỉ cần bấm nút luồng còn lại để đổi ngay.
+                </Text>
+              </View>
+
               {/* ── VIDEO PLAYER ── */}
               <View
                 style={{
@@ -29306,8 +29398,8 @@ function MainApp() {
                   overflow: 'hidden',
                   marginBottom: 14,
                   borderWidth: 2,
-                  borderColor: '#007AFF',
-                  shadowColor: '#007AFF',
+                  borderColor: previewPlayerMode === 'stream' ? '#007AFF' : '#AF52DE',
+                  shadowColor: previewPlayerMode === 'stream' ? '#007AFF' : '#AF52DE',
                   shadowOpacity: 0.35,
                   shadowRadius: 16,
                   shadowOffset: { width: 0, height: 4 },
@@ -29316,25 +29408,27 @@ function MainApp() {
               >
                 {Platform.OS === 'web' ? (
                   React.createElement('iframe', {
-                    key: `stream-${previewVideoUrl}`,
-                    src: previewVideoUrl
-                      ? `http://localhost:3333/player?m3u8=${encodeURIComponent(previewVideoUrl)}&title=${encodeURIComponent(previewVideoTitle)}`
-                      : 'about:blank',
+                    key: `player-${previewPlayerMode}-${previewPlayerMode === 'stream' ? previewVideoUrl : previewEmbedUrl}`,
+                    src: previewPlayerMode === 'stream'
+                      ? (previewVideoUrl
+                          ? `http://localhost:3333/player?m3u8=${encodeURIComponent(previewVideoUrl)}&title=${encodeURIComponent(previewVideoTitle)}`
+                          : 'about:blank')
+                      : (previewEmbedUrl || `https://player.phimapi.com/player/?url=${encodeURIComponent(previewVideoUrl)}`),
                     style: { width: '100%', height: '100%', border: 'none', backgroundColor: '#000000' },
                     allow: 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share',
                     allowFullScreen: true,
                   })
                 ) : (
                   <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-                    <Ionicons name="play-circle" size={60} color="#007AFF" />
+                    <Ionicons name="play-circle" size={60} color={previewPlayerMode === 'stream' ? '#007AFF' : '#AF52DE'} />
                     <Text style={{ color: '#FFFFFF', marginTop: 10, fontSize: 14, fontWeight: '700', textAlign: 'center' }}>
-                      Nhấn để mở luồng HLS trên trình phát hệ thống
+                      {previewPlayerMode === 'stream' ? 'Đang phát Luồng 1: HLS Direct' : 'Đang phát Luồng 2: Embed Player'}
                     </Text>
                     <TouchableOpacity
-                      onPress={() => Linking.openURL(previewVideoUrl).catch(() => {})}
-                      style={{ marginTop: 14, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12, backgroundColor: '#007AFF' }}
+                      onPress={() => Linking.openURL(previewPlayerMode === 'stream' ? previewVideoUrl : (previewEmbedUrl || previewVideoUrl)).catch(() => {})}
+                      style={{ marginTop: 14, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12, backgroundColor: previewPlayerMode === 'stream' ? '#007AFF' : '#AF52DE' }}
                     >
-                      <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '800' }}>▶ Mở Video (.m3u8)</Text>
+                      <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '800' }}>▶ Mở Video Trên Trình Duyệt</Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -29513,24 +29607,6 @@ function MainApp() {
                   <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#FFFFFF' }}>Copy</Text>
                 </TouchableOpacity>
               </View>
-
-              {/* ── LƯU KÉT SẮT ── */}
-              <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={() => handleSaveScrapedToVault(scrapedResult || { title: previewVideoTitle || 'Phim_VN.mp4', streamUrl: previewVideoUrl, sizeFormatted: '---', platform: 'gg', originalUrl: previewVideoUrl })}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  paddingVertical: 13,
-                  backgroundColor: '#34C759',
-                  borderRadius: 14,
-                  gap: 7,
-                }}
-              >
-                <Ionicons name="lock-closed" size={16} color="#FFFFFF" />
-                <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '800' }}>Lưu Vào Két Sắt LockX</Text>
-              </TouchableOpacity>
 
             </ScrollView>
           </SafeAreaView>
