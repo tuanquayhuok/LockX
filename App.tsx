@@ -8243,6 +8243,8 @@ function MainApp() {
   const [catalogFilterYear, setCatalogFilterYear] = useState<string>('all');
   const [scraperPlatform, setScraperPlatform] = useState<'gg' | 'tiktok' | 'ytb'>('gg');
   const [scraperUrlInput, setScraperUrlInput] = useState<string>('https://ghienphimz.mom/videoinfo?id=pha-dam-sinh-nhat-me');
+  const [scraperMovieNameInput, setScraperMovieNameInput] = useState<string>('');
+  const [scrapeFilterMode, setScrapeFilterMode] = useState<'title' | 'all'>('title');
   const [isScraping, setIsScraping] = useState<boolean>(false);
   const [scrapingStepText, setScrapingStepText] = useState<string>('');
   const [scrapingProgressPercent, setScrapingProgressPercent] = useState<number>(0);
@@ -14817,19 +14819,30 @@ function MainApp() {
     playAppleNotificationSound('success');
   };
 
-  // Xử lý Cào API & Bóc Tách Phim Mới (Lọc Trùng Lặp Với Kho API Đã Cào)
-  const handleExecuteScrape = (overrideUrl?: string) => {
+  // Xử lý Cào API & Bóc Tách Phim Mới (Hỗ trợ Lọc theo Tên Phim và Lọc All)
+  const handleExecuteScrape = (overrideUrl?: string, overrideMode?: 'title' | 'all', overrideMovieTitle?: string) => {
     const rawUrl = (overrideUrl !== undefined ? overrideUrl : scraperUrlInput).trim();
-    if (!rawUrl) {
+    const activeMode = overrideMode !== undefined ? overrideMode : scrapeFilterMode;
+    const targetMovieTitle = (overrideMovieTitle !== undefined ? overrideMovieTitle : scraperMovieNameInput).trim();
+
+    if (!rawUrl && activeMode === 'all') {
       triggerToast('Vui lòng điền domain hoặc URL web xem phim cần cào API!', 'Thiếu Thông Tin', 'warning');
       return;
     }
 
-    // 1. KIỂM TRA TRÙNG LẶP: Nếu URL hoặc phim đã có trong kho API, xem được ngay không cần cào lại!
-    const lower = rawUrl.toLowerCase();
+    if (activeMode === 'title' && !targetMovieTitle && !rawUrl.includes('id=') && !rawUrl.includes('/phim/')) {
+      triggerToast('Vui lòng nhập tên phim cần cào API hoặc chọn chế độ Lọc All!', 'Chưa Nhập Tên Phim', 'warning');
+      return;
+    }
+
+    // 1. KIỂM TRA TRÙNG LẶP: Nếu tên phim hoặc URL đã có trong kho API, xem được ngay không cần cào lại!
+    const lowerUrl = rawUrl.toLowerCase();
+    const lowerTitle = targetMovieTitle.toLowerCase();
     const existing = allCatalogMovies.find((m: any) =>
-      (m.code && lower.includes(m.code.toLowerCase())) ||
-      (m.title && lower.includes(m.title.toLowerCase()))
+      (lowerTitle && m.title.toLowerCase().includes(lowerTitle)) ||
+      (lowerTitle && m.code.toLowerCase().includes(lowerTitle.replace(/\s+/g, '-'))) ||
+      (m.code && lowerUrl.includes(m.code.toLowerCase())) ||
+      (m.title && lowerUrl.includes(m.title.toLowerCase()))
     );
 
     if (existing) {
@@ -14842,21 +14855,6 @@ function MainApp() {
     const currentCodes = new Set(allCatalogMovies.map((m: any) => m.code));
     let unScrapedCandidates = NEW_VN_CANDIDATE_MOVIES.filter((m: any) => !currentCodes.has(m.code));
 
-    let customCode = '';
-    const idMatch = rawUrl.match(/[?&]id=([^&#]+)/);
-    const pathMatch = rawUrl.match(/\/(?:phim|xem-phim)\/([^/?&#]+)/);
-    if (idMatch && idMatch[1]) {
-      customCode = idMatch[1];
-    } else if (pathMatch && pathMatch[1]) {
-      customCode = pathMatch[1];
-    } else {
-      const cleanPath = rawUrl.split('?')[0].replace(/\/+$/, '');
-      const lastSeg = cleanPath.split('/').pop();
-      if (lastSeg && lastSeg.length > 2 && !lastSeg.includes('.')) {
-        customCode = lastSeg;
-      }
-    }
-
     // Xác định tên miền nguồn (Motchill, RoPhim, GhienPhimz, PhimMoi, OPhim, v.v.)
     let domainLabel = 'Google Web Phim';
     if (rawUrl.includes('motchill')) domainLabel = 'Motchill (motchill.tv)';
@@ -14865,27 +14863,72 @@ function MainApp() {
     else if (rawUrl.includes('phimmoi')) domainLabel = 'PhimMoi (phimmoichill.net)';
     else if (rawUrl.includes('ophim')) domainLabel = 'OPhim (ophim1.com)';
 
-    if (customCode && !currentCodes.has(customCode)) {
-      const customTitle = customCode
-        .split('-')
-        .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
-        .join(' ');
-      const customMovie = {
-        code: customCode,
-        title: customTitle,
-        image: 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=500&q=80',
-        year: '2024',
-        duration: '115 phút',
-        rating: '8,8',
-        views: '24.500',
-        chapter: 'Full HD 1080p',
-        director: 'Đang cập nhật',
-        cast: 'Diễn viên Việt Nam',
-        embedUrl: `https://lamda.chumin.xyz/temp?s=${encodeURIComponent(customCode)}&linknhung=1&t=1`,
-        streamUrl: 'https://bmx.dachumin.xyz/bachanlanke/qLlTuf5zN03CJpMB.m3u8',
-        hlsUrl: 'https://bmx.dachumin.xyz/bachanlanke/qLlTuf5zN03CJpMB.m3u8',
-      };
-      unScrapedCandidates = [customMovie, ...unScrapedCandidates];
+    // Nếu lọc theo tên phim cụ thể:
+    if (activeMode === 'title' && targetMovieTitle) {
+      const slug = targetMovieTitle
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd').replace(/Đ/g, 'D')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+
+      const matchedCand = unScrapedCandidates.find((c: any) =>
+        c.title.toLowerCase().includes(lowerTitle) || c.code.includes(slug)
+      );
+
+      if (matchedCand) {
+        unScrapedCandidates = [matchedCand];
+      } else {
+        const customMovie = {
+          code: slug || `phim-${Date.now()}`,
+          title: targetMovieTitle,
+          image: 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=500&q=80',
+          year: '2025',
+          duration: '120 phút',
+          rating: '9,0',
+          views: '31.200',
+          chapter: 'Full HD 1080p',
+          director: 'Đang cập nhật',
+          cast: 'Diễn viên Việt Nam',
+          embedUrl: `https://lamda.chumin.xyz/temp?s=${encodeURIComponent(slug)}&linknhung=1&t=1`,
+          streamUrl: 'https://bmx.dachumin.xyz/bachanlanke/qLlTuf5zN03CJpMB.m3u8',
+          hlsUrl: 'https://bmx.dachumin.xyz/bachanlanke/qLlTuf5zN03CJpMB.m3u8',
+        };
+        unScrapedCandidates = [customMovie];
+      }
+    } else {
+      // Chế độ Lọc ALL: nếu có URL cụ thể thì trích xuất thêm
+      let customCode = '';
+      const idMatch = rawUrl.match(/[?&]id=([^&#]+)/);
+      const pathMatch = rawUrl.match(/\/(?:phim|xem-phim)\/([^/?&#]+)/);
+      if (idMatch && idMatch[1]) {
+        customCode = idMatch[1];
+      } else if (pathMatch && pathMatch[1]) {
+        customCode = pathMatch[1];
+      }
+      if (customCode && !currentCodes.has(customCode)) {
+        const customTitle = customCode
+          .split('-')
+          .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
+          .join(' ');
+        const customMovie = {
+          code: customCode,
+          title: customTitle,
+          image: 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=500&q=80',
+          year: '2024',
+          duration: '115 phút',
+          rating: '8,8',
+          views: '24.500',
+          chapter: 'Full HD 1080p',
+          director: 'Đang cập nhật',
+          cast: 'Diễn viên Việt Nam',
+          embedUrl: `https://lamda.chumin.xyz/temp?s=${encodeURIComponent(customCode)}&linknhung=1&t=1`,
+          streamUrl: 'https://bmx.dachumin.xyz/bachanlanke/qLlTuf5zN03CJpMB.m3u8',
+          hlsUrl: 'https://bmx.dachumin.xyz/bachanlanke/qLlTuf5zN03CJpMB.m3u8',
+        };
+        unScrapedCandidates = [customMovie, ...unScrapedCandidates];
+      }
     }
 
     if (unScrapedCandidates.length === 0) {
@@ -14904,18 +14947,22 @@ function MainApp() {
     setScrapingProgressPercent(10);
     setScrapedMovieList([]);
 
-    const totalSeconds = 12;
+    const totalSeconds = 10;
     let remaining = totalSeconds;
     setCrawlRemainingSec(totalSeconds);
+
+    const filterNotice = activeMode === 'title' && targetMovieTitle
+      ? `Lọc theo tên: [${targetMovieTitle}]`
+      : 'Lọc ALL (toàn bộ phim mới)';
 
     setScrapingLogs([
       {
         time: '00:01',
-        text: `[DNS & GATEWAY] Đang kết nối tới máy chủ nguồn ${domainLabel}: ${rawUrl}...`,
+        text: `[DNS & GATEWAY] Đang kết nối tới máy chủ nguồn ${domainLabel}: ${rawUrl}... (${filterNotice})`,
         type: 'info',
       },
     ]);
-    setScrapingStepText(`Đang đối soát kho API và lọc phim mới chưa cào từ ${domainLabel}...`);
+    setScrapingStepText(`Đang đối soát kho API và lọc phim từ ${domainLabel} (${filterNotice})...`);
 
     let elapsed = 0;
     crawlIntervalRef.current = setInterval(() => {
@@ -28157,59 +28204,163 @@ function MainApp() {
                   )}
                 </View>
 
-                {/* Chọn phim mẫu từ các nguồn web (Motchill, RoPhim, GhienPhimz...) */}
-                <View style={{ marginTop: 12 }}>
-                  <Text style={{ fontSize: 11, fontWeight: '600', color: '#94A3B8', marginBottom: 8 }}>
-                    Chọn phim mẫu từ các nguồn web (Motchill, RoPhim, GhienPhimz...):
-                  </Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                    {[
-                      { source: 'Motchill', title: 'Mai (2024)', url: 'https://motchill.tv/phim/mai-2024' },
-                      { source: 'RoPhim', title: 'Lật Mặt 7 (Mới)', url: 'https://rophim.net/phim/lat-mat-7-mot-dieu-uoc' },
-                      { source: 'GhienPhimz', title: 'Phá Đám: Sinh Nhật Mẹ', url: 'https://ghienphimz.mom/videoinfo?id=pha-dam-sinh-nhat-me' },
-                      { source: 'Motchill', title: 'Cám (Dị Bản)', url: 'https://motchill.tv/phim/cam-2024' },
-                      { source: 'RoPhim', title: 'Gặp Lại Chị Bầu', url: 'https://rophim.net/phim/gap-lai-chi-bau' },
-                      { source: 'PhimMoi', title: 'Nhà Bà Nữ', url: 'https://phimmoichill.net/phim/nha-ba-nu' },
-                      { source: 'GhienPhimz', title: 'Bố Già (Chiếu Rạp)', url: 'https://ghienphimz.mom/videoinfo?id=bo-gia' },
-                      { source: 'Motchill', title: 'Trại Buôn Người', url: 'https://motchill.tv/phim/trai-buon-nguoi' },
-                      { source: 'RoPhim', title: 'Thợ Săn Kho Báu', url: 'https://rophim.net/phim/tho-san-kho-bau' },
-                      { source: 'PhimMoi', title: 'Kế Hoạch CM12', url: 'https://phimmoichill.net/phim/ke-hoach-cm12' },
-                      { source: 'Motchill', title: 'Phù Sa', url: 'https://motchill.tv/phim/phu-sa' },
-                      { source: 'RoPhim', title: 'Trạng Quỳnh', url: 'https://rophim.net/phim/trang-quynh' },
-                      { source: 'GhienPhimz', title: 'Ma Xó', url: 'https://ghienphimz.mom/videoinfo?id=ma-xo' },
-                    ].map((preset, pIdx) => {
-                      const isSelected = scraperUrlInput === preset.url;
-                      return (
-                        <TouchableOpacity
-                          key={pIdx}
-                          activeOpacity={0.7}
-                          onPress={() => {
-                            setScraperUrlInput(preset.url);
-                            handleExecuteScrape(preset.url);
-                          }}
+                {/* Ô Nhập Tên Phim Muốn Cào API & Bộ Lọc (Lọc Theo Tên Phim / Lọc All) */}
+                <View style={{ marginTop: 14 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 8 }}>
+                    <Text style={{ fontSize: 12.5, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
+                      Tên phim muốn cào API:
+                    </Text>
+
+                    {/* Bộ lọc: Theo Tên Phim / Lọc All */}
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        backgroundColor: isLight ? '#E5E5EA' : '#0B0B0E',
+                        borderRadius: 8,
+                        padding: 2,
+                        borderWidth: 1,
+                        borderColor: isLight ? '#D1D1D6' : '#2C2C2E',
+                      }}
+                    >
+                      <TouchableOpacity
+                        activeOpacity={0.7}
+                        onPress={() => setScrapeFilterMode('title')}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 4,
+                          paddingHorizontal: 8,
+                          paddingVertical: 4,
+                          borderRadius: 6,
+                          backgroundColor: scrapeFilterMode === 'title' ? '#007AFF' : 'transparent',
+                        }}
+                      >
+                        <Ionicons
+                          name="search"
+                          size={11}
+                          color={scrapeFilterMode === 'title' ? '#FFFFFF' : '#8E8E93'}
+                        />
+                        <Text
                           style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            gap: 5,
-                            paddingHorizontal: 11,
-                            paddingVertical: 7,
-                            borderRadius: 10,
-                            backgroundColor: isSelected ? 'rgba(0, 122, 255, 0.15)' : (isLight ? '#F2F2F7' : '#0B0B0E'),
-                            borderWidth: 1,
-                            borderColor: isSelected ? '#007AFF' : (isLight ? '#E5E5EA' : '#2C2C2E'),
+                            fontSize: 10.5,
+                            fontWeight: '700',
+                            color: scrapeFilterMode === 'title' ? '#FFFFFF' : '#8E8E93',
                           }}
                         >
-                          <Ionicons name="film-outline" size={13} color={isSelected ? '#007AFF' : '#8E8E93'} />
-                          <Text style={{ fontSize: 10, color: '#8E8E93', fontWeight: '700' }}>
-                            [{preset.source}]
-                          </Text>
-                          <Text style={{ fontSize: 11.5, color: isSelected ? '#007AFF' : (isLight ? '#000000' : '#FFFFFF'), fontWeight: isSelected ? '800' : '600' }}>
-                            {preset.title}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </ScrollView>
+                          Lọc Tên Phim
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        activeOpacity={0.7}
+                        onPress={() => setScrapeFilterMode('all')}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 4,
+                          paddingHorizontal: 8,
+                          paddingVertical: 4,
+                          borderRadius: 6,
+                          backgroundColor: scrapeFilterMode === 'all' ? '#007AFF' : 'transparent',
+                        }}
+                      >
+                        <Ionicons
+                          name="layers-outline"
+                          size={11}
+                          color={scrapeFilterMode === 'all' ? '#FFFFFF' : '#8E8E93'}
+                        />
+                        <Text
+                          style={{
+                            fontSize: 10.5,
+                            fontWeight: '700',
+                            color: scrapeFilterMode === 'all' ? '#FFFFFF' : '#8E8E93',
+                          }}
+                        >
+                          Lọc All
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {/* Input Box Nhập Tên Phim */}
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      backgroundColor: isLight ? '#F2F2F7' : '#0B0B0E',
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: scrapeFilterMode === 'title' ? '#007AFF' : (isLight ? '#E5E5EA' : '#2C2C2E'),
+                      paddingHorizontal: 12,
+                      height: 46,
+                    }}
+                  >
+                    <Ionicons
+                      name="film-outline"
+                      size={17}
+                      color={scrapeFilterMode === 'title' ? '#007AFF' : '#8E8E93'}
+                      style={{ marginRight: 8 }}
+                    />
+                    <TextInput
+                      style={{
+                        flex: 1,
+                        color: isLight ? '#000000' : '#FFFFFF',
+                        fontSize: 13,
+                        paddingVertical: 0,
+                      }}
+                      placeholder={
+                        scrapeFilterMode === 'title'
+                          ? 'Nhập tên phim muốn cào (Mai, Lật Mặt 7, Cám, Bố Già...)'
+                          : 'Chế độ Lọc All: Sẽ cào toàn bộ danh mục phim mới...'
+                      }
+                      placeholderTextColor="#8E8E93"
+                      value={scraperMovieNameInput}
+                      onChangeText={(text) => {
+                        setScraperMovieNameInput(text);
+                        if (text.trim() && scrapeFilterMode !== 'title') {
+                          setScrapeFilterMode('title');
+                        }
+                      }}
+                      autoCapitalize="words"
+                      autoCorrect={false}
+                    />
+                    {scraperMovieNameInput.length > 0 && (
+                      <TouchableOpacity onPress={() => setScraperMovieNameInput('')} style={{ padding: 4 }}>
+                        <Ionicons name="close-circle" size={18} color="#8E8E93" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  {/* Gợi ý tên phim nhanh (bấm là tự điền) */}
+                  <View style={{ marginTop: 8 }}>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                      {['Mai', 'Lật Mặt 7', 'Cám', 'Nhà Bà Nữ', 'Bố Già', 'Phá Đám Sinh Nhật Mẹ', 'Gặp Lại Chị Bầu', 'Đất Rừng Phương Nam', 'Trạng Quỳnh', 'Ma Xó'].map((suggestName, sIdx) => {
+                        const isChosen = scraperMovieNameInput.toLowerCase() === suggestName.toLowerCase();
+                        return (
+                          <TouchableOpacity
+                            key={sIdx}
+                            activeOpacity={0.7}
+                            onPress={() => {
+                              setScraperMovieNameInput(suggestName);
+                              setScrapeFilterMode('title');
+                            }}
+                            style={{
+                              paddingHorizontal: 9,
+                              paddingVertical: 4,
+                              borderRadius: 8,
+                              backgroundColor: isChosen ? 'rgba(0, 122, 255, 0.2)' : (isLight ? '#F2F2F7' : '#0B0B0E'),
+                              borderWidth: 1,
+                              borderColor: isChosen ? '#007AFF' : (isLight ? '#E5E5EA' : '#2C2C2E'),
+                            }}
+                          >
+                            <Text style={{ fontSize: 10.5, color: isChosen ? '#007AFF' : '#8E8E93', fontWeight: isChosen ? '800' : '600' }}>
+                              {suggestName}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
                 </View>
 
                 {/* Banner Cơ Chế Chống Trùng Lặp */}
@@ -28244,10 +28395,10 @@ function MainApp() {
                       alignItems: 'center',
                       justifyContent: 'center',
                       paddingVertical: 13,
-                      backgroundColor: '#007AFF',
+                      backgroundColor: scrapeFilterMode === 'title' ? '#007AFF' : '#34C759',
                       borderRadius: 14,
                       gap: 8,
-                      shadowColor: '#007AFF',
+                      shadowColor: scrapeFilterMode === 'title' ? '#007AFF' : '#34C759',
                       shadowOffset: { width: 0, height: 4 },
                       shadowOpacity: 0.25,
                       shadowRadius: 8,
@@ -28257,14 +28408,22 @@ function MainApp() {
                       <>
                         <ActivityIndicator size="small" color="#FFFFFF" />
                         <Text style={{ fontSize: 14, fontWeight: '800', color: '#FFFFFF' }}>
-                          {scrapingStepText || `Đang Cào Phim Mới (${crawlRemainingSec}s)...`}
+                          {scrapingStepText || `Đang Cào Phim (${crawlRemainingSec}s)...`}
                         </Text>
                       </>
                     ) : (
                       <>
-                        <Ionicons name="cloud-download-outline" size={18} color="#FFFFFF" />
+                        <Ionicons
+                          name={scrapeFilterMode === 'title' ? 'search' : 'cloud-download-outline'}
+                          size={18}
+                          color="#FFFFFF"
+                        />
                         <Text style={{ fontSize: 14.5, fontWeight: '800', color: '#FFFFFF' }}>
-                          CÀO API PHIM MỚI (LỌC TRÙNG LẶP)
+                          {scrapeFilterMode === 'title'
+                            ? (scraperMovieNameInput.trim()
+                                ? `CÀO API THEO TÊN: "${scraperMovieNameInput.trim().toUpperCase()}"`
+                                : 'CÀO API THEO TÊN PHIM')
+                            : 'CÀO TOÀN BỘ (ALL) PHIM MỚI'}
                         </Text>
                       </>
                     )}
