@@ -14842,18 +14842,42 @@ function MainApp() {
     const currentCodes = new Set(allCatalogMovies.map((m: any) => m.code));
     let unScrapedCandidates = NEW_VN_CANDIDATE_MOVIES.filter((m: any) => !currentCodes.has(m.code));
 
+    let customCode = '';
     const idMatch = rawUrl.match(/[?&]id=([^&#]+)/);
-    if (idMatch && idMatch[1] && !currentCodes.has(idMatch[1])) {
-      const customCode = idMatch[1];
-      const customTitle = customCode.split('-').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    const pathMatch = rawUrl.match(/\/(?:phim|xem-phim)\/([^/?&#]+)/);
+    if (idMatch && idMatch[1]) {
+      customCode = idMatch[1];
+    } else if (pathMatch && pathMatch[1]) {
+      customCode = pathMatch[1];
+    } else {
+      const cleanPath = rawUrl.split('?')[0].replace(/\/+$/, '');
+      const lastSeg = cleanPath.split('/').pop();
+      if (lastSeg && lastSeg.length > 2 && !lastSeg.includes('.')) {
+        customCode = lastSeg;
+      }
+    }
+
+    // Xác định tên miền nguồn (Motchill, RoPhim, GhienPhimz, PhimMoi, OPhim, v.v.)
+    let domainLabel = 'Google Web Phim';
+    if (rawUrl.includes('motchill')) domainLabel = 'Motchill (motchill.tv)';
+    else if (rawUrl.includes('rophim')) domainLabel = 'RoPhim (rophim.net)';
+    else if (rawUrl.includes('ghienphimz')) domainLabel = 'GhienPhimz (ghienphimz.mom)';
+    else if (rawUrl.includes('phimmoi')) domainLabel = 'PhimMoi (phimmoichill.net)';
+    else if (rawUrl.includes('ophim')) domainLabel = 'OPhim (ophim1.com)';
+
+    if (customCode && !currentCodes.has(customCode)) {
+      const customTitle = customCode
+        .split('-')
+        .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(' ');
       const customMovie = {
         code: customCode,
         title: customTitle,
-        image: 'https://ghienphimz.mom/static/images/default-poster.jpg',
-        year: '2025',
-        duration: '110 phút',
-        rating: '8,5',
-        views: '15.200',
+        image: 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=500&q=80',
+        year: '2024',
+        duration: '115 phút',
+        rating: '8,8',
+        views: '24.500',
         chapter: 'Full HD 1080p',
         director: 'Đang cập nhật',
         cast: 'Diễn viên Việt Nam',
@@ -14887,11 +14911,11 @@ function MainApp() {
     setScrapingLogs([
       {
         time: '00:01',
-        text: `[DNS & GATEWAY] Đang kết nối tới máy chủ Google/Ghienphimz: ${rawUrl}...`,
+        text: `[DNS & GATEWAY] Đang kết nối tới máy chủ nguồn ${domainLabel}: ${rawUrl}...`,
         type: 'info',
       },
     ]);
-    setScrapingStepText(`Đang đối soát kho API và lọc phim mới chưa cào...`);
+    setScrapingStepText(`Đang đối soát kho API và lọc phim mới chưa cào từ ${domainLabel}...`);
 
     let elapsed = 0;
     crawlIntervalRef.current = setInterval(() => {
@@ -27879,7 +27903,7 @@ function MainApp() {
                         </View>
                       </View>
                       <Text style={{ fontSize: 11.5, color: '#8E8E93', marginTop: 2 }}>
-                        Máy chủ nguồn: ghienphimz.mom • Bóc tách luồng .m3u8 & Player
+                        Hỗ trợ đa nguồn: Motchill, RoPhim, GhienPhimz, PhimMoi...
                       </Text>
                     </View>
                   </View>
@@ -27915,44 +27939,44 @@ function MainApp() {
                   marginBottom: 14,
                 }}
               >
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    <View
-                      style={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: 12,
-                        backgroundColor: 'rgba(52, 199, 89, 0.15)',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <Ionicons name="layers-outline" size={22} color="#34C759" />
-                    </View>
-                    <View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 10 }}>
+                  <View
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 12,
+                      backgroundColor: 'rgba(52, 199, 89, 0.15)',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Ionicons name="layers-outline" size={22} color="#34C759" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                       <Text style={{ fontSize: 14.5, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF' }}>
                         Kho API Đã Cào Sẵn
                       </Text>
-                      <Text style={{ fontSize: 11.5, color: '#8E8E93' }}>
-                        {allCatalogMovies.length} phim đã bóc tách API • Xem ngay không cần chờ
-                      </Text>
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 3,
+                          backgroundColor: 'rgba(52, 199, 89, 0.15)',
+                          paddingHorizontal: 7,
+                          paddingVertical: 2,
+                          borderRadius: 6,
+                        }}
+                      >
+                        <Ionicons name="checkmark-circle" size={11} color="#34C759" />
+                        <Text style={{ fontSize: 10, fontWeight: '800', color: '#34C759' }}>
+                          Xem Ngay
+                        </Text>
+                      </View>
                     </View>
-                  </View>
-
-                  <View
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 4,
-                      backgroundColor: 'rgba(52, 199, 89, 0.15)',
-                      paddingHorizontal: 8,
-                      paddingVertical: 4,
-                      borderRadius: 8,
-                    }}
-                  >
-                    <Ionicons name="checkmark-circle" size={13} color="#34C759" />
-                    <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#34C759' }}>
-                      XEM ĐƯỢC NGAY
+                    <Text style={{ fontSize: 11.5, color: '#8E8E93', marginTop: 2 }} numberOfLines={1}>
+                      {allCatalogMovies.length} phim sẵn sàng phát • Không cần cào lại
                     </Text>
                   </View>
                 </View>
@@ -28047,12 +28071,58 @@ function MainApp() {
                       Cào API Phim Mới (Lọc Trùng Lặp)
                     </Text>
                     <Text style={{ fontSize: 11.5, color: '#8E8E93' }}>
-                      Chỉ lấy API phim mới chưa có trong kho • Tự động loại bỏ phim trùng
+                      Hỗ trợ đa nguồn web phim • Tự động loại bỏ phim trùng
                     </Text>
                   </View>
                 </View>
 
-                {/* Input điền sẵn tên miền */}
+                {/* Chọn Nhanh Tên Miền Nguồn Cào API */}
+                <View style={{ marginBottom: 10 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#8E8E93', marginBottom: 6, letterSpacing: 0.3 }}>
+                    CHỌN TÊN MIỀN NGUỒN CÀO API:
+                  </Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                    {[
+                      { name: 'Motchill', domain: 'https://motchill.tv/phim/mai-2024', badge: 'motchill.tv' },
+                      { name: 'RoPhim', domain: 'https://rophim.net/phim/lat-mat-7-mot-dieu-uoc', badge: 'rophim.net' },
+                      { name: 'GhienPhimz', domain: 'https://ghienphimz.mom/videoinfo?id=pha-dam-sinh-nhat-me', badge: 'ghienphimz.mom' },
+                      { name: 'PhimMoi', domain: 'https://phimmoichill.net/phim/nha-ba-nu', badge: 'phimmoichill.net' },
+                      { name: 'OPhim', domain: 'https://ophim1.com/phim/cam-2024', badge: 'ophim1.com' },
+                    ].map((dom, dIdx) => {
+                      const isDomSelected = scraperUrlInput.includes(dom.badge);
+                      return (
+                        <TouchableOpacity
+                          key={dIdx}
+                          activeOpacity={0.7}
+                          onPress={() => {
+                            setScraperUrlInput(dom.domain);
+                          }}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 5,
+                            paddingHorizontal: 10,
+                            paddingVertical: 6,
+                            borderRadius: 9,
+                            backgroundColor: isDomSelected ? 'rgba(0, 122, 255, 0.16)' : (isLight ? '#F2F2F7' : '#0B0B0E'),
+                            borderWidth: 1,
+                            borderColor: isDomSelected ? '#007AFF' : (isLight ? '#E5E5EA' : '#2C2C2E'),
+                          }}
+                        >
+                          <Ionicons name="globe-outline" size={13} color={isDomSelected ? '#007AFF' : '#8E8E93'} />
+                          <Text style={{ fontSize: 11.5, fontWeight: isDomSelected ? '800' : '600', color: isDomSelected ? '#007AFF' : (isLight ? '#000000' : '#CCCCCC') }}>
+                            {dom.name}
+                          </Text>
+                          <Text style={{ fontSize: 9.5, color: isDomSelected ? '#007AFF' : '#8E8E93' }}>
+                            ({dom.badge})
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+
+                {/* Input điền URL phim */}
                 <View
                   style={{
                     flexDirection: 'row',
@@ -28073,7 +28143,7 @@ function MainApp() {
                       fontSize: 13,
                       paddingVertical: 0,
                     }}
-                    placeholder="https://ghienphimz.mom/videoinfo?id=pha-dam-sinh-nhat-me"
+                    placeholder="Điền URL từ Motchill, RoPhim, GhienPhimz, PhimMoi..."
                     placeholderTextColor="#8E8E93"
                     value={scraperUrlInput}
                     onChangeText={setScraperUrlInput}
@@ -28087,28 +28157,26 @@ function MainApp() {
                   )}
                 </View>
 
-                {/* Chọn phim Việt Nam mẫu (Điền sẵn tên miền) */}
+                {/* Chọn phim mẫu từ các nguồn web (Motchill, RoPhim, GhienPhimz...) */}
                 <View style={{ marginTop: 12 }}>
                   <Text style={{ fontSize: 11, fontWeight: '600', color: '#94A3B8', marginBottom: 8 }}>
-                    Chọn phim Việt Nam mẫu (Tự động điền đầy đủ tên miền ghienphimz.mom):
+                    Chọn phim mẫu từ các nguồn web (Motchill, RoPhim, GhienPhimz...):
                   </Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
                     {[
-                      { title: 'Phá Đám: Sinh Nhật Mẹ', url: 'https://ghienphimz.mom/videoinfo?id=pha-dam-sinh-nhat-me' },
-                      { title: 'Mai (2024)', url: 'https://ghienphimz.mom/videoinfo?id=mai-2024' },
-                      { title: 'Lật Mặt 7 (Mới)', url: 'https://ghienphimz.mom/videoinfo?id=lat-mat-7-mot-dieu-uoc' },
-                      { title: 'Cám (Mới)', url: 'https://ghienphimz.mom/videoinfo?id=cam-2024' },
-                      { title: 'Gặp Lại Chị Bầu', url: 'https://ghienphimz.mom/videoinfo?id=gap-lai-chi-bau' },
-                      { title: 'Nhà Bà Nữ', url: 'https://ghienphimz.mom/videoinfo?id=nha-ba-nu' },
-                      { title: 'Bố Già', url: 'https://ghienphimz.mom/videoinfo?id=bo-gia' },
-                      { title: 'Trại Buôn Người', url: 'https://ghienphimz.mom/videoinfo?id=trai-buon-nguoi' },
-                      { title: 'Thợ Săn Kho Báu', url: 'https://ghienphimz.mom/videoinfo?id=tho-san-kho-bau' },
-                      { title: 'Kế Hoạch CM12', url: 'https://ghienphimz.mom/videoinfo?id=ke-hoach-cm12' },
-                      { title: 'Phù Sa', url: 'https://ghienphimz.mom/videoinfo?id=phu-sa' },
-                      { title: 'Trạng Quỳnh', url: 'https://ghienphimz.mom/videoinfo?id=trang-quynh-81' },
-                      { title: 'Mặt Trời Mùa Đông', url: 'https://ghienphimz.mom/videoinfo?id=mat-troi-mua-dong-2023-winter-sun-115' },
-                      { title: 'Ma Xó', url: 'https://ghienphimz.mom/videoinfo?id=ma-xo' },
-                      { title: 'Quỳnh Búp Bê', url: 'https://ghienphimz.mom/videoinfo?id=quynh-bup-be' },
+                      { source: 'Motchill', title: 'Mai (2024)', url: 'https://motchill.tv/phim/mai-2024' },
+                      { source: 'RoPhim', title: 'Lật Mặt 7 (Mới)', url: 'https://rophim.net/phim/lat-mat-7-mot-dieu-uoc' },
+                      { source: 'GhienPhimz', title: 'Phá Đám: Sinh Nhật Mẹ', url: 'https://ghienphimz.mom/videoinfo?id=pha-dam-sinh-nhat-me' },
+                      { source: 'Motchill', title: 'Cám (Dị Bản)', url: 'https://motchill.tv/phim/cam-2024' },
+                      { source: 'RoPhim', title: 'Gặp Lại Chị Bầu', url: 'https://rophim.net/phim/gap-lai-chi-bau' },
+                      { source: 'PhimMoi', title: 'Nhà Bà Nữ', url: 'https://phimmoichill.net/phim/nha-ba-nu' },
+                      { source: 'GhienPhimz', title: 'Bố Già (Chiếu Rạp)', url: 'https://ghienphimz.mom/videoinfo?id=bo-gia' },
+                      { source: 'Motchill', title: 'Trại Buôn Người', url: 'https://motchill.tv/phim/trai-buon-nguoi' },
+                      { source: 'RoPhim', title: 'Thợ Săn Kho Báu', url: 'https://rophim.net/phim/tho-san-kho-bau' },
+                      { source: 'PhimMoi', title: 'Kế Hoạch CM12', url: 'https://phimmoichill.net/phim/ke-hoach-cm12' },
+                      { source: 'Motchill', title: 'Phù Sa', url: 'https://motchill.tv/phim/phu-sa' },
+                      { source: 'RoPhim', title: 'Trạng Quỳnh', url: 'https://rophim.net/phim/trang-quynh' },
+                      { source: 'GhienPhimz', title: 'Ma Xó', url: 'https://ghienphimz.mom/videoinfo?id=ma-xo' },
                     ].map((preset, pIdx) => {
                       const isSelected = scraperUrlInput === preset.url;
                       return (
@@ -28132,6 +28200,9 @@ function MainApp() {
                           }}
                         >
                           <Ionicons name="film-outline" size={13} color={isSelected ? '#007AFF' : '#8E8E93'} />
+                          <Text style={{ fontSize: 10, color: '#8E8E93', fontWeight: '700' }}>
+                            [{preset.source}]
+                          </Text>
                           <Text style={{ fontSize: 11.5, color: isSelected ? '#007AFF' : (isLight ? '#000000' : '#FFFFFF'), fontWeight: isSelected ? '800' : '600' }}>
                             {preset.title}
                           </Text>
