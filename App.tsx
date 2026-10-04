@@ -8287,6 +8287,19 @@ function MainApp() {
   const [previewEmbedUrl, setPreviewEmbedUrl] = useState<string>('');
   const [previewPlayerMode, setPreviewPlayerMode] = useState<'stream' | 'embed'>('stream');
 
+  // Báo Cáo Phim Lỗi State
+  const [reportedBrokenMovies, setReportedBrokenMovies] = useState<Array<{
+    code: string;
+    title: string;
+    year: string;
+    streamUrl: string;
+    embedUrl: string;
+    reportedAt: string;
+    issue?: string;
+  }>>([]);
+  const [showReportedMoviesModal, setShowReportedMoviesModal] = useState<boolean>(false);
+  const [previewMovieItem, setPreviewMovieItem] = useState<any>(null);
+
   // Ping Server / Domain Inspector Modal State
   const [showPingInspectorModal, setShowPingInspectorModal] = useState<boolean>(false);
   const [pingTargetInput, setPingTargetInput] = useState<string>('motchill.tv');
@@ -14797,7 +14810,72 @@ function MainApp() {
     setPreviewEmbedUrl(resultToWatch.embedUrl || 'https://lamda.chumin.xyz/temp?s=q7v09d%2B%2F8a6x0e32v%2BPq8vC45N3w88rW3fGf1Nfvztv0rK6w3tXw0bWq0uf85vD%2B0e%2Fk0e34&linknhung=1&t=1');
     setPreviewVideoTitle(resultToWatch.title || 'Phá Đám: Sinh Nhật Mẹ - HLS (.m3u8)');
     setPreviewPlayerMode('stream');
+    setPreviewMovieItem(resultToWatch);
     setShowVideoPreviewModal(true);
+  };
+
+  // 1b. Báo Cáo Phim Bị Lỗi
+  const handleReportBrokenMovie = (movieItem: any, reason?: string) => {
+    if (!movieItem) return;
+    const alreadyReported = reportedBrokenMovies.some(m => m.code === (movieItem.code || movieItem.title));
+    if (alreadyReported) {
+      triggerToast('Phim này đã được ghi nhận trong danh sách báo cáo lỗi!', 'Đã Báo Cáo Trước Đó', 'warning', 'warning-outline');
+      return;
+    }
+    const now = new Date();
+    const pad2 = (n: number) => n.toString().padStart(2, '0');
+    const reportedAt = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())} ${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}`;
+    setReportedBrokenMovies(prev => [
+      ...prev,
+      {
+        code: movieItem.code || movieItem.title,
+        title: movieItem.title || 'Không rõ tên',
+        year: movieItem.year || '---',
+        streamUrl: movieItem.streamUrl || '',
+        embedUrl: movieItem.embedUrl || '',
+        reportedAt,
+        issue: reason || 'Người dùng báo lỗi phát video',
+      },
+    ]);
+    triggerToast(
+      `Đã ghi nhận báo cáo lỗi cho phim: "${movieItem.title}"! Xem & xuất JSON trong Menu Tiện Ích.`,
+      'Báo Cáo Thành Công',
+      'success',
+      'flag'
+    );
+    playAppleNotificationSound('tap');
+  };
+
+  // 1c. Xuất file JSON danh sách phim lỗi
+  const handleExportReportedMoviesJson = () => {
+    if (reportedBrokenMovies.length === 0) {
+      triggerToast('Chưa có phim nào được báo cáo lỗi!', 'Danh Sách Trống', 'warning', 'warning-outline');
+      return;
+    }
+    const jsonStr = JSON.stringify(reportedBrokenMovies, null, 2);
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      try {
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'reported_broken_movies.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } catch (e) {}
+    }
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(jsonStr).catch(() => {});
+    }
+    triggerToast(
+      `Đã xuất ${reportedBrokenMovies.length} phim lỗi thành file JSON & sao chép vào bộ nhớ tạm!`,
+      'Xuất JSON Thành Công',
+      'success',
+      'download-outline'
+    );
+    playAppleNotificationSound('success');
   };
 
   // 2. Tải về
@@ -27602,6 +27680,18 @@ function MainApp() {
                       setShowPingInspectorModal(true);
                     },
                   },
+                  {
+                    icon: 'flag',
+                    color: '#FF2D55',
+                    title: 'Báo Cáo Phim Lỗi & Xuất JSON',
+                    subtitle: 'Quản lý danh sách phim bị lỗi & xuất file JSON fix',
+                    badge: reportedBrokenMovies.length > 0 ? `${reportedBrokenMovies.length} PHIM` : undefined,
+                    badgeColor: '#FF2D55',
+                    action: () => {
+                      setShowHomeMenuModal(false);
+                      setShowReportedMoviesModal(true);
+                    },
+                  },
                 ].map((item, idx, arr) => (
                   <TouchableOpacity
                     key={idx}
@@ -28525,6 +28615,27 @@ function MainApp() {
                               {movieItem.chapter || 'Full HD'}
                             </Text>
                           </View>
+
+                          {/* 🚩 Nút Báo Lỗi nhanh trên poster */}
+                          <TouchableOpacity
+                            activeOpacity={0.7}
+                            onPress={() => handleReportBrokenMovie(movieItem)}
+                            style={{
+                              position: 'absolute',
+                              bottom: 6,
+                              right: 6,
+                              width: 28,
+                              height: 28,
+                              borderRadius: 14,
+                              backgroundColor: 'rgba(255,45,85,0.85)',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              borderWidth: 1.5,
+                              borderColor: 'rgba(255,255,255,0.5)',
+                            }}
+                          >
+                            <Text style={{ fontSize: 13 }}>🚩</Text>
+                          </TouchableOpacity>
                         </TouchableOpacity>
 
                         {/* Info Block */}
@@ -28612,141 +28723,139 @@ function MainApp() {
       </Modal>
 
       {/* ========================================================================= */}
-      {/* MODAL MỚI: XEM TRỰC TIẾP VIDEO PLAYER (HTML5 / NATIVE VIDEO STREAM) */}
+      {/* MODAL: XEM TRỰC TIẾP VIDEO PLAYER - CINEMA REDESIGN */}
       {/* ========================================================================= */}
       <Modal visible={showVideoPreviewModal} animationType="slide" transparent onRequestClose={() => setShowVideoPreviewModal(false)}>
         <View style={styles.modalBackdrop}>
-          <SafeAreaView style={[styles.sheetCard, { maxHeight: '90%' }, isLight && { backgroundColor: '#F2F2F7' }]}>
+          <SafeAreaView style={[styles.sheetCard, { maxHeight: '92%' }, isLight && { backgroundColor: '#F2F2F7' }]}>
+            {/* Header */}
             <View style={[styles.sheetHeader, isLight && { borderBottomColor: '#E5E5EA', backgroundColor: '#FFFFFF' }]}>
               <TouchableOpacity onPress={() => setShowVideoPreviewModal(false)}>
                 <Text style={[styles.sheetBtnBlue, { color: appSettings.accentColor }]}>Đóng</Text>
               </TouchableOpacity>
               <Text style={[styles.sheetTitle, isLight && { color: '#000000' }]} numberOfLines={1}>
-                Xem Trực Tiếp Video
+                🎬 Xem Phim
               </Text>
-              <View style={{ width: 44 }} />
+              {/* Nút 🚩 Báo Lỗi nhanh ở header */}
+              <TouchableOpacity
+                onPress={() => handleReportBrokenMovie(previewMovieItem || { title: previewVideoTitle, streamUrl: previewVideoUrl, embedUrl: previewEmbedUrl })}
+                style={{ padding: 4 }}
+              >
+                <Text style={{ fontSize: 22 }}>🚩</Text>
+              </TouchableOpacity>
             </View>
 
-            <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
-              {/* Player Mode Switcher: Luồng Trực Tiếp vs Web Nhúng Ghienphimz */}
-              <View
-                style={{
-                  flexDirection: 'row',
-                  backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E',
-                  borderRadius: 12,
-                  padding: 3,
-                  marginBottom: 14,
-                }}
-              >
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  onPress={() => setPreviewPlayerMode('stream')}
-                  style={{
-                    flex: 1,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    paddingVertical: 9,
-                    borderRadius: 10,
-                    backgroundColor: previewPlayerMode === 'stream' ? '#007AFF' : 'transparent',
-                    gap: 6,
-                  }}
-                >
-                  <Ionicons
-                    name="play-circle"
-                    size={17}
-                    color={previewPlayerMode === 'stream' ? '#FFFFFF' : '#8E8E93'}
-                  />
-                  <Text
-                    style={{
-                      fontSize: 12.5,
-                      fontWeight: '800',
-                      color: previewPlayerMode === 'stream' ? '#FFFFFF' : (isLight ? '#000000' : '#CCCCCC'),
-                    }}
-                  >
-                    Luồng Phát (MP4/HLS)
-                  </Text>
-                </TouchableOpacity>
+            <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 48 }} showsVerticalScrollIndicator={false}>
 
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  onPress={() => setPreviewPlayerMode('embed')}
-                  style={{
-                    flex: 1,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    paddingVertical: 9,
-                    borderRadius: 10,
-                    backgroundColor: previewPlayerMode === 'embed' ? '#AF52DE' : 'transparent',
-                    gap: 6,
-                  }}
-                >
-                  <Ionicons
-                    name="globe-outline"
-                    size={17}
-                    color={previewPlayerMode === 'embed' ? '#FFFFFF' : '#8E8E93'}
-                  />
-                  <Text
-                    style={{
-                      fontSize: 12.5,
-                      fontWeight: '800',
-                      color: previewPlayerMode === 'embed' ? '#FFFFFF' : (isLight ? '#000000' : '#CCCCCC'),
-                    }}
-                  >
-                    Web Nhúng Ghienphimz
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Video / Embed Player Viewport */}
+              {/* ── VIDEO PLAYER ── */}
               <View
                 style={{
                   width: '100%',
-                  height: 250,
+                  aspectRatio: 16 / 9,
                   backgroundColor: '#000000',
-                  borderRadius: 16,
+                  borderRadius: 18,
                   overflow: 'hidden',
-                  marginBottom: 12,
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  borderWidth: 1.5,
-                  borderColor: previewPlayerMode === 'embed' ? '#AF52DE' : '#007AFF',
+                  marginBottom: 14,
+                  borderWidth: 2,
+                  borderColor: '#007AFF',
+                  shadowColor: '#007AFF',
+                  shadowOpacity: 0.35,
+                  shadowRadius: 16,
+                  shadowOffset: { width: 0, height: 4 },
+                  elevation: 10,
                 }}
               >
                 {Platform.OS === 'web' ? (
                   React.createElement('iframe', {
-                    key: `${previewPlayerMode}-${previewVideoUrl}-${previewEmbedUrl}`,
-                    src: previewPlayerMode === 'stream' && previewVideoUrl
+                    key: `stream-${previewVideoUrl}`,
+                    src: previewVideoUrl
                       ? `http://localhost:3333/player?m3u8=${encodeURIComponent(previewVideoUrl)}&title=${encodeURIComponent(previewVideoTitle)}`
-                      : (previewEmbedUrl || (previewVideoUrl ? `http://localhost:3333/player?m3u8=${encodeURIComponent(previewVideoUrl)}&title=${encodeURIComponent(previewVideoTitle)}` : 'https://ghienphimz.mom')),
-                    style: {
-                      width: '100%',
-                      height: '100%',
-                      border: 'none',
-                      backgroundColor: '#000000',
-                    },
+                      : 'about:blank',
+                    style: { width: '100%', height: '100%', border: 'none', backgroundColor: '#000000' },
                     allow: 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share',
                     allowFullScreen: true,
                   })
                 ) : (
-                  <View style={{ alignItems: 'center', padding: 20 }}>
-                    <Ionicons name="play-circle" size={56} color="#007AFF" />
-                    <Text style={{ color: '#FFFFFF', marginTop: 8, fontSize: 13.5, fontWeight: '700', textAlign: 'center' }}>
-                      Phát luồng HLS .m3u8 trên trình phát hệ thống
+                  <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+                    <Ionicons name="play-circle" size={60} color="#007AFF" />
+                    <Text style={{ color: '#FFFFFF', marginTop: 10, fontSize: 14, fontWeight: '700', textAlign: 'center' }}>
+                      Nhấn để mở luồng HLS trên trình phát hệ thống
                     </Text>
                     <TouchableOpacity
                       onPress={() => Linking.openURL(previewVideoUrl).catch(() => {})}
-                      style={{ marginTop: 12, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, backgroundColor: '#007AFF' }}
+                      style={{ marginTop: 14, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12, backgroundColor: '#007AFF' }}
                     >
-                      <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>Mở Video Trực Tiếp (.m3u8)</Text>
+                      <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '800' }}>▶ Mở Video (.m3u8)</Text>
                     </TouchableOpacity>
                   </View>
                 )}
               </View>
 
-              {/* Nút Mở Trực Tiếp & Copy Link để không bị đen màn hình */}
+              {/* ── TITLE & BADGES ── */}
+              <View style={{ marginBottom: 14 }}>
+                <Text style={{ fontSize: 18, fontWeight: '900', color: isLight ? '#000000' : '#FFFFFF', marginBottom: 8, lineHeight: 24 }}>
+                  {previewVideoTitle || 'Phim Việt Nam'}
+                </Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                  {previewMovieItem?.year && (
+                    <View style={{ paddingHorizontal: 9, paddingVertical: 3.5, borderRadius: 7, backgroundColor: 'rgba(0,122,255,0.15)', borderWidth: 1, borderColor: 'rgba(0,122,255,0.4)' }}>
+                      <Text style={{ fontSize: 11, fontWeight: '800', color: '#007AFF' }}>{previewMovieItem.year}</Text>
+                    </View>
+                  )}
+                  <View style={{ paddingHorizontal: 9, paddingVertical: 3.5, borderRadius: 7, backgroundColor: 'rgba(52,199,89,0.15)', borderWidth: 1, borderColor: 'rgba(52,199,89,0.4)' }}>
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#34C759' }}>FULL HD</Text>
+                  </View>
+                  <View style={{ paddingHorizontal: 9, paddingVertical: 3.5, borderRadius: 7, backgroundColor: 'rgba(255,159,10,0.15)', borderWidth: 1, borderColor: 'rgba(255,159,10,0.4)' }}>
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#FF9F0A' }}>Vietsub</Text>
+                  </View>
+                  <View style={{ paddingHorizontal: 9, paddingVertical: 3.5, borderRadius: 7, backgroundColor: 'rgba(175,82,222,0.15)', borderWidth: 1, borderColor: 'rgba(175,82,222,0.4)' }}>
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#AF52DE' }}>HLS .m3u8</Text>
+                  </View>
+                  {previewMovieItem?.views && (
+                    <View style={{ paddingHorizontal: 9, paddingVertical: 3.5, borderRadius: 7, backgroundColor: 'rgba(255,45,85,0.12)', borderWidth: 1, borderColor: 'rgba(255,45,85,0.35)' }}>
+                      <Text style={{ fontSize: 11, fontWeight: '800', color: '#FF2D55' }}>👁 {previewMovieItem.views}</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+
+              {/* ── MOVIE METADATA CARD ── */}
+              {previewMovieItem && (
+                <View
+                  style={{
+                    backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                    borderRadius: 16,
+                    padding: 14,
+                    borderWidth: 1,
+                    borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                    marginBottom: 14,
+                    gap: 6,
+                  }}
+                >
+                  {previewMovieItem.director && (
+                    <View style={{ flexDirection: 'row', gap: 6 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#8E8E93', minWidth: 70 }}>🎬 Đạo diễn</Text>
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: isLight ? '#000000' : '#EFEFEF', flex: 1 }}>{previewMovieItem.director}</Text>
+                    </View>
+                  )}
+                  {previewMovieItem.cast && (
+                    <View style={{ flexDirection: 'row', gap: 6 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#8E8E93', minWidth: 70 }}>🎭 Diễn viên</Text>
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: isLight ? '#000000' : '#EFEFEF', flex: 1 }} numberOfLines={2}>{previewMovieItem.cast}</Text>
+                    </View>
+                  )}
+                  {previewMovieItem.synopsis && (
+                    <View style={{ flexDirection: 'row', gap: 6 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#8E8E93', minWidth: 70 }}>📝 Tóm tắt</Text>
+                      <Text style={{ fontSize: 12, color: '#8E8E93', flex: 1, lineHeight: 18 }} numberOfLines={3}>{previewMovieItem.synopsis}</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* ── 3 ACTION BUTTONS ── */}
               <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                {/* Mở ĐT / Tab Mới */}
                 <TouchableOpacity
                   activeOpacity={0.8}
                   onPress={() => {
@@ -28763,18 +28872,16 @@ function MainApp() {
                     alignItems: 'center',
                     justifyContent: 'center',
                     backgroundColor: '#007AFF',
-                    paddingVertical: 10,
-                    paddingHorizontal: 10,
-                    borderRadius: 12,
-                    gap: 6,
+                    paddingVertical: 11,
+                    borderRadius: 13,
+                    gap: 5,
                   }}
                 >
                   <Ionicons name="phone-portrait-outline" size={16} color="#FFFFFF" />
-                  <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#FFFFFF' }}>
-                    Mở Xem Trên ĐT / Tab Mới
-                  </Text>
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: '#FFFFFF' }}>📱 Mở ĐT/Tab</Text>
                 </TouchableOpacity>
 
+                {/* Copy .m3u8 */}
                 <TouchableOpacity
                   activeOpacity={0.8}
                   onPress={() => {
@@ -28782,136 +28889,262 @@ function MainApp() {
                     if (typeof navigator !== 'undefined' && navigator.clipboard) {
                       navigator.clipboard.writeText(toCopy);
                     }
-                    triggerToast('Đã sao chép link! Dán link này vào Safari/VLC trên điện thoại để xem trực tiếp.', 'Sao Chép Thành Công', 'success', 'copy');
+                    triggerToast('Đã sao chép link .m3u8! Dán vào Safari/VLC trên ĐT để xem.', 'Sao Chép Thành Công', 'success', 'copy');
                   }}
                   style={{
+                    flex: 1,
                     flexDirection: 'row',
                     alignItems: 'center',
                     justifyContent: 'center',
                     backgroundColor: 'rgba(52, 199, 89, 0.15)',
-                    paddingVertical: 10,
-                    paddingHorizontal: 12,
-                    borderRadius: 12,
-                    borderWidth: 1,
+                    paddingVertical: 11,
+                    borderRadius: 13,
+                    borderWidth: 1.5,
                     borderColor: '#34C759',
                     gap: 5,
                   }}
                 >
                   <Ionicons name="copy-outline" size={16} color="#34C759" />
-                  <Text style={{ fontSize: 12, fontWeight: '800', color: '#34C759' }}>
-                    Copy Link
-                  </Text>
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: '#34C759' }}>📋 Copy .m3u8</Text>
+                </TouchableOpacity>
+
+                {/* 🚩 Báo Lỗi */}
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => handleReportBrokenMovie(previewMovieItem || { title: previewVideoTitle, streamUrl: previewVideoUrl, embedUrl: previewEmbedUrl })}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: 'rgba(255, 45, 85, 0.12)',
+                    paddingVertical: 11,
+                    paddingHorizontal: 14,
+                    borderRadius: 13,
+                    borderWidth: 1.5,
+                    borderColor: 'rgba(255,45,85,0.5)',
+                    gap: 5,
+                  }}
+                >
+                  <Text style={{ fontSize: 15 }}>🚩</Text>
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: '#FF2D55' }}>Lỗi</Text>
                 </TouchableOpacity>
               </View>
 
-              {/* Real .M3U8 Stream Banner */}
+              {/* ── .M3U8 STREAM URL BANNER ── */}
               <View
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  backgroundColor: 'rgba(52, 199, 89, 0.12)',
+                  backgroundColor: 'rgba(52, 199, 89, 0.10)',
                   paddingHorizontal: 12,
                   paddingVertical: 9,
                   borderRadius: 12,
                   marginBottom: 12,
                   borderWidth: 1,
-                  borderColor: 'rgba(52, 199, 89, 0.3)',
+                  borderColor: 'rgba(52, 199, 89, 0.28)',
                 }}
               >
                 <View style={{ flex: 1, marginRight: 8 }}>
-                  <Text style={{ fontSize: 11, fontWeight: '800', color: '#34C759', marginBottom: 2 }}>
-                    ✓ LUỒNG GỐC .M3U8 (APPLE HLS MULTI-BITRATE)
+                  <Text style={{ fontSize: 10, fontWeight: '800', color: '#34C759', marginBottom: 2 }}>
+                    ✓ LUỒNG GỐC .M3U8 — APPLE HLS MULTI-BITRATE
                   </Text>
-                  <Text style={{ fontSize: 10.5, color: '#8E8E93' }} numberOfLines={1}>
-                    {previewVideoUrl}
-                  </Text>
+                  <Text style={{ fontSize: 10, color: '#8E8E93' }} numberOfLines={1}>{previewVideoUrl}</Text>
                 </View>
                 <TouchableOpacity
                   onPress={() => {
                     if (typeof navigator !== 'undefined' && navigator.clipboard) {
                       navigator.clipboard.writeText(previewVideoUrl);
                     }
-                    triggerToast('Đã sao chép link .m3u8 vào bộ nhớ tạm!', 'Sao Chép Thành Công', 'success', 'copy-outline');
+                    triggerToast('Đã sao chép link .m3u8!', 'Sao Chép Thành Công', 'success', 'copy-outline');
                   }}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 4,
-                    paddingHorizontal: 10,
-                    paddingVertical: 6,
-                    borderRadius: 8,
-                    backgroundColor: '#34C759',
-                  }}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: '#34C759' }}
                 >
-                  <Ionicons name="copy-outline" size={13} color="#FFFFFF" />
-                  <Text style={{ fontSize: 11, fontWeight: '800', color: '#FFFFFF' }}>Copy .m3u8</Text>
+                  <Ionicons name="copy-outline" size={12} color="#FFFFFF" />
+                  <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#FFFFFF' }}>Copy</Text>
                 </TouchableOpacity>
               </View>
 
-              {/* Title and metadata */}
-              <View
+              {/* ── LƯU KÉT SẮT ── */}
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => handleSaveScrapedToVault(scrapedResult || { title: previewVideoTitle || 'Phim_VN.mp4', streamUrl: previewVideoUrl, sizeFormatted: '---', platform: 'gg', originalUrl: previewVideoUrl })}
                 style={{
-                  backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
-                  borderRadius: 16,
-                  padding: 14,
-                  borderWidth: 1,
-                  borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
-                  marginBottom: 16,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  paddingVertical: 13,
+                  backgroundColor: '#34C759',
+                  borderRadius: 14,
+                  gap: 7,
                 }}
               >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#34C759' }} />
-                  <Text style={{ fontSize: 12, fontWeight: '800', color: '#34C759' }}>
-                    {previewPlayerMode === 'stream' ? 'ĐANG PHÁT LUỒNG TRỰC TIẾP HLS (.M3U8)' : 'ĐANG NHÚNG WEB PLAYER GHINPHIMZ'}
+                <Ionicons name="lock-closed" size={16} color="#FFFFFF" />
+                <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '800' }}>Lưu Vào Két Sắt LockX</Text>
+              </TouchableOpacity>
+
+            </ScrollView>
+          </SafeAreaView>
+        </View>
+      </Modal>
+
+      {/* ========================================================================= */}
+      {/* MODAL: BÁO CÁO PHIM LỖI & XUẤT JSON */}
+      {/* ========================================================================= */}
+      <Modal visible={showReportedMoviesModal} animationType="slide" transparent onRequestClose={() => setShowReportedMoviesModal(false)}>
+        <View style={styles.modalBackdrop}>
+          <SafeAreaView style={[styles.sheetCard, { maxHeight: '92%' }, isLight && { backgroundColor: '#F2F2F7' }]}>
+            {/* Header */}
+            <View style={[styles.sheetHeader, isLight && { borderBottomColor: '#E5E5EA', backgroundColor: '#FFFFFF' }]}>
+              <TouchableOpacity onPress={() => setShowReportedMoviesModal(false)}>
+                <Text style={[styles.sheetBtnBlue, { color: appSettings.accentColor }]}>Đóng</Text>
+              </TouchableOpacity>
+              <Text style={[styles.sheetTitle, isLight && { color: '#000000' }]} numberOfLines={1}>
+                🚩 Phim Lỗi ({reportedBrokenMovies.length})
+              </Text>
+              <TouchableOpacity onPress={() => {
+                if (reportedBrokenMovies.length === 0) return;
+                setReportedBrokenMovies([]);
+                triggerToast('Đã xóa toàn bộ danh sách phim lỗi!', 'Xóa Tất Cả', 'info', 'trash-outline');
+              }}>
+                <Ionicons name="trash-outline" size={20} color="#FF453A" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 48 }} showsVerticalScrollIndicator={false}>
+              {/* Banner Card */}
+              <View
+                style={{
+                  backgroundColor: 'rgba(255,45,85,0.08)',
+                  borderRadius: 16,
+                  padding: 16,
+                  marginBottom: 16,
+                  borderWidth: 1,
+                  borderColor: 'rgba(255,45,85,0.25)',
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ fontSize: 40, marginBottom: 8 }}>🚩</Text>
+                <Text style={{ fontSize: 17, fontWeight: '900', color: '#FF2D55', textAlign: 'center', marginBottom: 4 }}>
+                  Danh Sách Phim Báo Cáo Lỗi
+                </Text>
+                <Text style={{ fontSize: 12.5, color: '#8E8E93', textAlign: 'center', lineHeight: 18 }}>
+                  Các phim bị lỗi phát video sẽ được liệt kê ở đây.{'\n'}Bạn có thể xuất file JSON để AI fix lỗi tự động.
+                </Text>
+                {reportedBrokenMovies.length > 0 && (
+                  <View style={{ marginTop: 10, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 8, backgroundColor: '#FF2D55' }}>
+                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#FFFFFF' }}>
+                      {reportedBrokenMovies.length} PHIM ĐÃ BÁO CÁO
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Empty State */}
+              {reportedBrokenMovies.length === 0 && (
+                <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                  <Text style={{ fontSize: 48, marginBottom: 12 }}>✅</Text>
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF', marginBottom: 4 }}>
+                    Chưa có phim nào bị báo cáo lỗi
+                  </Text>
+                  <Text style={{ fontSize: 12.5, color: '#8E8E93', textAlign: 'center' }}>
+                    Nhấn nút 🚩 trên poster phim hoặc trong trang xem phim để báo cáo phim lỗi.
                   </Text>
                 </View>
-                <Text style={{ fontSize: 15, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF', marginBottom: 4 }}>
-                  {previewVideoTitle || 'Ma Xó (2026) - Vietsub Full HD'}
-                </Text>
-                <Text style={{ fontSize: 11.5, color: '#8E8E93' }} numberOfLines={1}>
-                  {previewPlayerMode === 'stream' ? previewVideoUrl : (previewEmbedUrl || 'https://cdn.ghienproxy.xyz/temp?s=%2BEYVxrOvX6F55PBG8VJnNGEqkMLidlv%2BOZOPCQkFLPEnLRdIuM%2By8Dsthr%2BnDi1r8toeAniz%2BoTBBwmkVa5Kjm0fawsAm8KYwSOb0juw8N8%3D')}
-                </Text>
-              </View>
+              )}
 
-              {/* Quick Actions */}
-              <View style={{ flexDirection: 'row', gap: 10 }}>
+              {/* List of Reported Movies */}
+              {reportedBrokenMovies.map((movie, idx) => (
+                <View
+                  key={`${movie.code}-${idx}`}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                    borderRadius: 14,
+                    padding: 12,
+                    marginBottom: 10,
+                    borderWidth: 1,
+                    borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                    gap: 10,
+                  }}
+                >
+                  {/* Icon */}
+                  <View style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 10,
+                    backgroundColor: 'rgba(255,45,85,0.12)',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}>
+                    <Text style={{ fontSize: 20 }}>🚩</Text>
+                  </View>
+
+                  {/* Info */}
+                  <View style={{ flex: 1 }}>
+                    <Text numberOfLines={1} style={{ fontSize: 13.5, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF', marginBottom: 2 }}>
+                      {movie.title}
+                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                      <View style={{ paddingHorizontal: 6, paddingVertical: 1.5, borderRadius: 4, backgroundColor: 'rgba(0,122,255,0.12)' }}>
+                        <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#007AFF' }}>{movie.year}</Text>
+                      </View>
+                      <Text style={{ fontSize: 10, color: '#8E8E93' }}>{movie.reportedAt}</Text>
+                    </View>
+                    <Text numberOfLines={1} style={{ fontSize: 10, color: '#FF2D55' }}>
+                      {movie.issue || 'Lỗi phát video'}
+                    </Text>
+                  </View>
+
+                  {/* Delete Button */}
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      setReportedBrokenMovies(prev => prev.filter((_, i) => i !== idx));
+                      triggerToast(`Đã xóa "${movie.title}" khỏi danh sách báo cáo!`, 'Xóa Thành Công', 'info', 'trash-outline');
+                    }}
+                    style={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: 10,
+                      backgroundColor: 'rgba(255,69,58,0.12)',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Ionicons name="close-circle" size={20} color="#FF453A" />
+                  </TouchableOpacity>
+                </View>
+              ))}
+
+              {/* EXPORT JSON BUTTON */}
+              {reportedBrokenMovies.length > 0 && (
                 <TouchableOpacity
                   activeOpacity={0.8}
-                  onPress={() => handleDownloadScraped(scrapedResult || { title: previewVideoTitle || 'Ma_Xo_2026.mp4', streamUrl: previewVideoUrl })}
+                  onPress={handleExportReportedMoviesJson}
                   style={{
-                    flex: 1,
                     flexDirection: 'row',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    paddingVertical: 12,
-                    backgroundColor: '#AF52DE',
-                    borderRadius: 14,
-                    gap: 6,
+                    paddingVertical: 14,
+                    backgroundColor: '#FF2D55',
+                    borderRadius: 16,
+                    marginTop: 6,
+                    gap: 8,
+                    shadowColor: '#FF2D55',
+                    shadowOpacity: 0.3,
+                    shadowRadius: 10,
+                    shadowOffset: { width: 0, height: 4 },
+                    elevation: 8,
                   }}
                 >
-                  <Ionicons name="download" size={17} color="#FFFFFF" />
-                  <Text style={{ color: '#FFFFFF', fontSize: 13.5, fontWeight: '800' }}>Tải Về</Text>
+                  <Text style={{ fontSize: 18 }}>📥</Text>
+                  <Text style={{ color: '#FFFFFF', fontSize: 14.5, fontWeight: '900' }}>
+                    XUẤT FILE JSON ĐỂ FIX LỖI
+                  </Text>
                 </TouchableOpacity>
-
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  onPress={() => handleSaveScrapedToVault(scrapedResult || { title: previewVideoTitle || 'Ma_Xo_2026.mp4', streamUrl: previewVideoUrl, sizeFormatted: '1.82 GB', platform: 'gg', originalUrl: previewVideoUrl })}
-                  style={{
-                    flex: 1,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    paddingVertical: 12,
-                    backgroundColor: '#34C759',
-                    borderRadius: 14,
-                    gap: 6,
-                  }}
-                >
-                  <Ionicons name="lock-closed" size={16} color="#FFFFFF" />
-                  <Text style={{ color: '#FFFFFF', fontSize: 13.5, fontWeight: '800' }}>Lưu Két Sắt</Text>
-                </TouchableOpacity>
-              </View>
+              )}
             </ScrollView>
           </SafeAreaView>
         </View>
