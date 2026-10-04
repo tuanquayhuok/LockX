@@ -246,8 +246,9 @@ class App:
         OptionMenu(f1, self.method_var, "http", "post", "https", "slowloris", "keepalive").grid(row=0, column=7, padx=4)
 
         f2 = tk.Frame(self.root); f2.pack(**p)
-        tk.Button(f2, text="▶ START", command=self.start, bg="#dc3545", fg="white", width=15).pack(side="left", padx=6)
-        tk.Button(f2, text="⏹ STOP", command=self.stop, bg="#6c757d", fg="white", width=15).pack(side="left", padx=6)
+        tk.Button(f2, text="▶ START", command=self.start, bg="#dc3545", fg="white", width=14).pack(side="left", padx=4)
+        tk.Button(f2, text="⏹ STOP", command=self.stop, bg="#6c757d", fg="white", width=14).pack(side="left", padx=4)
+        tk.Button(f2, text="🌐 CURL -I", command=self.curl_head, bg="#00bcd4", fg="black", width=14).pack(side="left", padx=4)
 
         self.prog_label = tk.Label(self.root, text="Requests: 0 | Bytes: 0 | Errors: 0 | Time: 0s",
                                    font=("Consolas", 10), fg="blue")
@@ -331,6 +332,36 @@ class App:
             self.engine.stop()
         else:
             self._log("[!] Không có tiến trình nào.")
+
+    def curl_head(self):
+        target = self.target_var.get().strip()
+        if not target:
+            self._log("[!] Chưa nhập Target URL / Domain để curl")
+            return
+
+        def _do_curl():
+            url = target
+            if not url.startswith("http://") and not url.startswith("https://"):
+                url = f"https://{target}"
+            self._log(f"[CURL -I] > curl -s -I {url}")
+            try:
+                import subprocess
+                res = subprocess.run(["curl.exe", "-s", "-I", "--max-time", "10", url],
+                                     capture_output=True, text=True, timeout=12)
+                out = res.stdout.strip()
+                if not out and res.stderr:
+                    self._log(f"[ERR] {res.stderr.strip()}")
+                elif out:
+                    for line in out.splitlines():
+                        if line.strip():
+                            self._log(f"  {line.strip()}")
+                    self._log("[✓] Curl headers hoàn tất.")
+                else:
+                    self._log(f"[!] Không nhận được phản hồi từ {url}")
+            except Exception as e:
+                self._log(f"[ERR] Lỗi curl: {e}")
+
+        threading.Thread(target=_do_curl, daemon=True).start()
 
 # ====== MAIN ======
 def main():

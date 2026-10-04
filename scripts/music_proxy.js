@@ -698,6 +698,124 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // 6. HIHI Curl -I Header Inspector endpoint: /hihi/curl
+  if (pathname === '/hihi/curl') {
+    const handleCurl = (rawTarget) => {
+      let target = (rawTarget || '').trim();
+      if (!target) {
+        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ success: false, error: 'Chưa cung cấp domain hoặc URL để curl' }));
+        return;
+      }
+
+      // Chuẩn hóa URL nếu chưa có http/https
+      let url = target;
+      if (!/^https?:\/\//i.test(url)) {
+        url = 'https://' + url;
+      }
+
+      const startTime = Date.now();
+      hihiState.logs.push(`[CURL -I] > curl -s -I ${url}`);
+      if (hihiState.logs.length > 100) hihiState.logs.shift();
+
+      exec(`curl.exe -s -I --max-time 10 "${url}"`, { timeout: 12000 }, (error, stdout, stderr) => {
+        const timeMs = Date.now() - startTime;
+        if (error && !stdout) {
+          // Thử lại HTTP nếu HTTPS thất bại và user không gõ protocol
+          if (!/^https?:\/\//i.test(rawTarget) && url.startsWith('https://')) {
+            const httpUrl = 'http://' + target;
+            hihiState.logs.push(`[CURL] Thử lại với HTTP: ${httpUrl}`);
+            exec(`curl.exe -s -I --max-time 10 "${httpUrl}"`, { timeout: 12000 }, (err2, stdout2, stderr2) => {
+              finishCurl(err2, stdout2, stderr2, httpUrl, Date.now() - startTime);
+            });
+            return;
+          }
+          finishCurl(error, stdout, stderr, url, timeMs);
+          return;
+        }
+        finishCurl(null, stdout, stderr, url, timeMs);
+      });
+    };
+
+    const finishCurl = (error, stdout, stderr, finalUrl, timeMs) => {
+      if (error && !stdout) {
+        const errMsg = stderr?.trim() || error?.message || 'Không thể kết nối đến target';
+        hihiState.logs.push(`[ERR] Curl thất bại: ${errMsg}`);
+        if (hihiState.logs.length > 100) hihiState.logs.shift();
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({
+          success: false,
+          error: errMsg,
+          url: finalUrl,
+          timeMs
+        }));
+        return;
+      }
+
+      const rawHeaders = (stdout || '').trim();
+      const lines = rawHeaders.split(/\r?\n/);
+      let statusCode = '';
+      let server = 'Unknown';
+      const parsedHeaders = {};
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        if (i === 0 || /^HTTP\/[0-9.]+\s+[0-9]+/i.test(line)) {
+          statusCode = line;
+        } else {
+          const colonIdx = line.indexOf(':');
+          if (colonIdx > 0) {
+            const k = line.substring(0, colonIdx).trim().toLowerCase();
+            const v = line.substring(colonIdx + 1).trim();
+            parsedHeaders[k] = v;
+            if (k === 'server') server = v;
+          }
+        }
+        hihiState.logs.push(`  ${line}`);
+        if (hihiState.logs.length > 100) hihiState.logs.shift();
+      }
+
+      if (parsedHeaders['server']) {
+        server = parsedHeaders['server'];
+      } else if (parsedHeaders['x-turbo-charged-by']) {
+        server = parsedHeaders['x-turbo-charged-by'];
+      } else if (parsedHeaders['cf-ray']) {
+        server = 'Cloudflare';
+      }
+
+      hihiState.logs.push(`[✓] Curl hoàn tất (${statusCode || 'OK'}) trong ${timeMs}ms.`);
+      if (hihiState.logs.length > 100) hihiState.logs.shift();
+
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({
+        success: true,
+        url: finalUrl,
+        statusCode: statusCode || 'HTTP/1.1 200 OK',
+        server,
+        timeMs,
+        rawHeaders,
+        headers: parsedHeaders
+      }));
+    };
+
+    if (req.method === 'POST') {
+      let body = '';
+      req.on('data', chunk => { body += chunk; });
+      req.on('end', () => {
+        try {
+          const data = JSON.parse(body || '{}');
+          handleCurl(data.target || data.url);
+        } catch (e) {
+          handleCurl('');
+        }
+      });
+    } else {
+      handleCurl(parsed.query?.target || parsed.query?.url);
+    }
+    return;
+  }
+
   // Generic fallback
   res.writeHead(200, { 'Content-Type': 'text/plain' });
   res.end('GVault HLS & Music Stream Proxy is running on port 3333');

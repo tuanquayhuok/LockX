@@ -8588,6 +8588,15 @@ function MainApp() {
     logs: []
   });
   const [isHiHiRunning, setIsHiHiRunning] = useState<boolean>(false);
+  const [isHiHiCurling, setIsHiHiCurling] = useState<boolean>(false);
+  const [hihiCurlResult, setHihiCurlResult] = useState<{
+    url: string;
+    statusCode: string;
+    server: string;
+    timeMs: number;
+    rawHeaders: string;
+    headers: Record<string, string>;
+  } | null>(null);
   const hihiPollIntervalRef = useRef<any>(null);
 
 
@@ -15787,6 +15796,42 @@ function MainApp() {
       }
     } catch (e: any) {
       triggerToast('Lỗi khi mở GUI Python: ' + (e?.message || ''), 'Lỗi', 'warning');
+    }
+  };
+
+  const handleHiHiCurl = async () => {
+    if (!hihiTarget.trim()) {
+      triggerToast('Vui lòng nhập Target Domain hoặc URL!', 'Lỗi Target', 'warning');
+      return;
+    }
+    setIsHiHiCurling(true);
+    try {
+      const res = await fetch('http://localhost:3333/hihi/curl', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          target: hihiTarget,
+          port: parseInt(hihiPort) || 80,
+          method: hihiMethod
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setHihiCurlResult(data);
+        triggerToast(`Curl thành công: ${data.statusCode || '200 OK'} (${data.timeMs}ms)`, 'CURL -I HEADERS', 'success', 'globe');
+        // Đồng bộ Matrix Logs từ proxy
+        try {
+          const stRes = await fetch('http://localhost:3333/hihi/status');
+          const st = await stRes.json();
+          setHihiStatus(st);
+        } catch {}
+      } else {
+        triggerToast(data.error || 'Lỗi khi curl domain', 'Lỗi Curl', 'warning');
+      }
+    } catch (e: any) {
+      triggerToast('Không thể kết nối proxy port 3333: ' + (e?.message || ''), 'Lỗi Kết Nối', 'warning');
+    } finally {
+      setIsHiHiCurling(false);
     }
   };
 
@@ -32042,25 +32087,52 @@ function MainApp() {
                 </View>
 
                 {/* Action Buttons */}
-                <View style={{ flexDirection: 'row', gap: 10 }}>
-                  <TouchableOpacity
-                    onPress={isHiHiRunning ? handleStopHiHi : handleStartHiHi}
-                    style={{
-                      flex: 1,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: isHiHiRunning ? '#FF3B30' : '#00FF66',
-                      paddingVertical: 12,
-                      borderRadius: 14,
-                      gap: 6,
-                    }}
-                  >
-                    <Ionicons name={isHiHiRunning ? "stop" : "play"} size={16} color={isHiHiRunning ? '#FFF' : '#000'} />
-                    <Text style={{ fontSize: 13, fontWeight: '800', color: isHiHiRunning ? '#FFF' : '#000' }}>
-                      {isHiHiRunning ? 'DỪNG KIỂM THỬ' : 'BẮT ĐẦU TEST'}
-                    </Text>
-                  </TouchableOpacity>
+                <View style={{ gap: 8 }}>
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <TouchableOpacity
+                      onPress={isHiHiRunning ? handleStopHiHi : handleStartHiHi}
+                      style={{
+                        flex: 1.15,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: isHiHiRunning ? '#FF3B30' : '#00FF66',
+                        paddingVertical: 12,
+                        borderRadius: 14,
+                        gap: 6,
+                      }}
+                    >
+                      <Ionicons name={isHiHiRunning ? "stop" : "play"} size={16} color={isHiHiRunning ? '#FFF' : '#000'} />
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: isHiHiRunning ? '#FFF' : '#000' }}>
+                        {isHiHiRunning ? 'DỪNG KIỂM THỬ' : 'BẮT ĐẦU TEST'}
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={handleHiHiCurl}
+                      disabled={isHiHiCurling}
+                      style={{
+                        flex: 1,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: '#00E5FF',
+                        paddingVertical: 12,
+                        borderRadius: 14,
+                        gap: 6,
+                        opacity: isHiHiCurling ? 0.75 : 1,
+                      }}
+                    >
+                      {isHiHiCurling ? (
+                        <ActivityIndicator size="small" color="#000000" />
+                      ) : (
+                        <Ionicons name="terminal" size={16} color="#000000" />
+                      )}
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: '#000000' }}>
+                        {isHiHiCurling ? 'ĐANG CURL...' : 'CURL -I'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
 
                   <TouchableOpacity
                     onPress={handleOpenHiHiGui}
@@ -32069,19 +32141,143 @@ function MainApp() {
                       alignItems: 'center',
                       justifyContent: 'center',
                       backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E',
-                      paddingHorizontal: 14,
-                      paddingVertical: 12,
-                      borderRadius: 14,
+                      paddingVertical: 10,
+                      borderRadius: 12,
                       gap: 6,
                     }}
                   >
-                    <Ionicons name="desktop-outline" size={16} color={isLight ? '#000' : '#FFF'} />
+                    <Ionicons name="desktop-outline" size={15} color={isLight ? '#000' : '#FFF'} />
                     <Text style={{ fontSize: 12, fontWeight: '700', color: isLight ? '#000' : '#FFF' }}>
-                      Mở GUI Python
+                      Mở GUI Python (scripts/hihi/dos.py)
                     </Text>
                   </TouchableOpacity>
                 </View>
               </View>
+
+              {/* CURL -I Response Inspector Card */}
+              {hihiCurlResult && (
+                <View
+                  style={{
+                    backgroundColor: isLight ? '#FFFFFF' : '#141820',
+                    borderRadius: 20,
+                    padding: 16,
+                    borderWidth: 1.5,
+                    borderColor: '#00E5FF',
+                    marginBottom: 16,
+                    shadowColor: '#00E5FF',
+                    shadowOpacity: isLight ? 0.08 : 0.25,
+                    shadowRadius: 12,
+                    elevation: 4,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, marginRight: 8 }}>
+                      <Ionicons name="globe-outline" size={17} color="#00E5FF" />
+                      <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#00E5FF' }} numberOfLines={1}>
+                        CURL -I: {hihiCurlResult.url}
+                      </Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <TouchableOpacity
+                        onPress={() => {
+                          if (Platform.OS === 'web' && navigator?.clipboard) {
+                            navigator.clipboard.writeText(hihiCurlResult.rawHeaders);
+                            triggerToast('Đã sao chép toàn bộ Response Headers!', 'Sao Chép', 'success');
+                          } else {
+                            triggerToast('Đã copy Headers', 'Sao Chép', 'info');
+                          }
+                        }}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 4,
+                          paddingHorizontal: 8,
+                          paddingVertical: 4,
+                          borderRadius: 8,
+                          backgroundColor: 'rgba(0, 229, 255, 0.15)',
+                        }}
+                      >
+                        <Ionicons name="copy-outline" size={12} color="#00E5FF" />
+                        <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#00E5FF' }}>Copy</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => setHihiCurlResult(null)}
+                        style={{ padding: 4 }}
+                      >
+                        <Ionicons name="close" size={16} color="#8E8E93" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {/* Badges */}
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+                    <View
+                      style={{
+                        paddingHorizontal: 8,
+                        paddingVertical: 3,
+                        borderRadius: 6,
+                        backgroundColor: hihiCurlResult.statusCode.includes('200')
+                          ? 'rgba(0, 255, 102, 0.15)'
+                          : (hihiCurlResult.statusCode.includes('301') || hihiCurlResult.statusCode.includes('302'))
+                            ? 'rgba(255, 149, 0, 0.15)'
+                            : 'rgba(255, 59, 48, 0.15)',
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          fontWeight: '900',
+                          color: hihiCurlResult.statusCode.includes('200')
+                            ? '#00FF66'
+                            : (hihiCurlResult.statusCode.includes('301') || hihiCurlResult.statusCode.includes('302'))
+                              ? '#FF9500'
+                              : '#FF3B30',
+                        }}
+                      >
+                        {hihiCurlResult.statusCode}
+                      </Text>
+                    </View>
+
+                    <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: 'rgba(0, 122, 255, 0.15)' }}>
+                      <Text style={{ fontSize: 11, fontWeight: '800', color: '#007AFF' }}>
+                        Server: {hihiCurlResult.server}
+                      </Text>
+                    </View>
+
+                    <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: 'rgba(191, 90, 242, 0.15)' }}>
+                      <Text style={{ fontSize: 11, fontWeight: '800', color: '#BF5AF2' }}>
+                        ⏱️ {hihiCurlResult.timeMs}ms
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Monospace Raw Headers */}
+                  <View
+                    style={{
+                      backgroundColor: '#050B14',
+                      borderRadius: 12,
+                      padding: 10,
+                      maxHeight: 180,
+                      borderWidth: 1,
+                      borderColor: 'rgba(0, 229, 255, 0.25)',
+                    }}
+                  >
+                    <ScrollView nestedScrollEnabled showsVerticalScrollIndicator>
+                      <Text
+                        selectable
+                        style={{
+                          fontSize: 11,
+                          lineHeight: 16,
+                          fontFamily: Platform.OS === 'web' ? 'Consolas, monospace' : undefined,
+                          color: '#E0F2FE',
+                        }}
+                      >
+                        {hihiCurlResult.rawHeaders}
+                      </Text>
+                    </ScrollView>
+                  </View>
+                </View>
+              )}
 
               {/* Real-time Dashboard Cards */}
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
