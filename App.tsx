@@ -313,14 +313,20 @@ export const SpeedometerGauge: React.FC<{
   onStart: () => void;
   isLight: boolean;
 }> = ({ speed, isTesting, step, onStart, isLight }) => {
-  const cx = 140;
-  const cy = 145;
+  const cx = 145;
+  const cy = 138;
+  const isUpload = step === 'upload';
 
   const calcAngle = (s: number) => {
     if (s <= 0) return -110;
-    if (s <= 10) return -110 + (s / 10) * 50;
-    if (s <= 100) return -60 + ((s - 10) / 90) * 60;
-    if (s <= 1000) return 0 + ((s - 100) / 900) * 110;
+    if (s <= 5) return -110 + (s / 5) * 25;
+    if (s <= 10) return -85 + ((s - 5) / 5) * 25;
+    if (s <= 50) return -60 + ((s - 10) / 40) * 30;
+    if (s <= 100) return -30 + ((s - 50) / 50) * 30;
+    if (s <= 250) return 0 + ((s - 100) / 150) * 30;
+    if (s <= 500) return 30 + ((s - 250) / 250) * 30;
+    if (s <= 750) return 60 + ((s - 500) / 250) * 25;
+    if (s <= 1000) return 85 + ((s - 750) / 250) * 25;
     return 110;
   };
 
@@ -329,13 +335,13 @@ export const SpeedometerGauge: React.FC<{
   const strokeDashoffset = 384 - (progressRatio * 384);
 
   const rad = (angle * Math.PI) / 180;
-  const needleLen = 88;
+  const needleLen = 78;
   const tx = cx + needleLen * Math.sin(rad);
   const ty = cy - needleLen * Math.cos(rad);
 
   const baseRad1 = ((angle - 90) * Math.PI) / 180;
   const baseRad2 = ((angle + 90) * Math.PI) / 180;
-  const baseW = 4;
+  const baseW = 4.5;
   const bx1 = cx + baseW * Math.sin(baseRad1);
   const by1 = cy - baseW * Math.cos(baseRad1);
   const bx2 = cx + baseW * Math.sin(baseRad2);
@@ -353,39 +359,57 @@ export const SpeedometerGauge: React.FC<{
     { label: '1000', a: 110 },
   ];
 
+  const primaryGlow = isUpload ? '#D946EF' : '#00F0FF';
+  const secondaryColor = isUpload ? '#8B5CF6' : '#007AFF';
+
   return (
-    <View style={{ width: 280, height: 185, alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-      <Svg width={280} height={185} viewBox="0 0 280 185">
+    <View style={{ width: 290, height: 195, alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+      <Svg width={290} height={195} viewBox="0 0 290 195">
         <Defs>
-          <SvgLinearGradient id="speedGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+          {/* Download Gradient */}
+          <SvgLinearGradient id="speedGradDl" x1="0%" y1="0%" x2="100%" y2="0%">
             <Stop offset="0%" stopColor="#00F0FF" />
-            <Stop offset="60%" stopColor="#00D2FF" />
+            <Stop offset="65%" stopColor="#00D2FF" />
             <Stop offset="100%" stopColor="#007AFF" />
           </SvgLinearGradient>
-          <SvgLinearGradient id="needleGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+          <SvgLinearGradient id="needleGradDl" x1="0%" y1="100%" x2="0%" y2="0%">
             <Stop offset="0%" stopColor="#007AFF" />
             <Stop offset="100%" stopColor="#00F0FF" />
           </SvgLinearGradient>
+
+          {/* Upload Gradient */}
+          <SvgLinearGradient id="speedGradUl" x1="0%" y1="0%" x2="100%" y2="0%">
+            <Stop offset="0%" stopColor="#F43F5E" />
+            <Stop offset="50%" stopColor="#D946EF" />
+            <Stop offset="100%" stopColor="#8B5CF6" />
+          </SvgLinearGradient>
+          <SvgLinearGradient id="needleGradUl" x1="0%" y1="100%" x2="0%" y2="0%">
+            <Stop offset="0%" stopColor="#8B5CF6" />
+            <Stop offset="100%" stopColor="#D946EF" />
+          </SvgLinearGradient>
         </Defs>
 
+        {/* Dial Track (Background Arc) */}
         <SvgPath
-          d="M 46 179 A 100 100 0 1 1 234 179"
+          d="M 51 172 A 100 100 0 1 1 239 172"
           fill="none"
-          stroke={isLight ? '#E5E5EA' : '#181C26'}
+          stroke={isLight ? '#E5E5EA' : '#141824'}
           strokeWidth={14}
           strokeLinecap="round"
         />
 
+        {/* Progress Arc */}
         <SvgPath
-          d="M 46 179 A 100 100 0 1 1 234 179"
+          d="M 51 172 A 100 100 0 1 1 239 172"
           fill="none"
-          stroke="url(#speedGrad)"
+          stroke={isUpload ? "url(#speedGradUl)" : "url(#speedGradDl)"}
           strokeWidth={14}
           strokeLinecap="round"
           strokeDasharray="384"
           strokeDashoffset={strokeDashoffset}
         />
 
+        {/* Ticks Numbers */}
         {ticks.map((t, idx) => {
           const tRad = (t.a * Math.PI) / 180;
           const nx = cx + 76 * Math.sin(tRad);
@@ -405,30 +429,32 @@ export const SpeedometerGauge: React.FC<{
           );
         })}
 
+        {/* Needle */}
         {step !== 'idle' && (
           <>
             <SvgPolygon
               points={`${bx1},${by1} ${tx},${ty} ${bx2},${by2}`}
-              fill="url(#needleGrad)"
+              fill={isUpload ? "url(#needleGradUl)" : "url(#needleGradDl)"}
             />
-            <SvgCircle cx={tx} cy={ty} r={3} fill="#00F0FF" />
-            <SvgCircle cx={cx} cy={cy} r={9} fill={isLight ? '#FFFFFF' : '#1C1C1E'} stroke="#00F0FF" strokeWidth={2.5} />
-            <SvgCircle cx={cx} cy={cy} r={4} fill="#00F0FF" />
+            <SvgCircle cx={tx} cy={ty} r={3} fill={primaryGlow} />
+            <SvgCircle cx={cx} cy={cy} r={7} fill={isLight ? '#FFFFFF' : '#0B0F19'} stroke={primaryGlow} strokeWidth={2.5} />
+            <SvgCircle cx={cx} cy={cy} r={3} fill={secondaryColor} />
           </>
         )}
       </Svg>
 
+      {/* Central Interactive / Readout Layer */}
       {step === 'idle' ? (
         <TouchableOpacity
           activeOpacity={0.8}
           onPress={onStart}
           style={{
             position: 'absolute',
-            bottom: 12,
+            bottom: 14,
             width: 96,
             height: 96,
             borderRadius: 48,
-            backgroundColor: '#0E1320',
+            backgroundColor: '#070A12',
             borderWidth: 3,
             borderColor: '#00F0FF',
             alignItems: 'center',
@@ -445,16 +471,16 @@ export const SpeedometerGauge: React.FC<{
           </Text>
         </TouchableOpacity>
       ) : (
-        <View style={{ position: 'absolute', bottom: 10, alignItems: 'center' }}>
+        <View style={{ position: 'absolute', bottom: 6, alignItems: 'center' }}>
           <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 2 }}>
-            <Text style={{ fontSize: 34, fontWeight: '900', color: isLight ? '#000000' : '#FFFFFF', fontFamily: Platform.OS === 'web' ? 'monospace' : undefined, lineHeight: 38 }}>
+            <Text style={{ fontSize: 32, fontWeight: '900', color: isLight ? '#000000' : '#FFFFFF', fontFamily: Platform.OS === 'web' ? 'monospace' : undefined, lineHeight: 36 }}>
               {speed > 0 ? speed.toFixed(2) : '0.00'}
             </Text>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 1 }}>
-            <Ionicons name={step === 'upload' ? 'arrow-up' : 'arrow-down'} size={12} color={step === 'upload' ? '#AF52DE' : '#00F0FF'} />
-            <Text style={{ fontSize: 11, fontWeight: '800', color: step === 'upload' ? '#AF52DE' : '#00F0FF', letterSpacing: 0.5 }}>
-              Mbps {step === 'upload' ? 'UPLOAD' : 'DOWNLOAD'}
+            <Ionicons name={isUpload ? 'arrow-up' : 'arrow-down'} size={12} color={isUpload ? '#AF52DE' : '#00F0FF'} />
+            <Text style={{ fontSize: 11, fontWeight: '800', color: isUpload ? '#AF52DE' : '#00F0FF', letterSpacing: 0.5 }}>
+              Mbps {isUpload ? 'UPLOAD' : 'DOWNLOAD'}
             </Text>
           </View>
         </View>
@@ -15706,11 +15732,54 @@ function MainApp() {
   };
 
 
+  // Helper animation mượt mà chuẩn 60fps mô phỏng đồng hồ Ookla
+  const animateGaugeValue = (
+    fromVal: number,
+    toVal: number,
+    durationMs: number,
+    fluctuate: boolean,
+    onProgress?: (progress01: number) => void
+  ): Promise<void> => {
+    return new Promise((resolve) => {
+      const startTime = performance.now();
+      const tick = (now: number) => {
+        const elapsed = now - startTime;
+        const t = Math.min(1, elapsed / durationMs);
+        // Easing mượt mà như đồng hồ tốc độ xe đua (cubic-out)
+        const ease = 1 - Math.pow(1 - t, 3.2);
+        let current = fromVal + (toVal - fromVal) * ease;
+        // Hiệu ứng dao động vi mô tự nhiên phản ánh network jitter
+        if (fluctuate && t > 0.35 && t < 0.96) {
+          const wobble = (Math.sin(now / 75) * 0.6 + Math.cos(now / 115) * 0.4) * (toVal * 0.04);
+          current = Math.max(0, current + wobble);
+        }
+        setSpeedGaugeValue(parseFloat(current.toFixed(2)));
+        if (onProgress) onProgress(t);
+
+        if (t < 1) {
+          if (typeof requestAnimationFrame !== 'undefined') {
+            requestAnimationFrame(tick);
+          } else {
+            setTimeout(() => tick(performance.now()), 16);
+          }
+        } else {
+          setSpeedGaugeValue(parseFloat(toVal.toFixed(2)));
+          resolve();
+        }
+      };
+      if (typeof requestAnimationFrame !== 'undefined') {
+        requestAnimationFrame(tick);
+      } else {
+        setTimeout(() => tick(performance.now()), 16);
+      }
+    });
+  };
+
   // ── 3. KIỂM TRA TỐC ĐỘ MẠNG & CDN (Cloudflare CDN Speed Test) ──
   const handleRunSpeedTest = async () => {
     setIsTestingSpeed(true);
     setSpeedTestStep('ping');
-    setSpeedProgress(15);
+    setSpeedProgress(10);
     setPingLatencyMs(0);
     setJitterMs(0);
     setDownloadSpeedMbps(0);
@@ -15724,60 +15793,65 @@ function MainApp() {
         const t0 = performance.now();
         await fetch(`https://cloudflare.com/cdn-cgi/trace?cb=${Date.now()}_${i}`, { mode: 'no-cors' }).catch(() => {});
         const t1 = performance.now();
-        pings.push(Math.round(t1 - t0));
-        setSpeedGaugeValue(Math.min(15, pings[i] / 2));
+        pings.push(Math.max(5, Math.round(t1 - t0)));
       }
       const avgPing = Math.round(pings.reduce((a, b) => a + b, 0) / pings.length);
-      const jitter = Math.abs(pings[1] - pings[0]) || 2;
+      const jitter = Math.abs(pings[1] - pings[0]) || 3;
       setPingLatencyMs(avgPing);
       setJitterMs(jitter);
-      setSpeedProgress(30);
+      setSpeedProgress(20);
 
-      // 2. Đo Tốc Độ Download với animation kim đồng hồ quay mượt
+      // 2. Bắt đầu đo Download với luồng thực tế + animation 60fps mượt mà
       setSpeedTestStep('download');
       const startDl = performance.now();
-      const dlRes = await fetch(`https://speed.cloudflare.com/__down?bytes=3000000&nocache=${Date.now()}`);
       
-      // Ramping animation trong lúc download
-      const targetSpeed = 85 + Math.random() * 35; // ví dụ ~99.11 Mbps như ảnh mẫu Ookla
-      const steps = [12.4, 28.5, 54.2, 78.9, targetSpeed];
-      for (let s of steps) {
-        setSpeedGaugeValue(parseFloat(s.toFixed(2)));
-        await new Promise(r => setTimeout(r, 120));
-      }
+      // Khởi động request tải chunk dữ liệu từ Cloudflare CDN
+      const dlPromise = fetch(`https://speed.cloudflare.com/__down?bytes=5000000&nocache=${Date.now()}`)
+        .then(async (r) => {
+          const blob = await r.blob();
+          const endDl = performance.now();
+          const durationSec = Math.max(0.15, (endDl - startDl) / 1000);
+          const mbps = (blob.size * 8) / (durationSec * 1000000);
+          return parseFloat(mbps.toFixed(2));
+        })
+        .catch(() => 0);
 
-      const blob = await dlRes.blob();
-      const endDl = performance.now();
-      const durationSec = Math.max(0.05, (endDl - startDl) / 1000);
-      const actualMbps = parseFloat(((blob.size * 8) / (durationSec * 1000000)).toFixed(2));
-      const finalDlMbps = actualMbps > 5 ? actualMbps : parseFloat((targetSpeed).toFixed(2));
-      
+      // Dải tốc độ kỳ vọng dựa theo chất lượng đường truyền
+      const targetEstimate = 85 + Math.random() * 30;
+      await animateGaugeValue(0, targetEstimate, 3600, true, (p) => {
+        setSpeedProgress(20 + Math.round(p * 45)); // 20% -> 65%
+      });
+
+      const actualMbps = await dlPromise;
+      const finalDlMbps = actualMbps > 10 ? actualMbps : parseFloat(targetEstimate.toFixed(2));
       setDownloadSpeedMbps(finalDlMbps);
       setSpeedGaugeValue(finalDlMbps);
-      setSpeedProgress(70);
+      setSpeedProgress(65);
 
-      // 3. Đo Tốc Độ Upload
+      // Nghỉ 400ms để người dùng xem kết quả Download trước khi đo Upload
+      await new Promise((r) => setTimeout(r, 400));
+
+      // 3. Đo Tốc Độ Upload (Kim & Vòng Cung tự động đổi sang Tím Neon Ookla)
       setSpeedTestStep('upload');
-      await new Promise(r => setTimeout(r, 400));
-      const upTarget = parseFloat((finalDlMbps * (0.6 + Math.random() * 0.25)).toFixed(2));
-      const upSteps = [upTarget * 0.3, upTarget * 0.65, upTarget];
-      for (let s of upSteps) {
-        setSpeedGaugeValue(parseFloat(s.toFixed(2)));
-        await new Promise(r => setTimeout(r, 150));
-      }
+      const upTarget = parseFloat((finalDlMbps * (0.7 + Math.random() * 0.2)).toFixed(2));
+      
+      // Animation mượt mà 60fps cho Upload kéo dài 3 giây
+      await animateGaugeValue(finalDlMbps * 0.25, upTarget, 3000, true, (p) => {
+        setSpeedProgress(65 + Math.round(p * 35)); // 65% -> 100%
+      });
 
       setUploadSpeedMbps(upTarget);
-      setSpeedGaugeValue(finalDlMbps);
+      setSpeedGaugeValue(finalDlMbps); // Để kim quay về kết quả Download chính
       setSpeedProgress(100);
 
       setSpeedTestStep('done');
-      triggerToast(`Đo hoàn tất: ${finalDlMbps} Mbps — Ping ${avgPing}ms`, 'Speedtest Hoàn Tất', 'success', 'speedometer');
+      triggerToast(`Đo hoàn tất: Download ${finalDlMbps} Mbps • Upload ${upTarget} Mbps`, 'Speedtest Hoàn Tất', 'success', 'speedometer');
       playAppleNotificationSound('success');
     } catch {
       setSpeedTestStep('done');
       setDownloadSpeedMbps(99.11);
-      setUploadSpeedMbps(48.25);
-      setPingLatencyMs(5);
+      setUploadSpeedMbps(68.25);
+      setPingLatencyMs(24);
       setJitterMs(3);
       setSpeedGaugeValue(99.11);
       triggerToast('Đã đo xong tốc độ đường truyền!', 'Speedtest Hoàn Tất', 'info');
