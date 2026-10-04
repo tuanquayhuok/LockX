@@ -8515,6 +8515,16 @@ function MainApp() {
   const [musicPlayerMode, setMusicPlayerMode] = useState<'stream' | 'embed'>('stream');
   const musicAudioRef = useRef<any>(null);
 
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const handleMsg = (e: MessageEvent) => {
+      if (e.data && e.data.type === 'GV_MUSIC_STATE') {
+        setMusicPlaying(Boolean(e.data.isPlaying));
+      }
+    };
+    window.addEventListener('message', handleMsg);
+    return () => window.removeEventListener('message', handleMsg);
+  }, []);
   // 2. Công cụ HIHI - Stress Test Engine (scripts/hihi)
   const [showHiHiModal, setShowHiHiModal] = useState<boolean>(false);
   const [hihiTarget, setHihiTarget] = useState<string>('example.com');
@@ -15580,6 +15590,7 @@ function MainApp() {
               allCandidates: fullData.results.slice(0, 5),
             });
             setMusicPlayerMode('stream');
+            setMusicPlaying(true);
             triggerToast(`Đã bóc tách kênh chính chủ: ${first.artist || first.channelName}`, 'Chính Chủ Thành Công', 'success', 'checkmark-circle');
             playAppleNotificationSound('success');
             setIsScrapingMusic(false);
@@ -15615,6 +15626,7 @@ function MainApp() {
             allCandidates: data.results.slice(0, 4),
           });
           setMusicPlayerMode('stream');
+          setMusicPlaying(true);
           triggerToast(`Đã bóc tách luồng nhạc: ${first.trackName} - ${first.artistName}`, 'Bóc Tách Thành Công', 'success', 'musical-notes');
           playAppleNotificationSound('success');
           setIsScrapingMusic(false);
@@ -15634,6 +15646,7 @@ function MainApp() {
         embedUrl: 'https://open.spotify.com/embed/track/4cOdK2wGLETKBW3PvgPWqT',
       });
       setMusicPlayerMode('stream');
+      setMusicPlaying(true);
       triggerToast(`Đã chuẩn bị luồng phát trực tiếp cho: ${q}`, 'Bóc Tách Hoàn Tất', 'info');
     } catch {
       triggerToast('Lỗi kết nối máy chủ cào nhạc! Vui lòng thử lại.', 'Lỗi Mạng', 'warning');
@@ -15644,21 +15657,20 @@ function MainApp() {
 
   const handleTogglePlayMusic = () => {
     if (!musicResult) return;
+    const nextPlaying = !musicPlaying;
+    setMusicPlaying(nextPlaying);
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
-      const frame = document.getElementById('gvault-bg-audio-engine') as HTMLIFrameElement;
+      const frame = (document.getElementById('gvault-vinyl-iframe') || document.getElementById('gvault-bg-audio-engine')) as HTMLIFrameElement;
       if (frame && frame.contentWindow) {
-        frame.contentWindow.postMessage('toggle', '*');
+        frame.contentWindow.postMessage(nextPlaying ? 'play' : 'pause', '*');
       }
     }
     if (typeof Audio !== 'undefined' && musicAudioRef.current) {
-      if (musicPlaying) {
+      if (!nextPlaying) {
         musicAudioRef.current.pause();
-        setMusicPlaying(false);
       } else {
-        musicAudioRef.current.play().then(() => setMusicPlaying(true)).catch(() => {});
+        musicAudioRef.current.play().catch(() => {});
       }
-    } else {
-      setMusicPlaying(!musicPlaying);
     }
   };
 
@@ -30663,40 +30675,39 @@ function MainApp() {
       {/* ========================================================================= */}
       {/* MODAL MỚI 1: CÀO NHẠC & AUDIO HUB (Spotify, SoundCloud, iTunes)           */}
       {/* ========================================================================= */}
-      {(showMusicScraperModal || musicResult) && (
-        <View
-          pointerEvents={showMusicScraperModal ? 'auto' : 'none'}
-          style={{
-            position: 'fixed' as any,
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            zIndex: 99990,
-            backgroundColor: 'rgba(0, 0, 0, 0.7)',
-            justifyContent: 'center',
-            alignItems: 'center',
-            opacity: showMusicScraperModal ? 1 : 0,
-            display: showMusicScraperModal ? 'flex' : (musicResult ? 'flex' : 'none'),
-            transform: showMusicScraperModal ? 'none' : 'scale(0.0001)',
-          }}
-        >
-          <View style={styles.modalBackdrop}>
-          <SafeAreaView style={[styles.sheetCard, { maxHeight: '92%' }, isLight && { backgroundColor: '#F2F2F7' }]}>
-            {/* Header */}
-            <View style={[styles.sheetHeader, isLight && { borderBottomColor: '#E5E5EA', backgroundColor: '#FFFFFF' }]}>
-              <TouchableOpacity onPress={() => setShowMusicScraperModal(false)}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <Ionicons name="chevron-down" size={18} color={appSettings.accentColor} />
-                  <Text style={[styles.sheetBtnBlue, { color: appSettings.accentColor }]}>Thu Nhỏ</Text>
-                </View>
-              </TouchableOpacity>
-              <Text style={[styles.sheetTitle, isLight && { color: '#000000' }]}>Cào Nhạc & Audio Hub</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(29, 185, 84, 0.15)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
-                <Ionicons name="musical-notes" size={14} color="#1DB954" />
-                <Text style={{ fontSize: 11, fontWeight: '800', color: '#1DB954' }}>320kbps</Text>
+      <View
+        pointerEvents={showMusicScraperModal ? 'auto' : 'none'}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          width: '100%',
+          height: '100%',
+          zIndex: showMusicScraperModal ? 99999 : -1,
+          backgroundColor: showMusicScraperModal ? 'rgba(0, 0, 0, 0.75)' : 'transparent',
+          justifyContent: 'flex-end',
+          alignItems: 'center',
+          opacity: showMusicScraperModal ? 1 : 0,
+          transform: [{ translateY: showMusicScraperModal ? 0 : 3500 }],
+        }}
+      >
+        <SafeAreaView style={[styles.sheetCard, { width: '100%', maxHeight: '92%' }, isLight && { backgroundColor: '#F2F2F7' }]}>
+          {/* Header */}
+          <View style={[styles.sheetHeader, isLight && { borderBottomColor: '#E5E5EA', backgroundColor: '#FFFFFF' }]}>
+            <TouchableOpacity onPress={() => setShowMusicScraperModal(false)} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Ionicons name="chevron-down" size={18} color={appSettings.accentColor} />
+                <Text style={[styles.sheetBtnBlue, { color: appSettings.accentColor }]}>Thu Nhỏ</Text>
               </View>
+            </TouchableOpacity>
+            <Text style={[styles.sheetTitle, isLight && { color: '#000000' }]}>Cào Nhạc & Audio Hub</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(29, 185, 84, 0.15)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
+              <Ionicons name="musical-notes" size={14} color="#1DB954" />
+              <Text style={{ fontSize: 11, fontWeight: '800', color: '#1DB954' }}>320kbps</Text>
             </View>
+          </View>
 
             <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
               {/* Search Card */}
@@ -30956,6 +30967,7 @@ function MainApp() {
                       >
                         {Platform.OS === 'web' ? (
                           React.createElement('iframe', {
+                            id: 'gvault-vinyl-iframe',
                             key: `vinyl-${musicResult.streamUrl}`,
                             src: musicResult.streamUrl,
                             style: { width: '100%', height: '100%', border: 'none', backgroundColor: '#0B0B0E' },
@@ -31208,8 +31220,6 @@ function MainApp() {
             </ScrollView>
           </SafeAreaView>
         </View>
-      </View>
-      )}
 
       {/* ========================================================================= */}
       {/* MODAL MỚI 3: KIỂM TRA TỐC ĐỘ MẠNG & CDN (Speedtest by Ookla Style)        */}
@@ -34370,11 +34380,11 @@ function MainApp() {
             alignItems: 'center',
             gap: 10,
             borderWidth: 1.5,
-            borderColor: isLight ? 'rgba(0,0,0,0.08)' : 'rgba(29, 185, 84, 0.4)',
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 6 },
-            shadowOpacity: 0.35,
-            shadowRadius: 12,
+            borderColor: musicPlaying ? '#1DB954' : (isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.12)'),
+            shadowColor: musicPlaying ? '#1DB954' : '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: musicPlaying ? 0.35 : 0.2,
+            shadowRadius: 10,
             elevation: 20,
             zIndex: 9999,
           }}
@@ -34388,7 +34398,7 @@ function MainApp() {
               borderRadius: 22,
               overflow: 'hidden',
               borderWidth: 2,
-              borderColor: '#1DB954',
+              borderColor: musicPlaying ? '#1DB954' : '#8E8E93',
             }}
           >
             <Image
@@ -34410,9 +34420,17 @@ function MainApp() {
                 <Ionicons name="checkmark-circle" size={13} color="#1DB954" />
               )}
             </View>
-            <Text numberOfLines={1} style={{ fontSize: 11, color: '#8E8E93', marginTop: 1 }}>
-              {musicResult.artist} {musicResult.duration ? `• ⏱ ${musicResult.duration}` : ''}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3.5, backgroundColor: musicPlaying ? 'rgba(52, 199, 89, 0.16)' : 'rgba(142, 142, 147, 0.16)', paddingHorizontal: 6, paddingVertical: 1.5, borderRadius: 5 }}>
+                <View style={{ width: 5.5, height: 5.5, borderRadius: 3, backgroundColor: musicPlaying ? '#34C759' : '#8E8E93' }} />
+                <Text style={{ fontSize: 9.5, fontWeight: '800', color: musicPlaying ? '#34C759' : '#8E8E93' }}>
+                  {musicPlaying ? 'ĐANG PHÁT' : 'TẠM DỪNG'}
+                </Text>
+              </View>
+              <Text numberOfLines={1} style={{ fontSize: 11, color: '#8E8E93', flex: 1 }}>
+                {musicResult.artist}
+              </Text>
+            </View>
           </TouchableOpacity>
 
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -34422,16 +34440,16 @@ function MainApp() {
                 width: 38,
                 height: 38,
                 borderRadius: 19,
-                backgroundColor: '#1DB954',
+                backgroundColor: musicPlaying ? '#1DB954' : (isLight ? '#E5E5EA' : '#2C2C2E'),
                 alignItems: 'center',
                 justifyContent: 'center',
-                shadowColor: '#1DB954',
+                shadowColor: musicPlaying ? '#1DB954' : '#000',
                 shadowOffset: { width: 0, height: 2 },
                 shadowOpacity: 0.4,
                 shadowRadius: 6,
               }}
             >
-              <Ionicons name={musicPlaying ? "pause" : "play"} size={19} color="#FFFFFF" />
+              <Ionicons name={musicPlaying ? "pause" : "play"} size={19} color={musicPlaying ? "#FFFFFF" : (isLight ? "#000000" : "#FFFFFF")} />
             </TouchableOpacity>
 
             <TouchableOpacity

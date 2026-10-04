@@ -475,12 +475,14 @@ const server = http.createServer(async (req, res) => {
               pauseIcon.style.display = 'block';
               vinylDisk.classList.add('playing');
               startTicker();
+              try { window.parent.postMessage({ type: 'GV_MUSIC_STATE', isPlaying: true }, '*'); } catch (err) {}
             } else {
               isPlaying = false;
               playIcon.style.display = 'block';
               pauseIcon.style.display = 'none';
               vinylDisk.classList.remove('playing');
               clearInterval(timer);
+              try { window.parent.postMessage({ type: 'GV_MUSIC_STATE', isPlaying: false }, '*'); } catch (err) {}
             }
           }
         }
