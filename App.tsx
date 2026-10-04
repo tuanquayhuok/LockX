@@ -15732,18 +15732,23 @@ function MainApp() {
 
   // ── 2. CÔNG CỤ HIHI - STRESS TEST & KIỂM THỬ CHỊU TẢI (scripts/hihi) ──
   const handleStartHiHi = async () => {
-    if (!hihiTarget.trim()) {
+    const rawTarget = hihiTarget.trim();
+    if (!rawTarget) {
       triggerToast('Vui lòng nhập Target Domain hoặc IP!', 'Lỗi Target', 'warning');
       return;
     }
+    const cleanTarget = rawTarget.replace(/^https?:\/\//i, '').replace(/\/.*$/, '').trim();
+    let port = parseInt(hihiPort) || 80;
+    if (hihiMethod === 'https' && port === 80) port = 443;
+
     try {
       setIsHiHiRunning(true);
       const res = await fetch('http://localhost:3333/hihi/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          target: hihiTarget,
-          port: parseInt(hihiPort) || 80,
+          target: cleanTarget,
+          port,
           threads: parseInt(hihiThreads) || 100,
           duration: parseInt(hihiDuration) || 30,
           method: hihiMethod

