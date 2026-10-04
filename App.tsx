@@ -288,6 +288,23 @@ export function computeUserPresence(
   }
 }
 
+// Biểu tượng SVG Anonymous Guy Fawkes Mask chuyên biệt cho công cụ HIHI (scripts/hihi)
+export const AnonymousMaskIcon = ({ size = 22, color = '#00FF66' }: { size?: number; color?: string }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <SvgPath
+      d="M12 2C6.5 2 3.5 5.5 3.5 10c0 4.2 2.2 8.3 5 11 1.8 1.7 5.2 1.7 7 0 2.8-2.7 5-6.8 5-11 0-4.5-3-8-8.5-8z"
+      stroke={color}
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <SvgPath d="M7 9.5c1.2-.8 2.5-.8 3.5 0M13.5 9.5c1-.8 2.3-.8 3.5 0" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
+    <SvgPath d="M7.5 11.5c1 .5 2 .5 2.5 0M14 11.5c.5.5 1.5.5 2.5 0" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
+    <SvgPath d="M6.5 15.5c1.8 1.2 3.5.5 5.5-.5 2 1 3.7 1.7 5.5.5" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
+    <SvgPath d="M12 17v3" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
+  </Svg>
+);
+
 // Biểu tượng SVG chuyên biệt chuẩn Apple iOS / Web cho Toàn bộ giao diện Chat & Cuộc gọi
 export const ChatSvgIcon = ({
   name,
@@ -8314,6 +8331,24 @@ function MainApp() {
   const [musicPlayerMode, setMusicPlayerMode] = useState<'stream' | 'embed'>('stream');
   const musicAudioRef = useRef<any>(null);
 
+  // 2. Công cụ HIHI - Stress Test Engine (scripts/hihi)
+  const [showHiHiModal, setShowHiHiModal] = useState<boolean>(false);
+  const [hihiTarget, setHihiTarget] = useState<string>('example.com');
+  const [hihiPort, setHihiPort] = useState<string>('80');
+  const [hihiThreads, setHihiThreads] = useState<string>('100');
+  const [hihiDuration, setHihiDuration] = useState<string>('30');
+  const [hihiMethod, setHihiMethod] = useState<'http' | 'post' | 'https' | 'slowloris' | 'keepalive'>('http');
+  const [hihiStatus, setHihiStatus] = useState<any>({
+    isRunning: false,
+    requestsSent: 0,
+    bytesSent: 0,
+    errors: 0,
+    elapsed: 0,
+    logs: []
+  });
+  const [isHiHiRunning, setIsHiHiRunning] = useState<boolean>(false);
+  const hihiPollIntervalRef = useRef<any>(null);
+
 
   // 3. Kiểm Tra Tốc Độ Mạng (Cloudflare Speed Test & CDN Ping)
   const [showSpeedTestModal, setShowSpeedTestModal] = useState<boolean>(false);
@@ -15423,18 +15458,91 @@ function MainApp() {
   };
 
   const handleTogglePlayMusic = () => {
-    if (!musicResult?.streamUrl) return;
-    if (typeof Audio !== 'undefined') {
-      if (musicPlaying && musicAudioRef.current) {
+    if (!musicResult) return;
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      const frame = document.getElementById('gvault-bg-audio-engine') as HTMLIFrameElement;
+      if (frame && frame.contentWindow) {
+        frame.contentWindow.postMessage('toggle', '*');
+      }
+    }
+    if (typeof Audio !== 'undefined' && musicAudioRef.current) {
+      if (musicPlaying) {
         musicAudioRef.current.pause();
         setMusicPlaying(false);
       } else {
-        if (!musicAudioRef.current || musicAudioRef.current.src !== musicResult.streamUrl) {
-          musicAudioRef.current = new Audio(musicResult.streamUrl);
-          musicAudioRef.current.onended = () => setMusicPlaying(false);
-        }
         musicAudioRef.current.play().then(() => setMusicPlaying(true)).catch(() => {});
       }
+    } else {
+      setMusicPlaying(!musicPlaying);
+    }
+  };
+
+  // ── 2. CÔNG CỤ HIHI - STRESS TEST & KIỂM THỬ CHỊU TẢI (scripts/hihi) ──
+  const handleStartHiHi = async () => {
+    if (!hihiTarget.trim()) {
+      triggerToast('Vui lòng nhập Target Domain hoặc IP!', 'Lỗi Target', 'warning');
+      return;
+    }
+    try {
+      setIsHiHiRunning(true);
+      const res = await fetch('http://localhost:3333/hihi/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          target: hihiTarget,
+          port: parseInt(hihiPort) || 80,
+          threads: parseInt(hihiThreads) || 100,
+          duration: parseInt(hihiDuration) || 30,
+          method: hihiMethod
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        triggerToast(`Đã bắt đầu kiểm thử: ${hihiTarget}`, 'HIHI Engine', 'success', 'skull');
+        startHiHiPolling();
+      } else {
+        triggerToast(data.error || 'Không thể bắt đầu test', 'Lỗi', 'warning');
+        setIsHiHiRunning(false);
+      }
+    } catch {
+      triggerToast('Không thể kết nối máy chủ proxy (port 3333)', 'Lỗi Kết Nối', 'warning');
+      setIsHiHiRunning(false);
+    }
+  };
+
+  const handleStopHiHi = async () => {
+    try {
+      await fetch('http://localhost:3333/hihi/stop', { method: 'POST' });
+      setIsHiHiRunning(false);
+      triggerToast('Đã dừng tiến trình kiểm thử', 'Dừng HIHI', 'info');
+      if (hihiPollIntervalRef.current) clearInterval(hihiPollIntervalRef.current);
+    } catch {}
+  };
+
+  const startHiHiPolling = () => {
+    if (hihiPollIntervalRef.current) clearInterval(hihiPollIntervalRef.current);
+    hihiPollIntervalRef.current = setInterval(async () => {
+      try {
+        const res = await fetch('http://localhost:3333/hihi/status');
+        const st = await res.json();
+        setHihiStatus(st);
+        if (!st.isRunning) {
+          setIsHiHiRunning(false);
+          clearInterval(hihiPollIntervalRef.current);
+        }
+      } catch {}
+    }, 600);
+  };
+
+  const handleOpenHiHiGui = async () => {
+    try {
+      const res = await fetch('http://localhost:3333/hihi/gui', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        triggerToast('Đã mở cửa sổ Python Tkinter GUI trên màn hình!', 'Thành Công', 'success');
+      }
+    } catch (e: any) {
+      triggerToast('Lỗi khi mở GUI Python: ' + (e?.message || ''), 'Lỗi', 'warning');
     }
   };
 
@@ -28304,6 +28412,19 @@ function MainApp() {
                     },
                   },
                   {
+                    icon: 'skull',
+                    customIcon: 'anonymous',
+                    color: '#00FF66',
+                    title: 'HIHI',
+                    subtitle: 'Công cụ stress test & kiểm thử chịu tải website (scripts/hihi)',
+                    badge: 'ANONYMOUS',
+                    badgeColor: '#00FF66',
+                    action: () => {
+                      setShowHomeMenuModal(false);
+                      setShowHiHiModal(true);
+                    },
+                  },
+                  {
                     icon: 'speedometer',
                     color: '#FF9500',
                     title: 'Đo Tốc Độ Mạng & CDN',
@@ -28364,7 +28485,11 @@ function MainApp() {
                         marginRight: 12,
                       }}
                     >
-                      <Ionicons name={item.icon as any} size={20} color={item.color} />
+                      {(item as any).customIcon === 'anonymous' ? (
+                        <AnonymousMaskIcon size={22} color={item.color} />
+                      ) : (
+                        <Ionicons name={item.icon as any} size={20} color={item.color} />
+                      )}
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: 14.5, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
@@ -30263,24 +30388,17 @@ function MainApp() {
       {/* MODAL MỚI 1: CÀO NHẠC & AUDIO HUB (Spotify, SoundCloud, iTunes)           */}
       {/* ========================================================================= */}
       <Modal visible={showMusicScraperModal} animationType="slide" transparent onRequestClose={() => {
-        if (musicAudioRef.current) {
-          musicAudioRef.current.pause();
-          setMusicPlaying(false);
-        }
         setShowMusicScraperModal(false);
       }}>
         <View style={styles.modalBackdrop}>
           <SafeAreaView style={[styles.sheetCard, { maxHeight: '92%' }, isLight && { backgroundColor: '#F2F2F7' }]}>
             {/* Header */}
             <View style={[styles.sheetHeader, isLight && { borderBottomColor: '#E5E5EA', backgroundColor: '#FFFFFF' }]}>
-              <TouchableOpacity onPress={() => {
-                if (musicAudioRef.current) {
-                  musicAudioRef.current.pause();
-                  setMusicPlaying(false);
-                }
-                setShowMusicScraperModal(false);
-              }}>
-                <Text style={[styles.sheetBtnBlue, { color: appSettings.accentColor }]}>Đóng</Text>
+              <TouchableOpacity onPress={() => setShowMusicScraperModal(false)}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Ionicons name="chevron-down" size={18} color={appSettings.accentColor} />
+                  <Text style={[styles.sheetBtnBlue, { color: appSettings.accentColor }]}>Thu Nhỏ</Text>
+                </View>
               </TouchableOpacity>
               <Text style={[styles.sheetTitle, isLight && { color: '#000000' }]}>Cào Nhạc & Audio Hub</Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(29, 185, 84, 0.15)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
@@ -31183,6 +31301,301 @@ function MainApp() {
                     )}
                   </View>
                 )}
+              </View>
+            </ScrollView>
+          </SafeAreaView>
+        </View>
+      </Modal>
+
+      {/* ========================================================================= */}
+      {/* MODAL MỚI 5: CÔNG CỤ HIHI - STRESS TEST & KIỂM THỬ CHỊU TẢI (scripts/hihi) */}
+      {/* ========================================================================= */}
+      <Modal visible={showHiHiModal} animationType="slide" transparent onRequestClose={() => setShowHiHiModal(false)}>
+        <View style={styles.modalBackdrop}>
+          <SafeAreaView style={[styles.sheetCard, { maxHeight: '92%' }, isLight && { backgroundColor: '#F2F2F7' }]}>
+            {/* Header */}
+            <View style={[styles.sheetHeader, isLight && { borderBottomColor: '#E5E5EA', backgroundColor: '#FFFFFF' }]}>
+              <TouchableOpacity onPress={() => setShowHiHiModal(false)}>
+                <Text style={[styles.sheetBtnBlue, { color: appSettings.accentColor }]}>Đóng</Text>
+              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <AnonymousMaskIcon size={20} color="#00FF66" />
+                <Text style={[styles.sheetTitle, isLight && { color: '#000000' }]}>HIHI Stress Test</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(0, 255, 102, 0.15)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
+                <Text style={{ fontSize: 10.5, fontWeight: '900', color: '#00FF66', letterSpacing: 0.5 }}>ANONYMOUS</Text>
+              </View>
+            </View>
+
+            <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+              {/* Configuration Card */}
+              <View
+                style={{
+                  backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                  borderRadius: 20,
+                  padding: 16,
+                  borderWidth: 1,
+                  borderColor: isLight ? '#E5E5EA' : 'rgba(0, 255, 102, 0.3)',
+                  marginBottom: 16,
+                  shadowColor: '#00FF66',
+                  shadowOpacity: isLight ? 0.05 : 0.15,
+                  shadowRadius: 10,
+                  elevation: 4,
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF' }}>
+                    Cấu Hình Mục Tiêu (Target)
+                  </Text>
+                  <View style={{ paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, backgroundColor: 'rgba(0, 255, 102, 0.15)' }}>
+                    <Text style={{ fontSize: 10, fontWeight: '800', color: '#00FF66' }}>scripts/hihi/dos.py</Text>
+                  </View>
+                </View>
+
+                {/* Target Domain Input */}
+                <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#8E8E93', marginBottom: 6 }}>
+                  DOMAIN HOẶC IP MỤC TIÊU:
+                </Text>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: isLight ? '#F2F2F7' : '#0B0B0E',
+                    borderRadius: 12,
+                    paddingHorizontal: 12,
+                    height: 44,
+                    borderWidth: 1,
+                    borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                    marginBottom: 12,
+                  }}
+                >
+                  <Ionicons name="globe-outline" size={17} color="#00FF66" style={{ marginRight: 8 }} />
+                  <TextInput
+                    style={{ flex: 1, color: isLight ? '#000000' : '#FFFFFF', fontSize: 13, fontWeight: '600' }}
+                    placeholder="VD: example.com hoặc 127.0.0.1"
+                    placeholderTextColor="#8E8E93"
+                    value={hihiTarget}
+                    onChangeText={setHihiTarget}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
+
+                {/* Port + Threads + Duration in 1 Row */}
+                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#8E8E93', marginBottom: 4 }}>CỔNG (PORT)</Text>
+                    <TextInput
+                      style={{
+                        backgroundColor: isLight ? '#F2F2F7' : '#0B0B0E',
+                        borderRadius: 10,
+                        paddingHorizontal: 10,
+                        height: 40,
+                        borderWidth: 1,
+                        borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                        color: isLight ? '#000' : '#FFF',
+                        fontSize: 13,
+                        fontWeight: '700',
+                      }}
+                      value={hihiPort}
+                      onChangeText={setHihiPort}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#8E8E93', marginBottom: 4 }}>LUỒNG (THREADS)</Text>
+                    <TextInput
+                      style={{
+                        backgroundColor: isLight ? '#F2F2F7' : '#0B0B0E',
+                        borderRadius: 10,
+                        paddingHorizontal: 10,
+                        height: 40,
+                        borderWidth: 1,
+                        borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                        color: isLight ? '#000' : '#FFF',
+                        fontSize: 13,
+                        fontWeight: '700',
+                      }}
+                      value={hihiThreads}
+                      onChangeText={setHihiThreads}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#8E8E93', marginBottom: 4 }}>THỜI GIAN (S)</Text>
+                    <TextInput
+                      style={{
+                        backgroundColor: isLight ? '#F2F2F7' : '#0B0B0E',
+                        borderRadius: 10,
+                        paddingHorizontal: 10,
+                        height: 40,
+                        borderWidth: 1,
+                        borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                        color: isLight ? '#000' : '#FFF',
+                        fontSize: 13,
+                        fontWeight: '700',
+                      }}
+                      value={hihiDuration}
+                      onChangeText={setHihiDuration}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                </View>
+
+                {/* Method Selector */}
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#8E8E93', marginBottom: 6 }}>
+                  PHƯƠNG THỨC KIỂM THỬ (METHOD):
+                </Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
+                  {[
+                    { key: 'http', label: 'HTTP GET' },
+                    { key: 'post', label: 'HTTP POST' },
+                    { key: 'https', label: 'HTTPS SSL' },
+                    { key: 'slowloris', label: 'SLOWLORIS' },
+                    { key: 'keepalive', label: 'KEEP-ALIVE' },
+                  ].map((m) => (
+                    <TouchableOpacity
+                      key={m.key}
+                      onPress={() => setHihiMethod(m.key as any)}
+                      style={{
+                        paddingHorizontal: 12,
+                        paddingVertical: 7,
+                        borderRadius: 10,
+                        backgroundColor: hihiMethod === m.key ? '#00FF66' : (isLight ? '#E5E5EA' : '#2C2C2E'),
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          fontWeight: '800',
+                          color: hihiMethod === m.key ? '#000000' : (isLight ? '#000000' : '#FFFFFF'),
+                        }}
+                      >
+                        {m.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {/* Action Buttons */}
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <TouchableOpacity
+                    onPress={isHiHiRunning ? handleStopHiHi : handleStartHiHi}
+                    style={{
+                      flex: 1,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: isHiHiRunning ? '#FF3B30' : '#00FF66',
+                      paddingVertical: 12,
+                      borderRadius: 14,
+                      gap: 6,
+                    }}
+                  >
+                    <Ionicons name={isHiHiRunning ? "stop" : "play"} size={16} color={isHiHiRunning ? '#FFF' : '#000'} />
+                    <Text style={{ fontSize: 13, fontWeight: '800', color: isHiHiRunning ? '#FFF' : '#000' }}>
+                      {isHiHiRunning ? 'DỪNG KIỂM THỬ' : 'BẮT ĐẦU TEST'}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={handleOpenHiHiGui}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                      paddingHorizontal: 14,
+                      paddingVertical: 12,
+                      borderRadius: 14,
+                      gap: 6,
+                    }}
+                  >
+                    <Ionicons name="desktop-outline" size={16} color={isLight ? '#000' : '#FFF'} />
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: isLight ? '#000' : '#FFF' }}>
+                      Mở GUI Python
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Real-time Dashboard Cards */}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+                {[
+                  { label: 'REQUESTS ĐÃ GỬI', val: `${(hihiStatus?.requestsSent || 0).toLocaleString()}`, color: '#00FF66' },
+                  { label: 'DUNG LƯỢNG GỬI', val: `${((hihiStatus?.bytesSent || 0) / 1024).toFixed(1)} KB`, color: '#007AFF' },
+                  { label: 'SỐ LỖI KẾT NỐI', val: `${(hihiStatus?.errors || 0).toLocaleString()}`, color: '#FF3B30' },
+                  { label: 'THỜI GIAN CHẠY', val: `${hihiStatus?.elapsed || 0}s / ${hihiDuration}s`, color: '#FF9500' },
+                ].map((stat, sIdx) => (
+                  <View
+                    key={sIdx}
+                    style={{
+                      flex: 1,
+                      minWidth: '45%',
+                      backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                      borderRadius: 16,
+                      padding: 12,
+                      borderWidth: 1,
+                      borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                    }}
+                  >
+                    <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#8E8E93', marginBottom: 4 }}>
+                      {stat.label}
+                    </Text>
+                    <Text style={{ fontSize: 16, fontWeight: '900', color: stat.color }}>
+                      {stat.val}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+
+              {/* Real-time Terminal Log Console */}
+              <View
+                style={{
+                  backgroundColor: '#0A0D12',
+                  borderRadius: 16,
+                  padding: 14,
+                  borderWidth: 1.5,
+                  borderColor: '#00FF66',
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: 'rgba(0, 255, 102, 0.2)' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: isHiHiRunning ? '#00FF66' : '#8E8E93' }} />
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#00FF66', fontFamily: Platform.OS === 'web' ? 'monospace' : undefined }}>
+                      TERMINAL MATRIX LOG
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 10, color: '#8E8E93', fontFamily: Platform.OS === 'web' ? 'monospace' : undefined }}>
+                    {isHiHiRunning ? 'LIVE LOGGING' : 'IDLE'}
+                  </Text>
+                </View>
+
+                <View style={{ minHeight: 140, maxHeight: 220 }}>
+                  <ScrollView nestedScrollEnabled showsVerticalScrollIndicator>
+                    {hihiStatus?.logs && hihiStatus.logs.length > 0 ? (
+                      hihiStatus.logs.map((logLine: string, lIdx: number) => (
+                        <Text
+                          key={lIdx}
+                          selectable
+                          style={{
+                            fontSize: 11,
+                            lineHeight: 16,
+                            fontFamily: Platform.OS === 'web' ? 'Consolas, monospace' : undefined,
+                            color: logLine.includes('[ERR]') ? '#FF3B30' : (logLine.includes('[✓]') ? '#00FF66' : '#94A3B8'),
+                            paddingVertical: 1,
+                          }}
+                        >
+                          {logLine}
+                        </Text>
+                      ))
+                    ) : (
+                      <Text style={{ fontSize: 11, color: '#4B5563', fontFamily: Platform.OS === 'web' ? 'monospace' : undefined }}>
+                        Sẵn sàng kiểm thử. Nhấn "BẮT ĐẦU TEST" để kích hoạt engine...
+                      </Text>
+                    )}
+                  </ScrollView>
+                </View>
               </View>
             </ScrollView>
           </SafeAreaView>
@@ -33447,6 +33860,152 @@ function MainApp() {
           </View>
         </View>
       </Modal>
+
+      {/* ========================================================================= */}
+      {/* PERSISTENT BACKGROUND AUDIO STREAMER (HOẠT ĐỘNG LIÊN TỤC TRÊN MỌI TRANG)  */}
+      {/* ========================================================================= */}
+      {musicResult && musicResult.streamUrl && Platform.OS === 'web' && (
+        <View
+          style={{
+            position: 'fixed' as any,
+            bottom: -200,
+            right: -200,
+            width: 1,
+            height: 1,
+            opacity: 0.001,
+            pointerEvents: 'none',
+            zIndex: -9999,
+          }}
+        >
+          {React.createElement('iframe', {
+            id: 'gvault-bg-audio-engine',
+            key: `bg-audio-${musicResult.streamUrl}`,
+            src: musicResult.streamUrl,
+            style: { width: 1, height: 1, border: 'none' },
+            allow: 'autoplay; clipboard-write; encrypted-media; picture-in-picture',
+          })}
+        </View>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MINI MUSIC PLAYER DOCKED BAR (HIỂN THỊ KHI ĐANG DUYỆT TRANG CHỦ / APP)    */}
+      {/* ========================================================================= */}
+      {musicResult && !showMusicScraperModal && (
+        <View
+          style={{
+            position: 'absolute',
+            bottom: currentTab ? 78 : 16,
+            left: 14,
+            right: 14,
+            backgroundColor: isLight ? 'rgba(255, 255, 255, 0.95)' : 'rgba(24, 24, 28, 0.96)',
+            borderRadius: 18,
+            padding: 10,
+            paddingHorizontal: 12,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 10,
+            borderWidth: 1.5,
+            borderColor: isLight ? 'rgba(0,0,0,0.08)' : 'rgba(29, 185, 84, 0.4)',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 6 },
+            shadowOpacity: 0.35,
+            shadowRadius: 12,
+            elevation: 20,
+            zIndex: 9999,
+          }}
+        >
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => setShowMusicScraperModal(true)}
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 22,
+              overflow: 'hidden',
+              borderWidth: 2,
+              borderColor: '#1DB954',
+            }}
+          >
+            <Image
+              source={{ uri: musicResult.artistAvatar || musicResult.cover }}
+              style={{ width: '100%', height: '100%' }}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => setShowMusicScraperModal(true)}
+            style={{ flex: 1, justifyContent: 'center' }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+              <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF', flex: 1 }}>
+                {musicResult.title}
+              </Text>
+              {musicResult.isVerified && (
+                <Ionicons name="checkmark-circle" size={13} color="#1DB954" />
+              )}
+            </View>
+            <Text numberOfLines={1} style={{ fontSize: 11, color: '#8E8E93', marginTop: 1 }}>
+              {musicResult.artist} {musicResult.duration ? `• ⏱ ${musicResult.duration}` : ''}
+            </Text>
+          </TouchableOpacity>
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <TouchableOpacity
+              onPress={handleTogglePlayMusic}
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: 19,
+                backgroundColor: '#1DB954',
+                alignItems: 'center',
+                justifyContent: 'center',
+                shadowColor: '#1DB954',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.4,
+                shadowRadius: 6,
+              }}
+            >
+              <Ionicons name={musicPlaying ? "pause" : "play"} size={19} color="#FFFFFF" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setShowMusicScraperModal(true)}
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: 17,
+                backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Ionicons name="expand-outline" size={16} color={isLight ? '#000000' : '#FFFFFF'} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => {
+                if (musicAudioRef.current) {
+                  musicAudioRef.current.pause();
+                  musicAudioRef.current = null;
+                }
+                setMusicPlaying(false);
+                setMusicResult(null);
+              }}
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: 17,
+                backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Ionicons name="close" size={16} color="#8E8E93" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }

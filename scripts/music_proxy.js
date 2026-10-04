@@ -1,10 +1,26 @@
 const http = require('http');
 const https = require('https');
 const url = require('url');
+const { spawn, exec } = require('child_process');
+
+let hihiProcess = null;
+let hihiState = {
+  isRunning: false,
+  target: '',
+  port: 80,
+  threads: 100,
+  duration: 30,
+  method: 'http',
+  requestsSent: 0,
+  bytesSent: 0,
+  errors: 0,
+  elapsed: 0,
+  logs: []
+};
 
 const server = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', '*');
 
   if (req.method === 'OPTIONS') {
@@ -310,13 +326,6 @@ const server = http.createServer(async (req, res) => {
       display: flex; flex-direction: column; align-items: center; justify-content: center;
       padding: 14px; position: relative;
     }
-    .badge-official {
-      position: absolute; top: 10px; left: 12px;
-      background: rgba(29, 185, 84, 0.2); border: 1.5px solid rgba(29, 185, 84, 0.6);
-      color: #1DB954; font-size: 10.5px; font-weight: 800; border-radius: 8px;
-      padding: 4px 8px; display: flex; align-items: center; gap: 5px; z-index: 10;
-    }
-    .badge-official .dot { width: 6px; height: 6px; border-radius: 50%; background: #1DB954; box-shadow: 0 0 6px #1DB954; }
 
     /* Top artist header with official avatar */
     .artist-header {
@@ -377,8 +386,6 @@ const server = http.createServer(async (req, res) => {
 </head>
 <body>
   <div class="player-card">
-    <div class="badge-official"><div class="dot"></div> CHÍNH CHỦ (${duration})</div>
-
     <div class="artist-header">
       <img src="${avatar}" class="artist-avatar" onerror="this.src='${cover}'" />
       <div class="artist-badge-name">
@@ -478,6 +485,32 @@ const server = http.createServer(async (req, res) => {
           }
         }
       });
+
+      if ('mediaSession' in navigator) {
+        try {
+          navigator.mediaSession.metadata = new MediaMetadata({
+            title: ${JSON.stringify(title)},
+            artist: ${JSON.stringify(artist)},
+            album: "GVault Audio Hub",
+            artwork: [
+              { src: ${JSON.stringify(avatar || cover)}, sizes: "512x512", type: "image/jpeg" }
+            ]
+          });
+          navigator.mediaSession.setActionHandler('play', function() { if (ytPlayer) ytPlayer.playVideo(); });
+          navigator.mediaSession.setActionHandler('pause', function() { if (ytPlayer) ytPlayer.pauseVideo(); });
+          navigator.mediaSession.setActionHandler('seekbackward', function() { if (ytPlayer) ytPlayer.seekTo(Math.max(0, ytPlayer.getCurrentTime() - 10), true); });
+          navigator.mediaSession.setActionHandler('seekforward', function() { if (ytPlayer) ytPlayer.seekTo(ytPlayer.getCurrentTime() + 10, true); });
+        } catch (e) {}
+      }
+
+      window.addEventListener('message', function(evt) {
+        if (!evt || !evt.data || !ytPlayer) return;
+        if (evt.data === 'play' || (evt.data && evt.data.action === 'play')) ytPlayer.playVideo();
+        if (evt.data === 'pause' || (evt.data && evt.data.action === 'pause')) ytPlayer.pauseVideo();
+        if (evt.data === 'toggle' || (evt.data && evt.data.action === 'toggle')) {
+          if (isPlaying) ytPlayer.pauseVideo(); else ytPlayer.playVideo();
+        }
+      });
     }
 
     function startTicker() {
@@ -530,6 +563,136 @@ const server = http.createServer(async (req, res) => {
 
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(playerHtml);
+    return;
+  }
+
+  // 5. HIHI Stress Test API endpoints: /hihi/start, /hihi/stop, /hihi/status, /hihi/gui
+  if (pathname === '/hihi/start' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const data = JSON.parse(body || '{}');
+        const target = (data.target || '').replace('http://', '').replace('https://', '').split('/')[0].trim();
+        const port = parseInt(data.port) || 80;
+        const threads = Math.min(1000, Math.max(1, parseInt(data.threads) || 100));
+        const duration = Math.min(600, Math.max(5, parseInt(data.duration) || 30));
+        const method = (data.method || 'http').toLowerCase();
+
+        if (!target) {
+          res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ success: false, error: 'Chưa nhập Target URL / Domain' }));
+          return;
+        }
+
+        if (hihiProcess) {
+          try { hihiProcess.kill(); } catch (e) {}
+          hihiProcess = null;
+        }
+
+        hihiState = {
+          isRunning: true,
+          target,
+          port,
+          threads,
+          duration,
+          method,
+          requestsSent: 0,
+          bytesSent: 0,
+          errors: 0,
+          elapsed: 0,
+          logs: [`[*] Khởi tạo kiểm thử chịu tải Target: ${target}:${port} (Luồng: ${threads}, Thời gian: ${duration}s, Method: ${method.toUpperCase()})`]
+        };
+
+        const pythonScript = 'D:\\GVault-Expo\\scripts\\hihi\\dos.py';
+        hihiProcess = spawn('python', [
+          pythonScript,
+          '--cli',
+          '--target', target,
+          '--port', String(port),
+          '--threads', String(threads),
+          '--duration', String(duration),
+          '--method', method
+        ]);
+
+        hihiProcess.stdout.on('data', (chunk) => {
+          const lines = chunk.toString().split('\n');
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+            if (trimmed.startsWith('PROGRESS:')) {
+              const parts = trimmed.split(':');
+              if (parts.length >= 5) {
+                hihiState.requestsSent = parseInt(parts[1]) || 0;
+                hihiState.bytesSent = parseInt(parts[2]) || 0;
+                hihiState.errors = parseInt(parts[3]) || 0;
+                hihiState.elapsed = parseInt(parts[4]) || 0;
+              }
+            } else if (trimmed.startsWith('LOG:')) {
+              hihiState.logs.push(trimmed.slice(4));
+              if (hihiState.logs.length > 100) hihiState.logs.shift();
+            } else {
+              hihiState.logs.push(trimmed);
+              if (hihiState.logs.length > 100) hihiState.logs.shift();
+            }
+          }
+        });
+
+        hihiProcess.stderr.on('data', (chunk) => {
+          const errText = chunk.toString().trim();
+          if (errText) {
+            hihiState.logs.push(`[ERR] ${errText}`);
+            if (hihiState.logs.length > 100) hihiState.logs.shift();
+          }
+        });
+
+        hihiProcess.on('close', (code) => {
+          hihiState.isRunning = false;
+          hihiState.logs.push(`[✓] Tiến trình kết thúc (Code: ${code}).`);
+          hihiProcess = null;
+        });
+
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ success: true, message: 'Đã khởi động tiến trình test' }));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ success: false, error: e.message }));
+      }
+    });
+    return;
+  }
+
+  if (pathname === '/hihi/stop') {
+    if (hihiProcess) {
+      try { hihiProcess.kill(); } catch (e) {}
+      hihiProcess = null;
+    }
+    hihiState.isRunning = false;
+    hihiState.logs.push('[!] Đã gửi lệnh dừng tiến trình kiểm thử.');
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ success: true, message: 'Đã dừng' }));
+    return;
+  }
+
+  if (pathname === '/hihi/status') {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(hihiState));
+    return;
+  }
+
+  if (pathname === '/hihi/gui') {
+    try {
+      const child = spawn('python', ['D:\\GVault-Expo\\scripts\\hihi\\dos.py'], {
+        detached: true,
+        stdio: 'ignore'
+      });
+      child.unref();
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: true, message: 'Đã mở cửa sổ Python Tkinter GUI' }));
+    } catch (e) {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, error: e.message }));
+    }
     return;
   }
 
