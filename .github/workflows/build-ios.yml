@@ -95,14 +95,16 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v2.0.1' }}
-          name: "LockX ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v2.0.1' }} - Bản Cài Đặt Trực Tiếp (.IPA)"
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v2.0.2' }}
+          name: "LockX ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v2.0.2' }} - Bản Cài Đặt Trực Tiếp (.IPA)"
           body: |
             ## 📱 LockX iOS - Bản Cài Đặt Trực Tiếp (.IPA)
             - **Tải trực tiếp**: Tệp `LockX.ipa` đính kèm bên dưới (cài qua Scarlet / TrollStore / AltStore / Sideloadly / Esign).
-            - **Giao diện mới**: Đồng bộ màu đen OLED & xám đen Apple HIG.
-            - **Tối ưu Light & Dark Mode**: Độ tương phản cao, mượt mà trên iPhone.
-            - **Chế độ Ngoại Tuyến**: Tính năng Offline Gate cho Tệp và Bạn Bè.
+            - **Tính năng mới**:
+              - Nâng cấp đồng hồ Speedtest mượt mà, chuyển giao Upload mượt mà không bị tụt sốc.
+              - Hiệu ứng Mini Player đĩa than (Vinyl) xoay 360 độ theo điệu nhạc.
+              - Tích hợp công cụ kiểm thử mạng HIHI: hỗ trợ CURL -I xem domain headers, tối ưu động cơ kết nối TCP socket.
+              - Tối ưu hiệu năng cao, giảm giật khung hình và hỗ trợ Dark/Light mode.
           files: build/LockX.ipa
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
