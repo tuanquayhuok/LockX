@@ -14757,7 +14757,7 @@ function MainApp() {
   };
 
   // Hoàn tất bóc tách dữ liệu (hết giờ hoặc người dùng bấm Hoàn tất ngay)
-  const finishScrapingProcess = (targetRawUrl?: string, newlyDiscovered?: any[]) => {
+  const finishScrapingProcess = (targetRawUrl?: string, newlyDiscovered?: any[], matchedMovie?: any) => {
     if (crawlIntervalRef.current) {
       clearInterval(crawlIntervalRef.current);
       crawlIntervalRef.current = null;
@@ -14767,7 +14767,17 @@ function MainApp() {
     setCrawlRemainingSec(0);
 
     const rawUrl = (targetRawUrl || scraperUrlInput).trim();
-    let targetMovie: any = null;
+    let targetMovie: any = matchedMovie || null;
+
+    if (!targetMovie) {
+      if (newlyDiscovered && newlyDiscovered.length > 0) {
+        targetMovie = newlyDiscovered[0];
+      } else {
+        const lower = rawUrl.toLowerCase();
+        const found = allCatalogMovies.find((m: any) => lower.includes(m.code) || lower.includes(m.title.toLowerCase()));
+        targetMovie = found || allCatalogMovies[0];
+      }
+    }
 
     if (newlyDiscovered && newlyDiscovered.length > 0) {
       setNewlyScrapedMovies((prev) => {
@@ -14775,11 +14785,6 @@ function MainApp() {
         const fresh = newlyDiscovered.filter((m: any) => !existingCodes.has(m.code));
         return [...prev, ...fresh];
       });
-      targetMovie = newlyDiscovered[0];
-    } else {
-      const lower = rawUrl.toLowerCase();
-      const found = allCatalogMovies.find((m: any) => lower.includes(m.code) || lower.includes(m.title.toLowerCase()));
-      targetMovie = found || allCatalogMovies[0];
     }
 
     setScrapedMovieList([...allCatalogMovies, ...(newlyDiscovered || [])]);
@@ -14819,41 +14824,21 @@ function MainApp() {
     playAppleNotificationSound('success');
   };
 
-  // Xử lý Cào API & Bóc Tách Phim Mới (Hỗ trợ Lọc theo Tên Phim và Lọc All)
+  // Xử lý Cào API & Bóc Tách Phim Mới (Hỗ trợ Lọc theo Tên Phim và Lọc All mượt mà)
   const handleExecuteScrape = (overrideUrl?: string, overrideMode?: 'title' | 'all', overrideMovieTitle?: string) => {
     const rawUrl = (overrideUrl !== undefined ? overrideUrl : scraperUrlInput).trim();
     const activeMode = overrideMode !== undefined ? overrideMode : scrapeFilterMode;
     const targetMovieTitle = (overrideMovieTitle !== undefined ? overrideMovieTitle : scraperMovieNameInput).trim();
 
-    if (!rawUrl && activeMode === 'all') {
+    if (activeMode === 'title' && !targetMovieTitle) {
+      triggerToast('Vui lòng nhập tên phim cần cào API hoặc chọn gợi ý phim bên dưới!', 'Chưa Nhập Tên Phim', 'warning', 'search-outline');
+      return;
+    }
+
+    if (activeMode === 'all' && !rawUrl) {
       triggerToast('Vui lòng điền domain hoặc URL web xem phim cần cào API!', 'Thiếu Thông Tin', 'warning');
       return;
     }
-
-    if (activeMode === 'title' && !targetMovieTitle && !rawUrl.includes('id=') && !rawUrl.includes('/phim/')) {
-      triggerToast('Vui lòng nhập tên phim cần cào API hoặc chọn chế độ Lọc All!', 'Chưa Nhập Tên Phim', 'warning');
-      return;
-    }
-
-    // 1. KIỂM TRA TRÙNG LẶP: Nếu tên phim hoặc URL đã có trong kho API, xem được ngay không cần cào lại!
-    const lowerUrl = rawUrl.toLowerCase();
-    const lowerTitle = targetMovieTitle.toLowerCase();
-    const existing = allCatalogMovies.find((m: any) =>
-      (lowerTitle && m.title.toLowerCase().includes(lowerTitle)) ||
-      (lowerTitle && m.code.toLowerCase().includes(lowerTitle.replace(/\s+/g, '-'))) ||
-      (m.code && lowerUrl.includes(m.code.toLowerCase())) ||
-      (m.title && lowerUrl.includes(m.title.toLowerCase()))
-    );
-
-    if (existing) {
-      handleSelectScrapedMovie(existing);
-      triggerToast(`Phim "${existing.title}" đã có sẵn trong kho API! Sẵn sàng xem ngay không cần cào lại.`, 'API Đã Sẵn Sàng', 'success', 'checkmark-circle-outline');
-      return;
-    }
-
-    // 2. NẾU LÀ PHIM MỚI HOẶC YÊU CẦU CÀO PHIM MỚI CHƯA CÓ TRONG KHO:
-    const currentCodes = new Set(allCatalogMovies.map((m: any) => m.code));
-    let unScrapedCandidates = NEW_VN_CANDIDATE_MOVIES.filter((m: any) => !currentCodes.has(m.code));
 
     // Xác định tên miền nguồn (Motchill, RoPhim, GhienPhimz, PhimMoi, OPhim, v.v.)
     let domainLabel = 'Google Web Phim';
@@ -14863,8 +14848,9 @@ function MainApp() {
     else if (rawUrl.includes('phimmoi')) domainLabel = 'PhimMoi (phimmoichill.net)';
     else if (rawUrl.includes('ophim')) domainLabel = 'OPhim (ophim1.com)';
 
-    // Nếu lọc theo tên phim cụ thể:
-    if (activeMode === 'title' && targetMovieTitle) {
+    // CHẾ ĐỘ 1: LỌC THEO TÊN PHIM (Có hiệu ứng cào 4s mượt mà, định vị chính xác tên phim)
+    if (activeMode === 'title') {
+      const lowerTitle = targetMovieTitle.toLowerCase();
       const slug = targetMovieTitle
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '')
@@ -14873,62 +14859,136 @@ function MainApp() {
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '');
 
-      const matchedCand = unScrapedCandidates.find((c: any) =>
-        c.title.toLowerCase().includes(lowerTitle) || c.code.includes(slug)
+      // Tìm trong allCatalogMovies trước, rồi đến NEW_VN_CANDIDATE_MOVIES
+      let matchedMovie = allCatalogMovies.find((m: any) =>
+        m.title.toLowerCase().includes(lowerTitle) || (slug && m.code.toLowerCase().includes(slug))
       );
 
-      if (matchedCand) {
-        unScrapedCandidates = [matchedCand];
-      } else {
-        const customMovie = {
+      if (!matchedMovie) {
+        matchedMovie = NEW_VN_CANDIDATE_MOVIES.find((c: any) =>
+          c.title.toLowerCase().includes(lowerTitle) || (slug && c.code.toLowerCase().includes(slug))
+        );
+      }
+
+      if (!matchedMovie) {
+        // Tạo phim mới theo tên người dùng nhập nếu chưa từng có
+        matchedMovie = {
           code: slug || `phim-${Date.now()}`,
           title: targetMovieTitle,
           image: 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=500&q=80',
           year: '2025',
           duration: '120 phút',
           rating: '9,0',
-          views: '31.200',
+          views: '35.400',
           chapter: 'Full HD 1080p',
           director: 'Đang cập nhật',
           cast: 'Diễn viên Việt Nam',
-          embedUrl: `https://lamda.chumin.xyz/temp?s=${encodeURIComponent(slug)}&linknhung=1&t=1`,
+          embedUrl: `https://lamda.chumin.xyz/temp?s=${encodeURIComponent(slug || 'phim')}&linknhung=1&t=1`,
           streamUrl: 'https://bmx.dachumin.xyz/bachanlanke/qLlTuf5zN03CJpMB.m3u8',
           hlsUrl: 'https://bmx.dachumin.xyz/bachanlanke/qLlTuf5zN03CJpMB.m3u8',
         };
-        unScrapedCandidates = [customMovie];
       }
-    } else {
-      // Chế độ Lọc ALL: nếu có URL cụ thể thì trích xuất thêm
-      let customCode = '';
-      const idMatch = rawUrl.match(/[?&]id=([^&#]+)/);
-      const pathMatch = rawUrl.match(/\/(?:phim|xem-phim)\/([^/?&#]+)/);
-      if (idMatch && idMatch[1]) {
-        customCode = idMatch[1];
-      } else if (pathMatch && pathMatch[1]) {
-        customCode = pathMatch[1];
+
+      const isAlreadyInCatalog = allCatalogMovies.some((m: any) => m.code === matchedMovie.code);
+      const candidatesForScrape = isAlreadyInCatalog ? [] : [matchedMovie];
+
+      if (crawlIntervalRef.current) {
+        clearInterval(crawlIntervalRef.current);
+        crawlIntervalRef.current = null;
       }
-      if (customCode && !currentCodes.has(customCode)) {
-        const customTitle = customCode
-          .split('-')
-          .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
-          .join(' ');
-        const customMovie = {
-          code: customCode,
-          title: customTitle,
-          image: 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=500&q=80',
-          year: '2024',
-          duration: '115 phút',
-          rating: '8,8',
-          views: '24.500',
-          chapter: 'Full HD 1080p',
-          director: 'Đang cập nhật',
-          cast: 'Diễn viên Việt Nam',
-          embedUrl: `https://lamda.chumin.xyz/temp?s=${encodeURIComponent(customCode)}&linknhung=1&t=1`,
-          streamUrl: 'https://bmx.dachumin.xyz/bachanlanke/qLlTuf5zN03CJpMB.m3u8',
-          hlsUrl: 'https://bmx.dachumin.xyz/bachanlanke/qLlTuf5zN03CJpMB.m3u8',
-        };
-        unScrapedCandidates = [customMovie, ...unScrapedCandidates];
-      }
+
+      setIsScraping(true);
+      setScrapedResult(null);
+      setScrapingProgressPercent(15);
+      setScrapedMovieList([]);
+
+      const totalSeconds = 4; // 4 giây hiển thị quá trình bóc tách mượt mà
+      let remaining = totalSeconds;
+      setCrawlRemainingSec(totalSeconds);
+
+      setScrapingLogs([
+        {
+          time: '00:01',
+          text: `[DNS & GATEWAY] Đang kết nối tới máy chủ ${domainLabel}... Bắt đầu tìm kiếm phim [${matchedMovie.title}]`,
+          type: 'info',
+        },
+      ]);
+      setScrapingStepText(`Đang dò quét máy chủ ${domainLabel} theo tên phim "${matchedMovie.title}"...`);
+
+      let elapsed = 0;
+      crawlIntervalRef.current = setInterval(() => {
+        elapsed += 1;
+        remaining -= 1;
+        setCrawlRemainingSec(Math.max(0, remaining));
+
+        const percent = Math.min(99, Math.floor((elapsed / totalSeconds) * 100));
+        setScrapingProgressPercent(percent);
+
+        const mm = Math.floor(elapsed / 60).toString().padStart(2, '0');
+        const ss = (elapsed % 60).toString().padStart(2, '0');
+        const timeStr = `${mm}:${ss}`;
+
+        if (elapsed === 1) {
+          setScrapingStepText(`Đã tìm thấy dữ liệu phim "${matchedMovie.title}". Đang kiểm tra mã bảo vệ...`);
+          setScrapingLogs((prev) => [
+            ...prev,
+            { time: timeStr, text: `[TARGET MATCHED] Đã khớp phim: "${matchedMovie.title}" (${matchedMovie.year || '2025'}). Đang phân tích mã HTML/JS...`, type: 'info' },
+          ]);
+        } else if (elapsed === 2) {
+          setScrapingStepText(`Đang bóc tách luồng HLS .m3u8 và player nhúng...`);
+          setScrapingLogs((prev) => [
+            ...prev,
+            { time: timeStr, text: `[EXTRACTING HLS] Giải mã luồng CDN .m3u8 FHD cho [${matchedMovie.title}] thành công!`, type: 'warn' },
+          ]);
+        } else if (elapsed === 3) {
+          setScrapingStepText(`Đang đồng bộ API vào kho dữ liệu LockX...`);
+          setScrapingLogs((prev) => [
+            ...prev,
+            { time: timeStr, text: `[SYNCING VAULT] Cấu hình proxy CDN và đồng bộ dữ liệu vào kho API!`, type: 'success' },
+          ]);
+        }
+
+        if (remaining <= 0) {
+          finishScrapingProcess(rawUrl, candidatesForScrape, matchedMovie);
+        }
+      }, 1000);
+
+      return;
+    }
+
+    // CHẾ ĐỘ 2: LỌC TOÀN BỘ (ALL) PHIM MỚI
+    const currentCodes = new Set(allCatalogMovies.map((m: any) => m.code));
+    let unScrapedCandidates = NEW_VN_CANDIDATE_MOVIES.filter((m: any) => !currentCodes.has(m.code));
+
+    let customCode = '';
+    const idMatch = rawUrl.match(/[?&]id=([^&#]+)/);
+    const pathMatch = rawUrl.match(/\/(?:phim|xem-phim)\/([^/?&#]+)/);
+    if (idMatch && idMatch[1]) {
+      customCode = idMatch[1];
+    } else if (pathMatch && pathMatch[1]) {
+      customCode = pathMatch[1];
+    }
+    if (customCode && !currentCodes.has(customCode)) {
+      const customTitle = customCode
+        .split('-')
+        .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(' ');
+      const customMovie = {
+        code: customCode,
+        title: customTitle,
+        image: 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=500&q=80',
+        year: '2024',
+        duration: '115 phút',
+        rating: '8,8',
+        views: '24.500',
+        chapter: 'Full HD 1080p',
+        director: 'Đang cập nhật',
+        cast: 'Diễn viên Việt Nam',
+        embedUrl: `https://lamda.chumin.xyz/temp?s=${encodeURIComponent(customCode)}&linknhung=1&t=1`,
+        streamUrl: 'https://bmx.dachumin.xyz/bachanlanke/qLlTuf5zN03CJpMB.m3u8',
+        hlsUrl: 'https://bmx.dachumin.xyz/bachanlanke/qLlTuf5zN03CJpMB.m3u8',
+      };
+      unScrapedCandidates = [customMovie, ...unScrapedCandidates];
     }
 
     if (unScrapedCandidates.length === 0) {
@@ -14947,28 +15007,24 @@ function MainApp() {
     setScrapingProgressPercent(10);
     setScrapedMovieList([]);
 
-    const totalSeconds = 10;
+    const totalSeconds = 6;
     let remaining = totalSeconds;
     setCrawlRemainingSec(totalSeconds);
-
-    const filterNotice = activeMode === 'title' && targetMovieTitle
-      ? `Lọc theo tên: [${targetMovieTitle}]`
-      : 'Lọc ALL (toàn bộ phim mới)';
 
     setScrapingLogs([
       {
         time: '00:01',
-        text: `[DNS & GATEWAY] Đang kết nối tới máy chủ nguồn ${domainLabel}: ${rawUrl}... (${filterNotice})`,
+        text: `[DNS & GATEWAY] Đang kết nối tới máy chủ nguồn ${domainLabel}: ${rawUrl}... (Lọc ALL toàn bộ phim mới)`,
         type: 'info',
       },
     ]);
-    setScrapingStepText(`Đang đối soát kho API và lọc phim từ ${domainLabel} (${filterNotice})...`);
+    setScrapingStepText(`Đang đối soát kho API và lọc toàn bộ phim mới từ ${domainLabel}...`);
 
     let elapsed = 0;
     crawlIntervalRef.current = setInterval(() => {
       elapsed += 1;
       remaining -= 1;
-      setCrawlRemainingSec(remaining);
+      setCrawlRemainingSec(Math.max(0, remaining));
 
       const percent = Math.min(99, Math.floor((elapsed / totalSeconds) * 100));
       setScrapingProgressPercent(percent);
@@ -14981,13 +15037,13 @@ function MainApp() {
         setScrapingStepText(`Phát hiện ${unScrapedCandidates.length} phim mới chưa có trong kho API...`);
         setScrapingLogs((prev) => prev.some(l => l.text.includes('UNSCRAPED FOUND')) ? prev : [
           ...prev,
-          { time: timeStr, text: `[UNSCRAPED FOUND] Đã lọc trùng lặp: Tìm thấy ${unScrapedCandidates.length} phim mới (${unScrapedCandidates.map((m: any) => m.title).join(', ')})...`, type: 'info' },
+          { time: timeStr, text: `[UNSCRAPED FOUND] Đã lọc trùng lặp: Tìm thấy ${unScrapedCandidates.length} phim mới (${unScrapedCandidates.map((m: any) => m.title).slice(0, 3).join(', ')}...)...`, type: 'info' },
         ]);
       } else if (percent >= 50 && percent < 75) {
         setScrapingStepText('Đang bóc tách luồng phát HLS .m3u8 và player nhúng cho phim mới...');
         setScrapingLogs((prev) => prev.some(l => l.text.includes('EXTRACTING HLS')) ? prev : [
           ...prev,
-          { time: timeStr, text: `[EXTRACTING HLS] Trích xuất mã hóa AES-128 & luồng stream .m3u8 CDN cho [${unScrapedCandidates[0].title}]...`, type: 'warn' },
+          { time: timeStr, text: `[EXTRACTING HLS] Trích xuất mã hóa AES-128 & luồng stream .m3u8 CDN cho [${unScrapedCandidates[0]?.title}]...`, type: 'warn' },
         ]);
       } else if (percent >= 75) {
         setScrapingStepText('Bóc tách hoàn tất! Đang đồng bộ vào kho API LockX...');
@@ -28380,7 +28436,7 @@ function MainApp() {
                 >
                   <Ionicons name="shield-checkmark-outline" size={17} color="#34C759" />
                   <Text style={{ flex: 1, fontSize: 11, color: isLight ? '#1B5E20' : '#81C784', lineHeight: 15 }}>
-                    Cơ chế lọc trùng: Nếu phim đã có sẵn sẽ mở xem ngay lập tức; crawler chỉ bóc tách các phim mới chưa có API trong kho.
+                    Lọc bóc tách thông minh: Trích xuất luồng .m3u8 CDN & Web Player theo tên phim hoặc lọc toàn bộ (All); tự động đồng bộ vào kho dữ liệu.
                   </Text>
                 </View>
 
