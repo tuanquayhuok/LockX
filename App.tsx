@@ -15344,10 +15344,14 @@ function MainApp() {
             setMusicResult({
               title: first.title,
               artist: first.artist || 'Nghệ Sĩ Việt Nam',
-              album: 'Bản Đầy Đủ (Full Song)',
+              channelName: first.channelName,
+              artistAvatar: first.artistAvatar || first.channelAvatar,
+              isVerified: first.isVerified,
+              isOfficial: first.isOfficial,
+              album: 'Bản Đầy Đủ Chính Chủ',
               cover: first.cover,
               duration: first.duration || 'Full Song',
-              genre: 'Nhạc Trẻ HD',
+              genre: 'Official Music',
               platform: 'full',
               streamUrl: first.playerUrl,
               backupStreamUrl: first.embedUrl,
@@ -15356,7 +15360,7 @@ function MainApp() {
               allCandidates: fullData.results.slice(0, 5),
             });
             setMusicPlayerMode('stream');
-            triggerToast(`Đã bóc tách trọn vẹn full bài: ${first.title}`, 'Cào Full Bài Thành Công', 'success', 'musical-notes');
+            triggerToast(`Đã bóc tách kênh chính chủ: ${first.artist || first.channelName}`, 'Chính Chủ Thành Công', 'success', 'checkmark-circle');
             playAppleNotificationSound('success');
             setIsScrapingMusic(false);
             return;
@@ -30435,24 +30439,42 @@ function MainApp() {
                     />
                     <View style={{ flex: 1, justifyContent: 'center' }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                        <View style={{ paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, backgroundColor: 'rgba(29,185,84,0.15)' }}>
-                          <Text style={{ fontSize: 10, fontWeight: '900', color: '#1DB954', textTransform: 'uppercase' }}>
-                            {musicResult.platform || 'AUDIO'}
+                        <View style={{ paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, backgroundColor: musicResult.isVerified ? 'rgba(29,185,84,0.15)' : 'rgba(0,122,255,0.15)' }}>
+                          <Text style={{ fontSize: 10, fontWeight: '900', color: musicResult.isVerified ? '#1DB954' : '#007AFF', textTransform: 'uppercase' }}>
+                            {musicResult.isVerified ? '✓ KÊNH CHÍNH CHỦ' : (musicResult.platform || 'AUDIO')}
                           </Text>
                         </View>
                         <Text style={{ fontSize: 11, color: '#8E8E93', fontWeight: '600' }}>
                           ⏱ {musicResult.duration}
                         </Text>
                       </View>
-                      <Text numberOfLines={2} style={{ fontSize: 16, fontWeight: '900', color: isLight ? '#000000' : '#FFFFFF', marginBottom: 2 }}>
+                      <Text numberOfLines={2} style={{ fontSize: 15, fontWeight: '900', color: isLight ? '#000000' : '#FFFFFF', marginBottom: 4 }}>
                         {musicResult.title}
                       </Text>
-                      <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '700', color: '#1DB954', marginBottom: 2 }}>
-                        {musicResult.artist}
-                      </Text>
-                      <Text numberOfLines={1} style={{ fontSize: 11, color: '#8E8E93' }}>
-                        {musicResult.album}
-                      </Text>
+
+                      {/* Artist Avatar + Verified Badge */}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                        {musicResult.artistAvatar ? (
+                          <Image
+                            source={{ uri: musicResult.artistAvatar }}
+                            style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, borderColor: '#1DB954' }}
+                          />
+                        ) : (
+                          <Ionicons name="person-circle" size={20} color="#1DB954" />
+                        )}
+                        <Text numberOfLines={1} style={{ fontSize: 12.5, fontWeight: '800', color: '#1DB954', flex: 1 }}>
+                          {musicResult.artist}
+                        </Text>
+                        {musicResult.isVerified && (
+                          <Ionicons name="checkmark-circle" size={14} color="#1DB954" />
+                        )}
+                      </View>
+
+                      {musicResult.channelName && musicResult.channelName !== musicResult.artist && (
+                        <Text numberOfLines={1} style={{ fontSize: 10.5, color: '#8E8E93' }}>
+                          Kênh: {musicResult.channelName}
+                        </Text>
+                      )}
                     </View>
                   </View>
 
@@ -30695,57 +30717,80 @@ function MainApp() {
                       <Text style={{ fontSize: 11, fontWeight: '800', color: '#8E8E93', marginBottom: 8, textTransform: 'uppercase' }}>
                         Các Bản Thu & Phiên Bản Khác (Full Bài):
                       </Text>
-                      <View style={{ gap: 6 }}>
-                        {musicResult.allCandidates.slice(1, 5).map((cand: any, cIdx: number) => (
-                          <TouchableOpacity
-                            key={cIdx}
-                            onPress={() => {
-                              const title = cand.title || cand.trackName;
-                              const artist = cand.artist || cand.artistName;
-                              const cover = cand.cover || (cand.artworkUrl100 ? cand.artworkUrl100.replace('100x100', '600x600') : musicResult.cover);
-                              const duration = cand.duration || 'Full Song';
-                              const streamUrl = cand.playerUrl || cand.previewUrl || cand.streamUrl;
-                              const embedUrl = cand.embedUrl;
-                              const watchUrl = cand.watchUrl;
+                      <View style={{ gap: 8 }}>
+                        {musicResult.allCandidates.slice(1, 6).map((cand: any, cIdx: number) => {
+                          const candAvatar = cand.artistAvatar || cand.channelAvatar || cand.cover;
+                          return (
+                            <TouchableOpacity
+                              key={cIdx}
+                              onPress={() => {
+                                const title = cand.title || cand.trackName;
+                                const artist = cand.artist || cand.artistName;
+                                const cover = cand.cover || (cand.artworkUrl100 ? cand.artworkUrl100.replace('100x100', '600x600') : musicResult.cover);
+                                const duration = cand.duration || 'Full Song';
+                                const streamUrl = cand.playerUrl || cand.previewUrl || cand.streamUrl;
+                                const embedUrl = cand.embedUrl;
+                                const watchUrl = cand.watchUrl;
+                                const channelName = cand.channelName || cand.channel || cand.artist;
+                                const artistAvatar = cand.artistAvatar || cand.channelAvatar || musicResult.artistAvatar;
+                                const isVerified = cand.isVerified ?? false;
+                                const isOfficial = cand.isOfficial ?? false;
 
-                              setMusicResult({
-                                ...musicResult,
-                                title,
-                                artist,
-                                cover,
-                                duration,
-                                streamUrl,
-                                embedUrl: embedUrl || musicResult.embedUrl,
-                                watchUrl: watchUrl || musicResult.watchUrl,
-                              });
-                              if (musicAudioRef.current) {
-                                musicAudioRef.current.pause();
-                                musicAudioRef.current = null;
-                                setMusicPlaying(false);
-                              }
-                              triggerToast(`Đã chọn bản Full: ${title}`, 'Đổi Bài Hát', 'info');
-                            }}
-                            style={{
-                              flexDirection: 'row',
-                              alignItems: 'center',
-                              padding: 8,
-                              borderRadius: 10,
-                              backgroundColor: isLight ? '#F2F2F7' : 'rgba(255,255,255,0.04)',
-                              gap: 10,
-                            }}
-                          >
-                            <Ionicons name="musical-note" size={14} color="#1DB954" />
-                            <View style={{ flex: 1 }}>
-                              <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: '700', color: isLight ? '#000' : '#FFF' }}>
-                                {cand.title || cand.trackName}
-                              </Text>
-                              <Text numberOfLines={1} style={{ fontSize: 10.5, color: '#8E8E93' }}>
-                                {cand.artist || cand.artistName} {cand.duration ? `• ⏱ ${cand.duration}` : ''}
-                              </Text>
-                            </View>
-                            <Ionicons name="play-circle" size={18} color="#1DB954" />
-                          </TouchableOpacity>
-                        ))}
+                                setMusicResult({
+                                  ...musicResult,
+                                  title,
+                                  artist,
+                                  cover,
+                                  duration,
+                                  streamUrl,
+                                  embedUrl: embedUrl || musicResult.embedUrl,
+                                  watchUrl: watchUrl || musicResult.watchUrl,
+                                  channelName,
+                                  artistAvatar,
+                                  isVerified,
+                                  isOfficial,
+                                });
+                                if (musicAudioRef.current) {
+                                  musicAudioRef.current.pause();
+                                  musicAudioRef.current = null;
+                                  setMusicPlaying(false);
+                                }
+                                triggerToast(`Đã chọn: ${title}`, 'Đổi Bản Thu', 'info');
+                              }}
+                              style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                padding: 8,
+                                borderRadius: 12,
+                                backgroundColor: isLight ? '#F2F2F7' : 'rgba(255,255,255,0.04)',
+                                gap: 10,
+                              }}
+                            >
+                              {candAvatar ? (
+                                <Image
+                                  source={{ uri: candAvatar }}
+                                  style={{ width: 34, height: 34, borderRadius: cand.artistAvatar ? 17 : 8, backgroundColor: '#333' }}
+                                />
+                              ) : (
+                                <Ionicons name="musical-note" size={16} color="#1DB954" />
+                              )}
+                              <View style={{ flex: 1 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                  <Text numberOfLines={1} style={{ flex: 1, fontSize: 12, fontWeight: '700', color: isLight ? '#000' : '#FFF' }}>
+                                    {cand.title || cand.trackName}
+                                  </Text>
+                                  {cand.isVerified && (
+                                    <Ionicons name="checkmark-circle" size={12} color="#1DB954" />
+                                  )}
+                                </View>
+                                <Text numberOfLines={1} style={{ fontSize: 10.5, color: '#8E8E93' }}>
+                                  {cand.channelName || cand.artist || cand.artistName} {cand.duration ? `• ⏱ ${cand.duration}` : ''}
+                                </Text>
+                              </View>
+                              <Ionicons name="play-circle" size={20} color="#1DB954" />
+                            </TouchableOpacity>
+                          );
+                        })}
                       </View>
                     </View>
                   )}
