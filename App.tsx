@@ -7142,18 +7142,56 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
                 }
                 Alert.alert('Đã Sao Chép', 'Đã copy thông tin lỗi vào khay nhớ tạm để gửi lập trình viên!');
               }}
-              style={{ flex: 1, backgroundColor: '#2C2C2E', paddingVertical: 14, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }}
+              style={{ flex: 1, flexDirection: 'row', gap: 8, backgroundColor: '#2C2C2E', paddingVertical: 14, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }}
             >
-              <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '700' }}>📋 Copy Mã Lỗi</Text>
+              <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                <SvgPath
+                  d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"
+                  stroke="#FFFFFF"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <SvgPath
+                  d="M15 2H9a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1z"
+                  stroke="#FFFFFF"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <SvgPath
+                  d="M9 12h6M9 16h4"
+                  stroke="#FFFFFF"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                />
+              </Svg>
+              <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '700' }}>Copy Mã Lỗi</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => {
                 globalStartupError = null;
                 this.handleReload();
               }}
-              style={{ flex: 1, backgroundColor: '#0A84FF', paddingVertical: 14, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }}
+              style={{ flex: 1, flexDirection: 'row', gap: 8, backgroundColor: '#0A84FF', paddingVertical: 14, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }}
             >
-              <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '700' }}>🔄 Thử Lại</Text>
+              <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                <SvgPath
+                  d="M23 4v6h-6M1 20v-6h6"
+                  stroke="#FFFFFF"
+                  strokeWidth={2.2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <SvgPath
+                  d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"
+                  stroke="#FFFFFF"
+                  strokeWidth={2.2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </Svg>
+              <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '700' }}>Thử Lại</Text>
             </TouchableOpacity>
           </View>
         </SafeAreaView>
