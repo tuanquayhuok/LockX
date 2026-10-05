@@ -68,6 +68,9 @@ function answerCallback($callbackId, $text = null) {
 function getMainMenuButtons() {
     return [
         [
+            ['text' => '📥 Tải IPA LockX Mới Nhất', 'callback_data' => 'btn_ipa']
+        ],
+        [
             ['text' => '🔑 Quên Mật Khẩu (OTP)', 'callback_data' => 'btn_otp'],
             ['text' => '🛡️ Duyệt Tích Xanh', 'callback_data' => 'btn_verify']
         ],
@@ -109,8 +112,31 @@ if (isset($update['callback_query'])) {
 
     answerCallback($cbId);
 
+    // 1.0. Bấm Tải IPA LockX Mới Nhất
+    if ($action === 'btn_ipa') {
+        $msg = "📥 <b>TẢI XUỐNG BẢN CÀI ĐẶT LOCKX VAULT (IPA)</b>\n";
+        $msg .= "━━━━━━━━━━━━━━━━━━━━\n";
+        $msg .= "🚀 <b>Phiên bản:</b> LockX v2.4.8 (Production Build)\n";
+        $msg .= "📱 <b>Hệ điều hành hỗ trợ:</b> iOS 15.0 - 18.x (iPhone / iPad)\n";
+        $msg .= "⚡ <b>Chứng chỉ:</b> Enterprise / Sideload (TrollStore, AltStore, Scarlet, ESign)\n\n";
+        $msg .= "🔗 <b>Link tải trực tiếp IPA:</b>\n";
+        $msg .= "👉 <a href=\"https://quangtrongtuan.id.vn/download/LockX.ipa\">https://quangtrongtuan.id.vn/download/LockX.ipa</a>\n\n";
+        $msg .= "💡 <i>Mẹo: Bạn có thể cài trực tiếp qua TrollStore hoặc dùng ESign / Scarlet để ký chứng chỉ cài vào máy.</i>\n";
+        $msg .= "━━━━━━━━━━━━━━━━━━━━";
+
+        $buttons = [
+            [
+                ['text' => '⚡ Tải File LockX.ipa Ngay', 'url' => 'https://quangtrongtuan.id.vn/download/LockX.ipa']
+            ],
+            [
+                ['text' => '🔙 Menu Chính', 'callback_data' => 'btn_main']
+            ]
+        ];
+        sendTelegramWithButtons($chatId, $msg, $buttons);
+    }
+
     // 1.1. Bấm Quên Mật Khẩu (OTP)
-    if ($action === 'btn_otp') {
+    elseif ($action === 'btn_otp') {
         $msg = "🔑 <b>QUÊN MẬT KHẨU - YÊU CẦU MÃ OTP</b>\n";
         $msg .= "━━━━━━━━━━━━━━━━━━━━\n";
         $msg .= "Vui lòng nhập tên tài khoản (username) của bạn để nhận mã OTP xác thực:\n\n";
@@ -406,7 +432,30 @@ elseif (strpos($text, '/otp') === 0) {
     }
 }
 
-// 2.3. Lệnh /chatid
+// 2.3. Lệnh /ipa hoặc /download
+elseif (strpos($text, '/ipa') === 0 || strpos($text, '/download') === 0) {
+    $msg = "📥 <b>TẢI XUỐNG BẢN CÀI ĐẶT LOCKX VAULT (IPA)</b>\n";
+    $msg .= "━━━━━━━━━━━━━━━━━━━━\n";
+    $msg .= "🚀 <b>Phiên bản:</b> LockX v2.4.8 (Production Build)\n";
+    $msg .= "📱 <b>Hệ điều hành hỗ trợ:</b> iOS 15.0 - 18.x (iPhone / iPad)\n";
+    $msg .= "⚡ <b>Chứng chỉ:</b> Enterprise / Sideload (TrollStore, AltStore, Scarlet, ESign)\n\n";
+    $msg .= "🔗 <b>Link tải trực tiếp IPA:</b>\n";
+    $msg .= "👉 <a href=\"https://quangtrongtuan.id.vn/download/LockX.ipa\">https://quangtrongtuan.id.vn/download/LockX.ipa</a>\n\n";
+    $msg .= "💡 <i>Mẹo: Bạn có thể cài trực tiếp qua TrollStore hoặc dùng ESign / Scarlet để ký chứng chỉ cài vào máy.</i>\n";
+    $msg .= "━━━━━━━━━━━━━━━━━━━━";
+
+    $buttons = [
+        [
+            ['text' => '⚡ Tải File LockX.ipa Ngay', 'url' => 'https://quangtrongtuan.id.vn/download/LockX.ipa']
+        ],
+        [
+            ['text' => '🔙 Menu Chính', 'callback_data' => 'btn_main']
+        ]
+    ];
+    sendTelegramWithButtons($chatId, $msg, $buttons);
+}
+
+// 2.4. Lệnh /chatid
 elseif (strpos($text, '/chatid') === 0) {
     $msg = "🆔 <b>Chat ID của bạn:</b> <code>{$chatId}</code>";
     sendTelegramWithButtons($chatId, $msg, getMainMenuButtons());

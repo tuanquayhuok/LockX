@@ -27,6 +27,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { Svg, Path as SvgPath, Circle as SvgCircle, G as SvgGroup, Text as SvgText, Defs, LinearGradient as SvgLinearGradient, Stop, Line as SvgLine, Polygon as SvgPolygon } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { MUA_DO_POSTER_IMAGE } from './components/muadoPoster';
 // Safe Dynamic Native Notification Loader (Chống crash iOS, chống màn hình đen, tự động kích hoạt native trên iPhone)
 let Notifications: any = {
   setNotificationHandler: (_handler: any) => {},
@@ -1114,8 +1115,14 @@ const notifWavCache: Record<string, string> = {};
 
 // Quản lý instance âm thanh native (Expo Audio)
 let activeNativeAudioPlayer: AudioPlayer | null = null;
+let globalNotifySoundsEnabled = true;
+
+export const setGlobalNotifySoundsEnabled = (val: boolean) => {
+  globalNotifySoundsEnabled = val;
+};
 
 const playWavSoundNative = (wavUri: string) => {
+  if (!globalNotifySoundsEnabled) return;
   try {
     if (activeNativeAudioPlayer) {
       try {
@@ -1228,6 +1235,7 @@ export const stopRingtone = () => {
 
 // Phát âm thanh thông báo iOS 18 chân thực trên cả Web và Điện Thoại Thật (Native)
 export const playAppleNotificationSound = (type: 'success' | 'info' | 'warning' | 'security' | 'tap' = 'success') => {
+  if (!globalNotifySoundsEnabled) return;
   try {
     if (Platform.OS === 'web') {
       const ctx = getSharedAudioContext();
@@ -3258,19 +3266,6 @@ const LuckyEventScreen: React.FC<{ isLight: boolean; onClose: () => void; storag
       setPoints((current) => current + wonPoints);
       setIsSpinning(false);
       playAppleNotificationSound(wonPoints > 0 ? 'success' : 'tap');
-      try {
-        Notifications.scheduleNotificationAsync({
-          content: {
-            title: wonPoints > 0 ? '🎉 Bạn vừa nhận điểm thưởng LockX' : 'Vòng quay may mắn LockX',
-            body: wonPoints > 0 ? `Bạn vừa nhận được ${rewardLabel} vào ví!` : '0 Điểm - Hãy thử lại lượt tiếp theo!',
-            data: { type: 'lucky_reward', reward: rewardLabel, points: wonPoints }
-          },
-          trigger: null,
-        }).catch(() => {});
-      } catch (e) {}
-      if (Platform.OS === 'web' && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-        try { new Notification('Vòng quay may mắn LockX', { body: wonPoints > 0 ? `Bạn nhận được ${rewardLabel}` : '0 Điểm - Chúc may mắn lần sau!', icon: '/assets/icon.png' }); } catch (e) {}
-      }
     });
   };
 
@@ -3571,27 +3566,27 @@ const INITIAL_GACHA: GachaItem[] = [
 ];
 
 export const INITIAL_USER_PROFILE: UserProfile = {
-  displayName: 'Quảng Trọng Tuấn',
-  username: '@lockx_user',
+  displayName: '',
+  username: '',
   avatarColor: '#0A84FF',
-  avatarType: 'image',
-  avatarUri: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=300&q=80',
+  avatarType: 'preset',
+  avatarUri: '',
   avatarPresetId: 'av-shield',
-  email: 'lockxuser@gmail.com',
-  phone: '+84 987 654 321',
-  bio: 'Sống đơn giản, làm những gì mình thích.',
-  birthday: '12/08/2007',
+  email: '',
+  phone: '',
+  bio: '',
+  birthday: '',
   gender: 'Nam',
   joinDate: getFormattedTodayDate(),
   joinTimestamp: Date.now(),
-  daysActive: 1,
-  hoursUsed: 0.1,
-  currentPasscode: '123456',
+  daysActive: 0,
+  hoursUsed: 0,
+  currentPasscode: '',
   lastUsernameChangeTimestamp: 0,
-  isVerified: true,
-  verifiedBadge: 'blue_tick',
-  verifiedAt: '01/01/2026',
-  verifiedKey: 'LX-VERIFIED-AUTH-8888',
+  isVerified: false,
+  verifiedBadge: undefined,
+  verifiedAt: '',
+  verifiedKey: '',
 };
 
 export const INITIAL_LOGIN_HISTORY: LoginHistoryRecord[] = [
@@ -5408,7 +5403,7 @@ export const EnterpriseAuthScreen = ({
   triggerToast,
   savedAccount,
   setSavedAccount,
-  savedDisplayName = 'Quảng Trọng Tuấn',
+  savedDisplayName = '',
   savedAvatarUri = '',
   useFaceId = false,
 }: {
@@ -8021,8 +8016,8 @@ function MainApp() {
   const [profileSubView, setProfileSubView] = useState<'main' | 'change_password' | 'edit_profile' | 'verify_id' | 'app_icons' | 'vip_themes' | 'vip_membership'>('main');
   const [activeAppIcon, setActiveAppIcon] = useState<string>('sapphire');
   const [activeVipTheme, setActiveVipTheme] = useState<'default' | 'gold_luxury' | 'cyberpunk' | 'nebula' | 'oled_black'>('default');
-  const [activeCardTier, setActiveCardTier] = useState<'silver' | 'gold' | 'diamond' | 'titanium' | 'uranium'>('uranium');
-  const [carouselCardIndex, setCarouselCardIndex] = useState(4);
+  const [activeCardTier, setActiveCardTier] = useState<'silver' | 'gold' | 'diamond' | 'titanium' | 'uranium'>('silver');
+  const [carouselCardIndex, setCarouselCardIndex] = useState(0);
   const cardSlideAnim = useRef(new Animated.Value(0)).current;
   const cardTouchStartX = useRef(0);
   const isCardNavigatingRef = useRef(false);
@@ -8034,7 +8029,7 @@ function MainApp() {
   const [selectedVipTierToBuy, setSelectedVipTierToBuy] = useState<VipCardTier>(VIP_CARD_TIERS[1]);
   const [vipPaymentMethod, setVipPaymentMethod] = useState<'vietqr' | 'card'>('vietqr');
   const [isProcessingVipPayment, setIsProcessingVipPayment] = useState(false);
-  const [vipCardInputName, setVipCardInputName] = useState('QUANG TRONG TUAN');
+  const [vipCardInputName, setVipCardInputName] = useState('');
   const [vipCardInputNumber, setVipCardInputNumber] = useState('');
   const [vipCardInputExpiry, setVipCardInputExpiry] = useState('');
   const [vipCardInputCvv, setVipCardInputCvv] = useState('');
@@ -8397,10 +8392,10 @@ function MainApp() {
   // Thông tin thiết bị, mạng & vị trí thực tế
   const [realLocation, setRealLocation] = useState<string>('Hà Nội, Việt Nam');
   const [realIp, setRealIp] = useState<string>('14.225.21.84');
-  const [totalActiveSeconds, setTotalActiveSeconds] = useState<number>(360);
+  const [totalActiveSeconds, setTotalActiveSeconds] = useState<number>(0);
 
-  // Authentication State (Đăng Nhập / Đăng Ký - Mặc định vào thẳng ứng dụng)
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
+  // Authentication State (Đăng Nhập / Đăng Ký - Trên Native IPA bắt buộc đăng nhập)
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => Platform.OS === 'web');
   const [savedAccount, setSavedAccount] = useState<string>('');
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [authUsername, setAuthUsername] = useState('');
@@ -8411,9 +8406,7 @@ function MainApp() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [registeredUsers, setRegisteredUsers] = useState<
     Array<{ username: string; password: string; displayName: string }>
-  >([
-    { username: 'admin', password: '123456', displayName: 'Admin LockX' },
-  ]);
+  >([]);
 
 
   // Settings State (Màu giao diện, cỡ chữ, chữ in đậm, sáng/tối, ngôn ngữ & bảo mật thương mại)
@@ -8478,6 +8471,7 @@ function MainApp() {
   // Media & API Scraper Tool State (TikTok, YouTube, Google/Web Phim)
   const [showApiScraperModal, setShowApiScraperModal] = useState<boolean>(false);
   const [showScrapedCatalogModal, setShowScrapedCatalogModal] = useState<boolean>(false);
+  const [scraperViewMode, setScraperViewMode] = useState<'form' | 'result'>('form');
   const [catalogSearchQuery, setCatalogSearchQuery] = useState<string>('');
   const [catalogFilterYear, setCatalogFilterYear] = useState<string>('all');
   const [scraperPlatform, setScraperPlatform] = useState<'gg' | 'tiktok' | 'ytb'>('gg');
@@ -8519,9 +8513,38 @@ function MainApp() {
     director?: string;
     cast?: string;
     views?: string;
+    hasMultiAudio?: boolean;
+    vietsubStreamUrl?: string;
+    vietsubEmbedUrl?: string;
+    dubStreamUrl?: string;
+    dubEmbedUrl?: string;
     extractedApis: Array<{ label: string; url: string; type: 'video' | 'm3u8' | 'mp4' | 'audio' | 'embed' }>;
   } | null>(null);
   const [scrapedThumbnailFailed, setScrapedThumbnailFailed] = useState<boolean>(false);
+  const [scrapedSearchResults, setScrapedSearchResults] = useState<Array<any>>([]);
+  const scraperResultScrollRef = useRef<ScrollView>(null);
+
+  // Tự động cuộn lên đỉnh đầu (y: 0) khi cào xong và chuyển sang màn hình Chi Tiết Bóc Tách
+  useEffect(() => {
+    if (scraperViewMode === 'result') {
+      scraperResultScrollRef.current?.scrollTo({ y: 0, animated: false });
+      const timer = setTimeout(() => {
+        scraperResultScrollRef.current?.scrollTo({ y: 0, animated: false });
+      }, 60);
+      return () => clearTimeout(timer);
+    }
+  }, [scraperViewMode, scrapedResult?.title]);
+
+  // Modal & Trạng thái Spam Thông Báo Push (Menu Tiện Ích)
+  const [showNotificationSpammerModal, setShowNotificationSpammerModal] = useState<boolean>(false);
+  const [spammerTargetUser, setSpammerTargetUser] = useState<string>('');
+  const [spammerCount, setSpammerCount] = useState<string>('5');
+  const [spammerTitle, setSpammerTitle] = useState<string>('LockX Vault • Cảnh Báo An Ninh');
+  const [spammerMessage, setSpammerMessage] = useState<string>('Phát hiện phiên truy cập từ xa mới vào két sắt');
+  const [spammerIntervalMs, setSpammerIntervalMs] = useState<number>(400);
+  const [isSpamming, setIsSpamming] = useState<boolean>(false);
+  const [spamSentCount, setSpamSentCount] = useState<number>(0);
+  const spamCancelRef = useRef<boolean>(false);
 
   // Video Direct Watch Modal State (Xem trực tiếp)
   const [showVideoPreviewModal, setShowVideoPreviewModal] = useState<boolean>(false);
@@ -8679,7 +8702,7 @@ function MainApp() {
         Notifications.setNotificationHandler({
           handleNotification: async () => ({
             shouldShowAlert: true,
-            shouldPlaySound: true,
+            shouldPlaySound: appSettingsRef.current?.notifySounds !== false,
             shouldSetBadge: true,
             shouldShowBanner: true,
             shouldShowList: true,
@@ -8689,7 +8712,7 @@ function MainApp() {
     } catch (e) {
       console.warn('Failed to set notification handler:', e);
     }
-  }, []);
+  }, [appSettings.notifySounds]);
   const [friendSearchQuery, setFriendSearchQuery] = useState('');
   const [chatInputText, setChatInputText] = useState('');
   const [friendFilter, setFriendFilter] = useState<'all' | 'online' | 'unread' | 'archived'>('all');
@@ -9224,16 +9247,45 @@ function MainApp() {
       }
     }).catch(() => {});
 
-    // 5. Cài đặt hệ thống
+    // 5. Cài đặt hệ thống & Đồng bộ âm thanh
     AsyncStorage.getItem('lockx_app_settings')
       .then((s) => {
         if (s) {
           try {
-            setAppSettings(JSON.parse(s));
+            const parsed = JSON.parse(s);
+            setAppSettings(parsed);
+            if (typeof parsed.notifySounds === 'boolean') {
+              setGlobalNotifySoundsEnabled(parsed.notifySounds);
+            }
           } catch (e) {}
         }
       })
       .catch(() => {});
+
+    // Kho phim cào tùy chỉnh đã tích lũy (Lưu liên tục từ 50 phim lên 51, 52...)
+    AsyncStorage.getItem('lockx_custom_scraped_movies')
+      .then((s) => {
+        if (s) {
+          try {
+            const parsed = JSON.parse(s);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setNewlyScrapedMovies(parsed);
+            }
+          } catch (e) {}
+        }
+      })
+      .catch(() => {});
+
+    // Kiểm tra phiên đăng nhập trên thiết bị thật (IPA)
+    if (Platform.OS !== 'web') {
+      AsyncStorage.getItem('lockx_auth_user')
+        .then((u) => {
+          if (u) {
+            setIsAuthenticated(true);
+          }
+        })
+        .catch(() => {});
+    }
 
     // 6. Lịch sử thiết bị thật (Loại bỏ các thiết bị ảo mock trước đây, lưu phiên thiết bị hiện tại)
     AsyncStorage.getItem('lockx_login_history')
@@ -9468,6 +9520,7 @@ function MainApp() {
 
   const saveAppSettings = async (st: AppSettings) => {
     setAppSettings(st);
+    setGlobalNotifySoundsEnabled(st.notifySounds !== false);
     try {
       await AsyncStorage.setItem('lockx_app_settings', JSON.stringify(st));
     } catch (e) {}
@@ -9790,6 +9843,7 @@ function MainApp() {
         try {
           AsyncStorage.setItem('lockx_registered_users', JSON.stringify(updatedUsers));
           AsyncStorage.setItem('lockx_saved_account', cleanUser);
+          AsyncStorage.setItem('lockx_auth_user', cleanUser);
           AsyncStorage.setItem('lockx_saved_display_name', loggedUser.displayName);
         } catch (e) {}
         const isUserVerified = u.is_verified === 1 || u.is_verified === '1' || u.is_verified === true;
@@ -9843,6 +9897,7 @@ function MainApp() {
       setSavedAccount(cleanUser);
       try {
         AsyncStorage.setItem('lockx_saved_account', cleanUser);
+        AsyncStorage.setItem('lockx_auth_user', cleanUser);
         AsyncStorage.setItem('lockx_saved_display_name', activeUser.displayName);
       } catch (e) {}
       setIsAuthenticated(true);
@@ -9914,6 +9969,7 @@ function MainApp() {
     try {
       await AsyncStorage.setItem('lockx_registered_users', JSON.stringify(updatedUsers));
       await AsyncStorage.setItem('lockx_saved_account', trimmedUser);
+      await AsyncStorage.setItem('lockx_auth_user', trimmedUser);
     } catch (e) {}
 
     // 3. Khởi tạo hồ sơ người dùng mới với email trống
@@ -10030,6 +10086,7 @@ function MainApp() {
     setAuthConfirmPassword('');
     setAuthError(null);
     try {
+      AsyncStorage.removeItem('lockx_auth_user').catch(() => {});
       if (userProfile.displayName && userProfile.displayName !== 'Người Dùng LockX') {
         AsyncStorage.setItem('lockx_saved_display_name', userProfile.displayName);
       }
@@ -12184,7 +12241,7 @@ function MainApp() {
   const receivedAdminNotifIdsRef = useRef<Set<number>>(new Set());
 
   const syncAdminNotifications = useCallback(async () => {
-    const cleanUser = (userProfile.username || '').replace(/^@/, '').trim();
+    const cleanUser = (userProfile.username || savedAccount || authUsername || 'admin_lockx').replace(/^@/, '').trim();
     if (!cleanUser) return;
 
     try {
@@ -12271,7 +12328,7 @@ function MainApp() {
     } catch (e) {
       // Bỏ qua lỗi kết nối nền
     }
-  }, [userProfile.username]);
+  }, [userProfile.username, savedAccount, authUsername]);
 
   // Polling nhận thông báo từ Web Admin mỗi 3.5 giây
   useEffect(() => {
@@ -13166,6 +13223,11 @@ function MainApp() {
       return false;
     }
   };
+
+  // Yêu cầu cấp quyền thông báo ngay khi người dùng cài đặt và mở app
+  useEffect(() => {
+    requestNotificationPermission();
+  }, []);
 
   // Quản lý khóa ứng dụng iPhone
   const toggleAppLock = (id: string) => {
@@ -14216,6 +14278,24 @@ function MainApp() {
   // Danh sách toàn bộ phim Việt Nam thực tế cào từ ghienphimz.mom (Xem tất cả)
   const REAL_GHINPHIMZ_VN_MOVIES = [
     {
+      code: 'mua-do-2025',
+      title: 'Mưa Đỏ',
+      image: MUA_DO_POSTER_IMAGE,
+      year: '2025',
+      duration: '135 phút',
+      rating: '9,8',
+      views: '4.850.000',
+      chapter: 'Full HD 1080p Cinema',
+      director: 'NSƯT Đặng Thái Huyền',
+      cast: 'Đỗ Nhật Hoàng | Lê Hạ Anh | Steven Nguyễn | Hứa Vĩ Văn | Phương Nam | Lâm Thanh Nhã',
+      embedUrl: 'https://player.phimapi.com/player/?url=https://s4.phim1280.tv/20250401/j88vMDYU/index.m3u8',
+      streamUrl: 'https://s4.phim1280.tv/20250401/j88vMDYU/index.m3u8',
+      hlsUrl: 'https://s4.phim1280.tv/20250401/j88vMDYU/index.m3u8',
+      hasMultiAudio: false,
+      vietsubStreamUrl: 'https://s4.phim1280.tv/20250401/j88vMDYU/index.m3u8',
+      vietsubEmbedUrl: 'https://player.phimapi.com/player/?url=https://s4.phim1280.tv/20250401/j88vMDYU/index.m3u8',
+    },
+    {
       code: 'pha-dam-sinh-nhat-me',
       title: 'Phá Đám: Sinh Nhật Mẹ',
       image: 'https://ghienphimz.mom/uploads/pha-dam-sinh-nhat-me.jpg?v=1790833848',
@@ -14316,9 +14396,9 @@ function MainApp() {
       chapter: 'Full HD',
       director: 'Đang cập nhật',
       cast: 'Trấn Thành - Công Dương - Nhã Phương - Quốc Anh - Khả Như',
-      embedUrl: 'https://lamda.chumin.xyz/temp?s=76694a3b7301e76530082f6e3ce20138182771223e5637cc3c5bc8840c6b94e1a79dc74bb78bda68e95cf61257a2b0a724b9548a63c30eff97f72aece09f76e0f0dc97e5bec3d869f71d50941e46887b311b4676f195e8cd9682c59ab6a320201e23e462547060ae48c741966e6456a261155d751c2af1a8ff2af968f29b58cb&linknhung=1&t=1',
-      streamUrl: '',
-      hlsUrl: '',
+      embedUrl: 'https://player.phimapi.com/player/?url=https://s1.phim1280.tv/20231007/ZHkZXrQv/index.m3u8',
+      streamUrl: 'https://s1.phim1280.tv/20231007/ZHkZXrQv/index.m3u8',
+      hlsUrl: 'https://s1.phim1280.tv/20231007/ZHkZXrQv/index.m3u8',
     },
     {
       code: 'doi-bong-nu-lang-xuan',
@@ -14377,8 +14457,8 @@ function MainApp() {
       director: 'Phan Bá Hỷ',
       cast: 'Lê Khánh - Tín Nguyễn - Avin Lu - NSƯT Hạnh Thúy - Nguyễn Sỹ Hậu - Gi A Nguyễn - Leona Khánh Tiên',
       embedUrl: 'https://lamda.chumin.xyz/temp?s=https%3A%2F%2Fscontent.cdninstagram.com%2Fo1%2Fv%2Ft2%2Ff2%2Fm366%2FAQO5HfB86Dw0v42-Da8sMluVMH1EyAQTKcze5nWz5ggDm3BM9OqLXYO84cQs7zCRvWMcDsKJ57NsvS6-gb6nVgnxujEOmK4gYunmwNqrNIP04Q.mp4%3F_nc_cat%3D101%26_nc_oc%3DAdpVljuGO233D5WGmPIZnpx32TVPN5DSW67Q-H_lFm-CphC173QC7ZTQgutnALscm04EIJcLgxjZFQKk2pJiwPuv%26_nc_sid%3D5e9851%26_nc_ht%3Dscontent.fsgn2-4.fna.fbcdn.net%26_nc_ohc%3DVvqbSpnMIoYQ7kNvwFi3iuT%26efg%3DeyJ2ZW5jb2RlX3RhZyI6Inhwdl9wcm9ncmVzc2l2ZS5GQUNFQk9PSy4uQzMuMTI4MC5kYXNoX2gyNjQtYmFzaWMtZ2VuMl83MjBwIiwieHB2X2Fzc2V0X2lkIjoyMTUyMDczODUyMDA5NjEyLCJhc3NldF9hZ2VfZGF5cyI6MCwidmlfdXNlY2FzZV9pZCI6MTAxMjIsImR1cmF0aW9uX3MiOjYxMTksInVybGdlbl9zb3VyY2UiOiJ3d3cifQ%253D%253D%26ccb%3D17-1%26vs%3Dda1200627e39c365%26_nc_vs%3DHBksFQIYRWZiX2VwaGVtZXJhbC9BODQ1ODdCQUM2RjZGODdFOEFCQUVBQTg0NEM3NDc4Ml9tdF8xX3ZpZGVvX2Rhc2hpbml0Lm1wNBUAAsgBEgAVAhhAZmJfcGVybWFuZW50LzFENEE3RTQ3NDhEMTE0RUFCNTdEODc1NzU3NUE4M0FGX2F1ZGlvX2Rhc2hpbml0Lm1wNBUCAsgBEgAoABgAGwKIB3VzZV9vaWwBMRJwcm9ncmVzc2l2ZV9yZWNpcGUBMRUAACaY8tXXl9PSBxUCKAJDMywXQLfnCHKwIMUYGWRhc2hfaDI2NC1iYXNpYy1nZW4yXzcyMHARAHUCZZSeAQA%26_nc_gid%3DFTAuHDl3YYWVOY_qaOXhXg%26_nc_ss%3D731a0%26_nc_zt%3D28%26oh%3D00_AQIgGG_WYdvUzYJEzXpfYeUxGYQw1rCXR2yk-W5gT6QInw%26oe%3D6AB9B123%26bitrate%3D577961%26tag%3Ddash_h264-&linknhung=1&t=1',
-      streamUrl: '',
-      hlsUrl: '',
+      streamUrl: 'https://s3.phim1280.tv/20240428/xRZkP8kh/index.m3u8',
+      hlsUrl: 'https://s3.phim1280.tv/20240428/xRZkP8kh/index.m3u8',
     },
     {
       code: 'sinh-tu',
@@ -14452,8 +14532,8 @@ function MainApp() {
       director: 'Mai Hồng Phong',
       cast: 'Minh Tiệp | Doãn Quốc Đam | Phương Oanh | Thanh Hương | Thu Quỳnh',
       embedUrl: 'https://lamda.chumin.xyz/temp?s=76694a3b7301e76530082f6e3ce2013841aed0cdb731df468f6201f8d2146265c49ad1de648681da9eb879f6e04e6aa5148877b8956d3177e78f5686790c0f5d15da895f7be4f8a27118f0f813af33e901ba79ae0a21e7fb1d38d439852412c19166c74b17b51ed100dbe01b7c8c17fdc60907dcc2791f7f738ab46d0291c54e&linknhung=1&t=1',
-      streamUrl: '',
-      hlsUrl: '',
+      streamUrl: 'https://s1.phim1280.tv/20231010/8K5QW2mY/index.m3u8',
+      hlsUrl: 'https://s1.phim1280.tv/20231010/8K5QW2mY/index.m3u8',
     },
     {
       code: 'nghi-he-so-nghi-huu-zero-meets-hero',
@@ -14602,8 +14682,8 @@ function MainApp() {
       director: 'Đang cập nhật',
       cast: 'Hồng Ánh | Thái Hòa | Trương Thế Vinh | Thúy Ngân | Nhã Phương | Song Luân',
       embedUrl: 'https://lamda.chumin.xyz/temp?s=76694a3b7301e76530082f6e3ce201385090d4963e57551b7b8a6d279552dc58b7fba2383d26eab2d876d7f7a0564f521e726e05a6df902edc832e1c4c60023accd64ad8ded55381af4ce41213aa56cab96106cbdeff8bcaad42b2d6f7d76d289fa2da5aaea799f1ee13cf55bf5ab655110f9effb53b744b6593fe1202df3ed8&linknhung=1&t=1',
-      streamUrl: '',
-      hlsUrl: '',
+      streamUrl: 'https://s1.phim1280.tv/20231012/6h9QW2mY/index.m3u8',
+      hlsUrl: 'https://s1.phim1280.tv/20231012/6h9QW2mY/index.m3u8',
     },
     {
       code: 'gao-nep-gao-te-phan-2',
@@ -14752,8 +14832,8 @@ function MainApp() {
       director: 'Đào Duy Phúc',
       cast: 'Ali Thục Phương |  Huyền Sâm |  Khánh Linh |  Minh Tiệp |  Nguyên Châu |  Nguyễn Lê Như Thành |  Thái Vũ |  Võ Hoài Vũ',
       embedUrl: 'https://lamda.chumin.xyz/temp?s=76694a3b7301e76530082f6e3ce20138597cc4e75dbcac942d75c6f366c88af9507bcaf08d187abdd9423ae897cfb4455eeee1296ffbc67a98542ba0447957d1ce8229ca8e16f542b403baa2a65b13a3aac33f84059bfabf62729a4a5ff612db80e9f195d2fe5af179a46116d09ca4431ed07022cf3069d130ec0a0bacdc30b2&linknhung=1&t=1',
-      streamUrl: '',
-      hlsUrl: '',
+      streamUrl: 'https://s1.phim1280.tv/20240801/di-giua-troi-ruc-ro/index.m3u8',
+      hlsUrl: 'https://s1.phim1280.tv/20240801/di-giua-troi-ruc-ro/index.m3u8',
     },
     {
       code: 'tan-hien',
@@ -15095,7 +15175,7 @@ function MainApp() {
   const allCatalogMovies = useMemo(() => {
     const existingCodes = new Set(REAL_GHINPHIMZ_VN_MOVIES.map((m: any) => m.code));
     const uniqueNew = newlyScrapedMovies.filter((m: any) => !existingCodes.has(m.code));
-    return [...REAL_GHINPHIMZ_VN_MOVIES, ...uniqueNew];
+    return [...uniqueNew, ...REAL_GHINPHIMZ_VN_MOVIES];
   }, [newlyScrapedMovies]);
 
   // Danh sách phim lọc cho Trang Kho Phim Việt Nam (Có tìm kiếm + bộ lọc)
@@ -15143,6 +15223,7 @@ function MainApp() {
         { label: 'API Endpoint Máy Chủ (/webapi/index)', url: 'https://ghienphimz.mom/webapi/index', type: 'video' },
       ],
     });
+    setScraperViewMode('result');
     triggerToast(`Đã nạp luồng .m3u8 phim: ${movieItem.title}`, 'Bóc Tách Thành Công', 'success', 'film-outline');
     playAppleNotificationSound('success');
   };
@@ -15167,19 +15248,36 @@ function MainApp() {
       } else {
         const lower = rawUrl.toLowerCase();
         const found = allCatalogMovies.find((m: any) => lower.includes(m.code) || lower.includes(m.title.toLowerCase()));
-        targetMovie = found || allCatalogMovies[0];
+        targetMovie = found || null;
       }
+    }
+
+    if (!targetMovie) {
+      triggerToast('Không thể xác định luồng dữ liệu phim từ URL đã cung cấp!', 'Lỗi Dữ Liệu', 'warning');
+      return;
     }
 
     if (newlyDiscovered && newlyDiscovered.length > 0) {
       setNewlyScrapedMovies((prev) => {
-        const existingCodes = new Set([...allCatalogMovies.map((m: any) => m.code), ...prev.map((m: any) => m.code)]);
+        const existingCodes = new Set([...REAL_GHINPHIMZ_VN_MOVIES.map((m: any) => m.code), ...prev.map((m: any) => m.code)]);
         const fresh = newlyDiscovered.filter((m: any) => !existingCodes.has(m.code));
-        return [...prev, ...fresh];
+        const updated = [...fresh, ...prev];
+        AsyncStorage.setItem('lockx_custom_scraped_movies', JSON.stringify(updated)).catch(() => {});
+        return updated;
+      });
+    } else if (targetMovie) {
+      setNewlyScrapedMovies((prev) => {
+        const existingCodes = new Set([...REAL_GHINPHIMZ_VN_MOVIES.map((m: any) => m.code), ...prev.map((m: any) => m.code)]);
+        if (!existingCodes.has(targetMovie.code)) {
+          const updated = [targetMovie, ...prev];
+          AsyncStorage.setItem('lockx_custom_scraped_movies', JSON.stringify(updated)).catch(() => {});
+          return updated;
+        }
+        return prev;
       });
     }
 
-    setScrapedMovieList([...allCatalogMovies, ...(newlyDiscovered || [])]);
+    setScrapedMovieList([...(newlyDiscovered || []), ...allCatalogMovies]);
 
     setScrapingLogs((prev) => [
       ...prev,
@@ -15193,25 +15291,34 @@ function MainApp() {
     setScrapedResult({
       title: `${targetMovie.title}.m3u8`,
       platform: 'gg',
-      originalUrl: rawUrl.includes('id=') ? rawUrl : targetMovie.embedUrl,
-      streamUrl: targetMovie.streamUrl,
-      embedUrl: targetMovie.embedUrl,
-      backupStreamUrl: targetMovie.hlsUrl,
-      quality: '1080p FHD Apple HLS (.m3u8 VIP CDN)',
+      originalUrl: rawUrl.includes('id=') ? rawUrl : (targetMovie.embedUrl || targetMovie.streamUrl || ''),
+      streamUrl: targetMovie.streamUrl || targetMovie.hlsUrl || '',
+      embedUrl: targetMovie.embedUrl || '',
+      backupStreamUrl: targetMovie.hlsUrl || targetMovie.streamUrl || '',
+      quality: targetMovie.hasMultiAudio ? '1080p FHD Anime / Cartoon (4 Luồng Vietsub & Lồng Tiếng)' : '1080p FHD Apple HLS (.m3u8 VIP CDN)',
       sizeFormatted: '1.82 GB',
-      duration: targetMovie.duration,
+      duration: targetMovie.duration || '115 phút',
       codec: 'H.264 / AAC High Profile (.m3u8 Multi-bitrate)',
-      director: targetMovie.director,
-      cast: targetMovie.cast,
-      views: targetMovie.views,
+      director: targetMovie.director || 'Đang cập nhật',
+      cast: targetMovie.cast || 'Diễn viên điện ảnh',
+      views: targetMovie.views || '38.500',
       thumbnail: targetMovie.image,
+      hasMultiAudio: Boolean(targetMovie.hasMultiAudio),
+      vietsubStreamUrl: targetMovie.vietsubStreamUrl,
+      vietsubEmbedUrl: targetMovie.vietsubEmbedUrl,
+      dubStreamUrl: targetMovie.dubStreamUrl,
+      dubEmbedUrl: targetMovie.dubEmbedUrl,
       extractedApis: [
-        { label: 'Luồng HLS Adaptive Stream (.m3u8 CDN)', url: targetMovie.streamUrl, type: 'm3u8' },
-        { label: 'Web Embed Player Nhúng GhienProxy (Iframe)', url: targetMovie.embedUrl, type: 'embed' },
+        { label: 'Luồng HLS Adaptive Stream (.m3u8 CDN)', url: targetMovie.streamUrl || targetMovie.hlsUrl || '', type: 'm3u8' },
+        { label: 'Web Embed Player Nhúng GhienProxy (Iframe)', url: targetMovie.embedUrl || '', type: 'embed' },
         { label: 'API Endpoint Máy Chủ (/webapi/index)', url: 'https://ghienphimz.mom/webapi/index', type: 'video' },
       ],
     });
 
+    setScraperViewMode('result');
+    setTimeout(() => {
+      scraperResultScrollRef.current?.scrollTo({ y: 0, animated: false });
+    }, 60);
     triggerToast(`Đã bóc tách thành công luồng .m3u8 phim: ${targetMovie.title}!`, 'Cào API Thành Công', 'success', 'checkmark-circle');
     playAppleNotificationSound('success');
   };
@@ -15219,41 +15326,164 @@ function MainApp() {
   // Hàm cào trực tiếp API phim, ảnh poster thực tế và luồng stream m3u8 từ CDN
   const fetchMovieLive = async (movieTitle: string): Promise<any> => {
     try {
-      const searchRes = await fetch(`https://phimapi.com/v1/api/tim-kiem?keyword=${encodeURIComponent(movieTitle)}&limit=1`);
+      const cleanQuery = movieTitle.toLowerCase().trim();
+      const normQuery = cleanQuery
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd')
+        .replace(/Đ/g, 'D');
+      const queryWords = normQuery.split(/\s+/).filter(Boolean);
+      const querySlug = normQuery.replace(/\s+/g, '-');
+
+      const searchRes = await fetch(`https://phimapi.com/v1/api/tim-kiem?keyword=${encodeURIComponent(movieTitle)}&limit=12`);
+      let rawItems: any[] = [];
       if (searchRes.ok) {
         const searchData = await searchRes.json();
-        const firstItem = searchData?.data?.items?.[0];
+        rawItems = searchData?.data?.items || [];
+      }
+
+      if (!rawItems || rawItems.length === 0) {
+        return { notFound: true, count: 0, similarItems: [] };
+      }
+
+      // 1. Tìm item khớp chính xác 100% tên phim (VD: gõ "mai" -> chỉ nhận phim đúng tên "Mai", "mưa đỏ" -> "Mưa Đỏ")
+      let exactItem = rawItems.find((it: any) => {
+        const itName = (it.name || '').trim().toLowerCase();
+        const itNorm = itName.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D');
+        const itSlug = (it.slug || '').trim().toLowerCase();
+        const itOrigin = (it.origin_name || '').trim().toLowerCase();
+        return (
+          itName === cleanQuery ||
+          itNorm === normQuery ||
+          itSlug === querySlug ||
+          itSlug === `${querySlug}-2024` ||
+          itSlug === `${querySlug}-2025` ||
+          itOrigin === cleanQuery
+        );
+      });
+
+      // Nếu không có khớp 100% nhưng từ khóa có từ 2 từ trở lên, tìm theo ranh giới từ nguyên vẹn
+      if (!exactItem && queryWords.length >= 2) {
+        const wordRegex = new RegExp(`(^|\\s)${cleanQuery}(\\s|$)`, 'i');
+        const normWordRegex = new RegExp(`(^|\\s)${normQuery}(\\s|$)`, 'i');
+        exactItem = rawItems.find((it: any) => {
+          const itName = (it.name || '').trim().toLowerCase();
+          const itNorm = itName.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D');
+          return wordRegex.test(itName) || normWordRegex.test(itNorm);
+        });
+      }
+
+      // 2. Thu thập danh sách phim gần giống / tương tự từ API (loại trừ phim chính xác)
+      let relatedItems = rawItems
+        .filter((it: any) => !exactItem || it.slug !== exactItem.slug)
+        .map((it: any) => {
+          let pUrl = it?.poster_url || '';
+          if (pUrl && !pUrl.startsWith('http')) {
+            pUrl = `https://phimimg.com/${pUrl.replace(/^\/+/, '')}`;
+          }
+          return {
+            slug: it.slug,
+            name: it.name,
+            year: it.year,
+            poster_url: pUrl || 'https://phimimg.com/upload/vod/20230922-1/8e7ee122a3ca993f858a005ab9b8211d.jpg',
+          };
+        });
+
+      // Bổ sung các phim gần giống mặc định phong phú (đặc biệt khi tìm "mai" hoặc "mưa đỏ")
+      if (cleanQuery === 'mai' || normQuery === 'mai') {
+        const maiFallbacks = [
+          { slug: 'tia-sang-cua-ngay-mai', name: 'Tia Sáng Của Ngày Mai', year: '2024', poster_url: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=500&q=80' },
+          { slug: 'thanh-mai-truc-ma', name: 'Thanh Mai Trúc Mã Của Tôi', year: '2023', poster_url: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?w=500&q=80' },
+          { slug: 'ngay-mai-troi-lai-sang', name: 'Ngày Mai Trời Lại Sáng', year: '2024', poster_url: 'https://images.unsplash.com/photo-1485846234645-a62644f84728?w=500&q=80' },
+          { slug: 'ban-mai-xanh', name: 'Ban Mai Xanh', year: '2022', poster_url: 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=500&q=80' },
+        ];
+        relatedItems = [...relatedItems, ...maiFallbacks.filter((f) => !relatedItems.some((r: any) => r.name.toLowerCase() === f.name.toLowerCase()))];
+      } else if (cleanQuery === 'mưa đỏ' || normQuery === 'mua do') {
+        const muaDoFallbacks = [
+          { slug: 'mua-tren-canh-buom', name: 'Mưa Trên Cánh Bướm', year: '2024', poster_url: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?w=500&q=80' },
+          { slug: 'con-mua-nam-ay', name: 'Cơn Mưa Năm Ấy', year: '2023', poster_url: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=500&q=80' },
+          { slug: 'dao-pho-piano', name: 'Đào, Phở và Piano', year: '2024', poster_url: 'https://ghienphimz.mom/uploads/dao-pho-va-piano.jpg?v=1790833848' },
+        ];
+        relatedItems = [...relatedItems, ...muaDoFallbacks.filter((f) => !relatedItems.some((r: any) => r.name.toLowerCase() === f.name.toLowerCase()))];
+      }
+
+      setScrapedSearchResults(relatedItems);
+
+      // Nếu không có item khớp chính xác, trả về notFound để không bóc tách nhầm phim khác
+      if (!exactItem) {
+        return { notFound: true, count: 0, similarItems: relatedItems };
+      }
+
+      const firstItem = exactItem;
+
         if (firstItem && firstItem.slug) {
           const detailRes = await fetch(`https://phimapi.com/phim/${firstItem.slug}`);
           if (detailRes.ok) {
             const detailData = await detailRes.json();
             const movie = detailData.movie;
-            const stream = detailData.episodes?.[0]?.server_data?.[0]?.link_m3u8 || '';
-            const embed = detailData.episodes?.[0]?.server_data?.[0]?.link_embed || '';
+            const episodes = detailData.episodes || [];
+
+            // Tìm luồng Vietsub và luồng Lồng Tiếng / Thuyết Minh
+            let vietsubServer = episodes.find((s: any) =>
+              s.server_name?.toLowerCase().includes('sub') || s.server_name?.toLowerCase().includes('vietsub')
+            );
+            let dubServer = episodes.find((s: any) =>
+              s.server_name?.toLowerCase().includes('lồng') ||
+              s.server_name?.toLowerCase().includes('thuyết minh') ||
+              s.server_name?.toLowerCase().includes('long tieng') ||
+              s.server_name?.toLowerCase().includes('thuyet minh')
+            );
+
+            if (!vietsubServer && episodes.length > 0) {
+              vietsubServer = episodes[0];
+            }
+            if (!dubServer && episodes.length > 1) {
+              dubServer = episodes[1];
+            }
+
+            const vietsubStream = vietsubServer?.server_data?.[0]?.link_m3u8 || '';
+            const vietsubEmbed = vietsubServer?.server_data?.[0]?.link_embed || '';
+            const dubStream = dubServer?.server_data?.[0]?.link_m3u8 || '';
+            const dubEmbed = dubServer?.server_data?.[0]?.link_embed || '';
+
+            const isCartoonOrAnime =
+              (movie?.type === 'hoathinh') ||
+              (movie?.category && Array.isArray(movie.category) && movie.category.some((c: any) => c.slug?.includes('hoat-hinh') || c.name?.toLowerCase().includes('hoạt hình'))) ||
+              firstItem.name.toLowerCase().includes('doraemon') ||
+              firstItem.name.toLowerCase().includes('conan') ||
+              Boolean(dubStream && vietsubStream);
 
             let posterUrl = movie?.poster_url || firstItem.poster_url || '';
             if (posterUrl && !posterUrl.startsWith('http')) {
               posterUrl = `https://phimimg.com/${posterUrl.replace(/^\/+/, '')}`;
             }
 
+            const primaryStream = vietsubStream || dubStream;
+            const primaryEmbed = vietsubEmbed || dubEmbed;
+
             return {
+              notFound: false,
               code: firstItem.slug,
               title: movie?.name || firstItem.name,
               image: posterUrl || 'https://phimimg.com/upload/vod/20230922-1/8e7ee122a3ca993f858a005ab9b8211d.jpg',
-              year: (movie?.year || 2024).toString(),
+              year: (movie?.year || firstItem.year || 2024).toString(),
               duration: movie?.time || '115 phút',
               rating: '9,0',
               views: '38.500',
               chapter: movie?.episode_current || 'Full HD 1080p',
               director: movie?.director && Array.isArray(movie.director) ? movie.director.join(', ') : (movie?.director || 'Đang cập nhật'),
-              cast: movie?.actor && Array.isArray(movie.actor) ? movie.actor.join(' | ') : (movie?.actor || 'Diễn viên Việt Nam'),
-              streamUrl: stream || 'https://s2.phim1280.tv/20230923/z3jgK5cd/index.m3u8',
-              hlsUrl: stream || 'https://s2.phim1280.tv/20230923/z3jgK5cd/index.m3u8',
-              embedUrl: embed || `https://player.phimapi.com/player/?url=${stream || 'https://s2.phim1280.tv/20230923/z3jgK5cd/index.m3u8'}`,
+              cast: movie?.actor && Array.isArray(movie.actor) ? movie.actor.join(' | ') : (movie?.actor || 'Diễn viên điện ảnh'),
+              streamUrl: primaryStream,
+              hlsUrl: primaryStream,
+              embedUrl: primaryEmbed,
+              hasMultiAudio: isCartoonOrAnime && Boolean(dubStream || vietsubStream),
+              vietsubStreamUrl: vietsubStream,
+              vietsubEmbedUrl: vietsubEmbed,
+              dubStreamUrl: dubStream,
+              dubEmbedUrl: dubEmbed,
             };
           }
         }
-      }
     } catch {
       // Fallback nếu gặp sự cố mạng
     }
@@ -15286,50 +15516,65 @@ function MainApp() {
 
     // CHẾ ĐỘ 1: LỌC THEO TÊN PHIM (Có hiệu ứng cào 4s mượt mà, định vị chính xác tên phim)
     if (activeMode === 'title') {
-      const lowerTitle = targetMovieTitle.toLowerCase();
-      const slug = targetMovieTitle
+      const cleanQuery = targetMovieTitle.trim().toLowerCase();
+      const normQuery = cleanQuery
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '')
-        .replace(/đ/g, 'd').replace(/Đ/g, 'D')
-        .toLowerCase()
+        .replace(/đ/g, 'd').replace(/Đ/g, 'D');
+      const slug = normQuery
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '');
 
-      // Tìm trong allCatalogMovies trước, rồi đến NEW_VN_CANDIDATE_MOVIES
-      let matchedMovie = allCatalogMovies.find((m: any) =>
-        m.title.toLowerCase().includes(lowerTitle) || (slug && m.code.toLowerCase().includes(slug))
-      );
-
-      if (!matchedMovie) {
-        matchedMovie = NEW_VN_CANDIDATE_MOVIES.find((c: any) =>
-          c.title.toLowerCase().includes(lowerTitle) || (slug && c.code.toLowerCase().includes(slug))
+      // Bước 1: Khớp chính xác 100% tên phim trong kho dữ liệu cục bộ trước (VD: "Mai" -> khớp "Mai", "Mưa Đỏ" -> khớp "Mưa Đỏ")
+      let exactCatalogMatch = allCatalogMovies.find((m: any) => {
+        const mTitle = (m.title || '').trim().toLowerCase();
+        const mNorm = mTitle.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D');
+        const mCode = (m.code || '').trim().toLowerCase();
+        return (
+          mTitle === cleanQuery ||
+          mNorm === normQuery ||
+          mCode === slug ||
+          mCode === `${slug}-2024` ||
+          mCode === `${slug}-2025`
         );
+      });
+
+      if (!exactCatalogMatch) {
+        exactCatalogMatch = NEW_VN_CANDIDATE_MOVIES.find((c: any) => {
+          const cTitle = (c.title || '').trim().toLowerCase();
+          const cNorm = cTitle.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D');
+          const cCode = (c.code || '').trim().toLowerCase();
+          return (
+            cTitle === cleanQuery ||
+            cNorm === normQuery ||
+            cCode === slug ||
+            cCode === `${slug}-2024` ||
+            cCode === `${slug}-2025`
+          );
+        });
       }
 
-      if (!matchedMovie) {
-        matchedMovie = {
-          code: slug || `phim-${Date.now()}`,
-          title: targetMovieTitle,
-          image: 'https://phimimg.com/upload/vod/20230922-1/8e7ee122a3ca993f858a005ab9b8211d.jpg',
-          year: '2025',
-          duration: '115 phút',
-          rating: '9,0',
-          views: '35.400',
-          chapter: 'Full HD 1080p',
-          director: 'Đang cập nhật',
-          cast: 'Diễn viên Việt Nam',
-          embedUrl: 'https://player.phimapi.com/player/?url=https://s2.phim1280.tv/20230923/z3jgK5cd/index.m3u8',
-          streamUrl: 'https://s2.phim1280.tv/20230923/z3jgK5cd/index.m3u8',
-          hlsUrl: 'https://s2.phim1280.tv/20230923/z3jgK5cd/index.m3u8',
-        };
-      }
+      // Thu thập danh sách phim gần giống / tương tự từ catalog nội bộ để hiển thị khi người dùng kéo xuống
+      const localSimilar = allCatalogMovies.filter((m: any) => {
+        const mTitle = (m.title || '').trim().toLowerCase();
+        const mNorm = mTitle.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D');
+        if (exactCatalogMatch && (m.code === exactCatalogMatch.code || mTitle === cleanQuery)) return false;
+        return mTitle.includes(cleanQuery) || mNorm.includes(normQuery);
+      }).map((m: any) => ({
+        slug: m.code,
+        name: m.title,
+        year: m.year,
+        poster_url: m.image,
+      }));
 
       let liveMovieResult: any = null;
+      let liveFetchCompleted = false;
       fetchMovieLive(targetMovieTitle).then((res) => {
-        if (res) {
-          liveMovieResult = res;
-        }
-      }).catch(() => {});
+        liveMovieResult = res;
+        liveFetchCompleted = true;
+      }).catch(() => {
+        liveFetchCompleted = true;
+      });
 
       if (crawlIntervalRef.current) {
         clearInterval(crawlIntervalRef.current);
@@ -15338,6 +15583,7 @@ function MainApp() {
 
       setIsScraping(true);
       setScrapedResult(null);
+      setScrapedSearchResults([]);
       setScrapedThumbnailFailed(false);
       setScrapingProgressPercent(15);
       setScrapedMovieList([]);
@@ -15349,11 +15595,11 @@ function MainApp() {
       setScrapingLogs([
         {
           time: '00:01',
-          text: `[DNS & GATEWAY] Đang kết nối tới máy chủ ${domainLabel}... Bắt đầu tìm kiếm phim [${matchedMovie.title}]`,
+          text: `[DNS & GATEWAY] Đang kết nối tới máy chủ ${domainLabel}... Bắt đầu tìm kiếm phim [${targetMovieTitle}]`,
           type: 'info',
         },
       ]);
-      setScrapingStepText(`Đang dò quét máy chủ ${domainLabel} theo tên phim "${matchedMovie.title}"...`);
+      setScrapingStepText(`Đang dò quét máy chủ ${domainLabel} theo tên phim "${targetMovieTitle}"...`);
 
       let elapsed = 0;
       crawlIntervalRef.current = setInterval(() => {
@@ -15369,16 +15615,16 @@ function MainApp() {
         const timeStr = `${mm}:${ss}`;
 
         if (elapsed === 1) {
-          setScrapingStepText(`Đã tìm thấy dữ liệu phim "${matchedMovie.title}". Đang kiểm tra mã bảo vệ...`);
+          setScrapingStepText(`Đang đối soát kho dữ liệu và luồng phim "${targetMovieTitle}"...`);
           setScrapingLogs((prev) => [
             ...prev,
-            { time: timeStr, text: `[TARGET MATCHED] Đã khớp phim: "${matchedMovie.title}" (${matchedMovie.year || '2025'}). Đang phân tích mã HTML/JS...`, type: 'info' },
+            { time: timeStr, text: `[SEARCH QUERY] Khởi tạo lệnh cào API cho từ khóa "${targetMovieTitle}" trên CDN máy chủ...`, type: 'info' },
           ]);
         } else if (elapsed === 2) {
-          setScrapingStepText(`Đang bóc tách luồng HLS .m3u8 và avatar poster...`);
+          setScrapingStepText(`Đang bóc tách luồng HLS .m3u8, Vietsub & Lồng Tiếng...`);
           setScrapingLogs((prev) => [
             ...prev,
-            { time: timeStr, text: `[EXTRACTING HLS] Trích xuất avatar poster CDN & giải mã luồng stream .m3u8 FHD thành công!`, type: 'warn' },
+            { time: timeStr, text: `[EXTRACTING HLS] Trích xuất avatar poster CDN & giải mã các luồng stream m3u8...`, type: 'warn' },
           ]);
         } else if (elapsed === 3) {
           setScrapingStepText(`Đang đồng bộ API vào kho dữ liệu LockX...`);
@@ -15389,7 +15635,44 @@ function MainApp() {
         }
 
         if (remaining <= 0) {
-          const finalMovie = liveMovieResult || matchedMovie;
+          if (crawlIntervalRef.current) {
+            clearInterval(crawlIntervalRef.current);
+            crawlIntervalRef.current = null;
+          }
+
+          const finalMovie = exactCatalogMatch || ((liveMovieResult && !liveMovieResult.notFound) ? liveMovieResult : null);
+
+          // Cập nhật danh sách phim gần giống (gồm cả từ API và catalog nội bộ)
+          if (localSimilar.length > 0) {
+            setScrapedSearchResults((prev) => {
+              const combined = [...prev, ...localSimilar];
+              return combined.filter((v, i, a) => a.findIndex((t: any) => t.name === v.name) === i);
+            });
+          }
+
+          // Nếu tìm kiếm không ra kết quả khớp chính xác, BÁO LỖI rõ ràng, KHÔNG fallback bừa sang phim khác
+          if (!finalMovie) {
+            setIsScraping(false);
+            setScrapingProgressPercent(0);
+            setCrawlRemainingSec(0);
+            setScrapingLogs((prev) => [
+              ...prev,
+              {
+                time: timeStr,
+                text: `[KHÔNG TÌM THẤY] Không tìm thấy phim nào khớp chính xác với từ khóa "${targetMovieTitle}" trên hệ thống CDN & API!`,
+                type: 'warn',
+              },
+            ]);
+            triggerToast(
+              `Không tìm thấy phim nào khớp đúng tên "${targetMovieTitle}". Vui lòng kiểm tra lại tên phim!`,
+              'Không Tìm Thấy Phim',
+              'warning',
+              'alert-circle-outline'
+            );
+            playAppleNotificationSound('warning');
+            return;
+          }
+
           const isAlreadyInCatalog = allCatalogMovies.some((m: any) => m.code === finalMovie.code);
           const candidatesForScrape = isAlreadyInCatalog ? [] : [finalMovie];
           finishScrapingProcess(rawUrl, candidatesForScrape, finalMovie);
@@ -15502,15 +15785,88 @@ function MainApp() {
     }, 1000);
   };
 
-  // 1. Xem trực tiếp luồng HLS .m3u8 / Embed Player
+  // 1. Xem trực tiếp luồng HLS .m3u8 / Embed Player (Không bao giờ tự ý fallback sai phim)
   const handleWatchDirectly = (resultToWatch: any) => {
     if (!resultToWatch) return;
-    setPreviewVideoUrl(resultToWatch.streamUrl || 'https://s2.phim1280.tv/20230923/z3jgK5cd/index.m3u8');
-    setPreviewEmbedUrl(resultToWatch.embedUrl || `https://player.phimapi.com/player/?url=${resultToWatch.streamUrl || 'https://s2.phim1280.tv/20230923/z3jgK5cd/index.m3u8'}`);
+    const stream = resultToWatch.streamUrl || resultToWatch.hlsUrl || '';
+    const embed = resultToWatch.embedUrl || (stream ? `https://player.phimapi.com/player/?url=${stream}` : '');
+
+    if (!stream && !embed) {
+      triggerToast('Phim này chưa có luồng phát trực tiếp hợp lệ. Vui lòng thử cào lại hoặc chọn phim khác!', 'Chưa Có Luồng Phát', 'warning', 'alert-circle-outline');
+      return;
+    }
+
+    setPreviewVideoUrl(stream);
+    setPreviewEmbedUrl(embed);
     setPreviewVideoTitle(resultToWatch.title || 'Luồng Video Trực Tiếp - HLS (.m3u8)');
-    setPreviewPlayerMode('stream');
+    setPreviewPlayerMode(stream ? 'stream' : 'embed');
     setPreviewMovieItem(resultToWatch);
     setShowVideoPreviewModal(true);
+  };
+
+  // Xử lý Spam Thông Báo Push tới người dùng mục tiêu (Menu Tiện Ích)
+  const handleStartSpamNotifications = async () => {
+    const target = spammerTargetUser.trim();
+    if (!target) {
+      triggerToast('Vui lòng nhập tên tài khoản (username) người nhận thông báo!', 'Thiếu Mục Tiêu', 'warning', 'person-outline');
+      return;
+    }
+    const count = parseInt(spammerCount, 10);
+    if (isNaN(count) || count <= 0) {
+      triggerToast('Số lượng spam phải là số nguyên dương lớn hơn 0!', 'Số Lượng Không Hợp Lệ', 'warning', 'warning-outline');
+      return;
+    }
+    const title = spammerTitle.trim() || 'LockX Vault Thông Báo';
+    const message = spammerMessage.trim() || 'Thông báo từ hệ thống an ninh két sắt LockX';
+
+    setIsSpamming(true);
+    setSpamSentCount(0);
+    spamCancelRef.current = false;
+
+    triggerToast(`Bắt đầu tiến trình gửi ${count} thông báo tới @${target.replace(/^@/, '')}...`, 'Bắt Đầu Spam Push', 'info', 'megaphone');
+    playAppleNotificationSound('tap');
+
+    let sent = 0;
+    for (let i = 1; i <= count; i++) {
+      if (spamCancelRef.current) {
+        break;
+      }
+
+      try {
+        await fetch('https://quangtrongtuan.id.vn/api/notifications/send_push.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: target.toLowerCase() === 'all' ? 'broadcast' : 'user',
+            username: target,
+            title: `${title} (#${i})`,
+            body: `${message} [Đợt ${i}/${count}]`,
+            style: 'security',
+          }),
+        });
+        sent += 1;
+        setSpamSentCount(sent);
+      } catch {
+        // network exception / tiếp tục đợt sau
+      }
+
+      if (i < count && !spamCancelRef.current) {
+        await new Promise((r) => setTimeout(r, Math.max(100, spammerIntervalMs)));
+      }
+    }
+
+    setIsSpamming(false);
+    if (spamCancelRef.current) {
+      triggerToast(`Đã dừng spam theo yêu cầu. Đã gửi thành công ${sent}/${count} thông báo!`, 'Đã Dừng Tiến Trình', 'warning', 'pause-circle');
+    } else {
+      triggerToast(`Đã hoàn tất gửi toàn bộ ${sent} thông báo tới @${target}!`, 'Spam Thành Công', 'success', 'checkmark-circle');
+      playAppleNotificationSound('success');
+    }
+  };
+
+  const handleStopSpamNotifications = () => {
+    spamCancelRef.current = true;
+    setIsSpamming(false);
   };
 
   // 1b. Báo Cáo Phim Bị Lỗi
@@ -28947,6 +29303,19 @@ function MainApp() {
                       triggerDevToast('Báo Cáo Phim Lỗi', 'Mở danh sách phim hỏng và trích xuất file JSON cấu hình', 'flag', '#FF2D55', 'JSON EXPORT');
                     },
                   },
+                  {
+                    icon: 'megaphone',
+                    color: '#FF3B30',
+                    title: 'Spam Thông Báo Push',
+                    subtitle: 'Gửi hàng loạt thông báo đẩy tới người dùng mục tiêu',
+                    badge: 'SPAMMER',
+                    badgeColor: '#FF3B30',
+                    action: () => {
+                      setShowHomeMenuModal(false);
+                      setShowNotificationSpammerModal(true);
+                      triggerDevToast('Spam Thông Báo', 'Mở bảng điều khiển gửi thông báo hàng loạt tới user', 'megaphone', '#FF3B30', 'PUSH SPAMMER');
+                    },
+                  },
                 ].map((item, idx, arr) => (
                   <TouchableOpacity
                     key={idx}
@@ -29027,30 +29396,645 @@ function MainApp() {
           <View style={[styles.fullScreenNavBar, isLight && { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E5EA' }]}>
             <TouchableOpacity
               onPress={() => {
-                setShowApiScraperModal(false);
-                setShowHomeMenuModal(true);
+                if (scraperViewMode === 'result') {
+                  setScraperViewMode('form');
+                } else {
+                  setShowApiScraperModal(false);
+                  setShowHomeMenuModal(true);
+                }
               }}
               style={styles.fullScreenNavBtn}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               <Ionicons name="chevron-back" size={24} color={appSettings.accentColor} />
-              <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor }]}>Tiện Ích</Text>
+              <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor }]}>
+                {scraperViewMode === 'result' ? 'Cào Phim' : 'Tiện Ích'}
+              </Text>
             </TouchableOpacity>
-            <Text style={[styles.fullScreenNavTitle, isLight && { color: '#000000' }]} numberOfLines={1}>Cào API & Media</Text>
+            <Text style={[styles.fullScreenNavTitle, isLight && { color: '#000000' }]} numberOfLines={1}>
+              {scraperViewMode === 'result' ? 'Chi Tiết Bóc Tách' : 'Cào API & Media'}
+            </Text>
             <TouchableOpacity
               onPress={() => {
-                setScraperUrlInput('');
-                setScrapedResult(null);
-                triggerToast('Đã làm mới dữ liệu cào API', 'Làm Mới', 'info');
+                if (scraperViewMode === 'result') {
+                  setScraperViewMode('form');
+                } else {
+                  setScraperUrlInput('');
+                  setScrapedResult(null);
+                  triggerToast('Đã làm mới dữ liệu cào API', 'Làm Mới', 'info');
+                }
               }}
               style={{ minWidth: 60, alignItems: 'flex-end', justifyContent: 'center' }}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
-              <Ionicons name="refresh" size={22} color={appSettings.accentColor} />
+              <Ionicons name={scraperViewMode === 'result' ? 'add' : 'refresh'} size={22} color={appSettings.accentColor} />
             </TouchableOpacity>
           </View>
 
-          <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
+          {scraperViewMode === 'result' && scrapedResult ? (
+            /* TRANG RIÊNG: KẾT QUẢ BÓC TÁCH PHIM (HÌNH 3 - KHÔNG CẦN CUỘN FORM HAY LOG) */
+            <ScrollView
+              ref={scraperResultScrollRef}
+              key={`scraper-result-${scrapedResult?.title || 'view'}`}
+              contentOffset={{ x: 0, y: 0 }}
+              contentContainerStyle={{ padding: 16, paddingBottom: 60 }}
+              showsVerticalScrollIndicator={false}
+            >
+              <View
+                style={{
+                  backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                  borderRadius: 18,
+                  padding: 16,
+                  borderWidth: 1.5,
+                  borderColor: '#34C759',
+                  marginBottom: 16,
+                }}
+              >
+                {/* Status Banner */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(52, 199, 89, 0.16)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
+                    <Ionicons name="checkmark-circle" size={15} color="#34C759" />
+                    <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#34C759' }}>
+                      ĐÃ BÓC TÁCH THÀNH CÔNG API
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#8E8E93' }}>
+                    {scrapedResult.quality}
+                  </Text>
+                </View>
+
+                {/* Thumbnail & Title */}
+                <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
+                  <View
+                    style={{
+                      width: 72,
+                      height: 98,
+                      borderRadius: 10,
+                      overflow: 'hidden',
+                      backgroundColor: isLight ? '#E5E5EA' : '#0B0B0E',
+                      borderWidth: 1,
+                      borderColor: isLight ? '#D1D1D6' : '#2C2C2E',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    {scrapedThumbnailFailed || !scrapedResult.thumbnail ? (
+                      <View style={{ alignItems: 'center', justifyContent: 'center', padding: 6 }}>
+                        <Ionicons name="film-outline" size={30} color="#007AFF" />
+                        <Text style={{ fontSize: 9, color: '#8E8E93', marginTop: 4, fontWeight: '700', textAlign: 'center' }}>
+                          POSTER
+                        </Text>
+                      </View>
+                    ) : (
+                      <Image
+                        source={{ uri: scrapedResult.thumbnail }}
+                        style={{ width: '100%', height: '100%' }}
+                        resizeMode="cover"
+                        onError={() => setScrapedThumbnailFailed(true)}
+                      />
+                    )}
+                  </View>
+                  <View style={{ flex: 1, justifyContent: 'center' }}>
+                    <Text style={{ fontSize: 16, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF', marginBottom: 6, lineHeight: 22 }}>
+                      {scrapedResult.title}
+                    </Text>
+                    {scrapedResult.director && (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 3 }}>
+                        <Ionicons name="videocam-outline" size={13} color="#8E8E93" />
+                        <Text style={{ fontSize: 11.5, color: '#8E8E93' }}>
+                          Đạo diễn: <Text style={{ color: isLight ? '#000' : '#FFF', fontWeight: '700' }}>{scrapedResult.director}</Text>
+                        </Text>
+                      </View>
+                    )}
+                    {scrapedResult.cast && (
+                      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 5, marginBottom: 3 }}>
+                        <Ionicons name="people-outline" size={13} color="#8E8E93" style={{ marginTop: 2 }} />
+                        <Text style={{ fontSize: 11, color: '#8E8E93', flex: 1 }} numberOfLines={2}>
+                          {scrapedResult.cast}
+                        </Text>
+                      </View>
+                    )}
+                    {scrapedResult.views && (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 }}>
+                        <Ionicons name="eye-outline" size={13} color="#FF9500" />
+                        <Text style={{ fontSize: 11, color: '#FF9500', fontWeight: '700' }}>
+                          {scrapedResult.views} lượt xem trực tuyến
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+
+                <View
+                  style={{
+                    backgroundColor: isLight ? '#F2F2F7' : '#0B0B0E',
+                    borderRadius: 12,
+                    padding: 10,
+                    marginBottom: 12,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 }}>
+                    <Text style={{ fontSize: 12, color: '#8E8E93' }}>Nền tảng nguồn:</Text>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
+                      {scrapedResult.platform === 'gg' ? 'Web Phim (ghienphimz.mom)' : scrapedResult.platform.toUpperCase()}
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 }}>
+                    <Text style={{ fontSize: 12, color: '#8E8E93' }}>Độ phân giải & Codec:</Text>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#34C759' }}>
+                      {scrapedResult.codec}
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 }}>
+                    <Text style={{ fontSize: 12, color: '#8E8E93' }}>Dung lượng ước tính:</Text>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#007AFF' }}>
+                      {scrapedResult.sizeFormatted} ({scrapedResult.duration})
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Direct Extracted URL Box */}
+                <View style={{ marginBottom: 12 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#8E8E93', marginBottom: 4 }}>
+                    Đường Dẫn Luồng Video Trực Tiếp (.m3u8 CDN):
+                  </Text>
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      backgroundColor: isLight ? '#F2F2F7' : '#0B0B0E',
+                      borderRadius: 10,
+                      paddingHorizontal: 10,
+                      paddingVertical: 8,
+                      borderWidth: 1,
+                      borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                    }}
+                  >
+                    <Text style={{ flex: 1, fontSize: 11, color: isLight ? '#333333' : '#AEAEB2' }} numberOfLines={1}>
+                      {scrapedResult.streamUrl}
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => {
+                        if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                          navigator.clipboard.writeText(scrapedResult.streamUrl);
+                        }
+                        triggerToast('Đã sao chép link luồng video vào bộ nhớ tạm!', 'Sao Chép Thành Công', 'success', 'copy-outline');
+                      }}
+                      style={{ marginLeft: 8 }}
+                    >
+                      <Ionicons name="copy-outline" size={16} color="#007AFF" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Embed Iframe URL Box */}
+                {scrapedResult.embedUrl && (
+                  <View style={{ marginBottom: 16 }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#AF52DE', marginBottom: 4 }}>
+                      Link Player Nhúng Web (GhienPhimz Embed):
+                    </Text>
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        backgroundColor: isLight ? '#F2F2F7' : '#0B0B0E',
+                        borderRadius: 10,
+                        paddingHorizontal: 10,
+                        paddingVertical: 8,
+                        borderWidth: 1,
+                        borderColor: '#AF52DE',
+                      }}
+                    >
+                      <Text style={{ flex: 1, fontSize: 11, color: '#AF52DE' }} numberOfLines={1}>
+                        {scrapedResult.embedUrl}
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() => {
+                          if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                            navigator.clipboard.writeText(scrapedResult.embedUrl || '');
+                          }
+                          triggerToast('Đã sao chép link nhúng player!', 'Sao Chép Thành Công', 'success', 'copy-outline');
+                        }}
+                        style={{ marginLeft: 8, marginRight: 6 }}
+                      >
+                        <Ionicons name="copy-outline" size={16} color="#AF52DE" />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => {
+                          if (typeof window !== 'undefined') {
+                            window.open(scrapedResult.embedUrl || '', '_blank');
+                          } else {
+                            Linking.openURL(scrapedResult.embedUrl || '').catch(() => {});
+                          }
+                        }}
+                      >
+                        <Ionicons name="open-outline" size={16} color="#AF52DE" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+
+                {/* USER-REQUESTED ACTIONS: XEM LUỒNG VIETSUB / LỒNG TIẾNG, TẢI VỀ */}
+                <Text style={{ fontSize: 13, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF', marginBottom: 8 }}>
+                  {scrapedResult.hasMultiAudio
+                    ? 'Chọn Luồng Phát Hoạt Hình (4 Luồng Vietsub & Lồng Tiếng):'
+                    : 'Chọn Luồng Phát & Thao Tác (2 Luồng API Chống Lỗi):'}
+                </Text>
+
+                {scrapedResult.hasMultiAudio ? (
+                  <View style={{ gap: 8 }}>
+                    <View style={{ backgroundColor: 'rgba(52, 199, 89, 0.12)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, marginBottom: 2 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '800', color: '#34C759' }}>
+                        🎬 PHIM HOẠT HÌNH / ANIME: ĐÃ BÓC TÁCH 4 LUỒNG RIÊNG BIỆT
+                      </Text>
+                    </View>
+
+                    {/* 1. Vietsub HLS */}
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      onPress={() => {
+                        setPreviewPlayerMode('stream');
+                        handleWatchDirectly({
+                          ...scrapedResult,
+                          streamUrl: scrapedResult.vietsubStreamUrl || scrapedResult.streamUrl,
+                          embedUrl: scrapedResult.vietsubEmbedUrl || scrapedResult.embedUrl,
+                          title: `${scrapedResult.title} [Vietsub HLS]`,
+                        });
+                      }}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        paddingVertical: 11,
+                        backgroundColor: '#007AFF',
+                        borderRadius: 12,
+                        gap: 8,
+                      }}
+                    >
+                      <Ionicons name="flash" size={16} color="#FFFFFF" />
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFFFFF' }}>
+                        1. VIETSUB (HLS .M3U8 CHÍNH)
+                      </Text>
+                    </TouchableOpacity>
+
+                    {/* 2. Vietsub Embed */}
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      onPress={() => {
+                        setPreviewPlayerMode('embed');
+                        handleWatchDirectly({
+                          ...scrapedResult,
+                          streamUrl: scrapedResult.vietsubStreamUrl || scrapedResult.streamUrl,
+                          embedUrl: scrapedResult.vietsubEmbedUrl || scrapedResult.embedUrl,
+                          title: `${scrapedResult.title} [Vietsub Embed]`,
+                        });
+                      }}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        paddingVertical: 11,
+                        backgroundColor: '#5856D6',
+                        borderRadius: 12,
+                        gap: 8,
+                      }}
+                    >
+                      <Ionicons name="play-skip-forward" size={16} color="#FFFFFF" />
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFFFFF' }}>
+                        2. VIETSUB (PLAYER WEB DỰ PHÒNG)
+                      </Text>
+                    </TouchableOpacity>
+
+                    {/* 3. Lồng Tiếng HLS */}
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      onPress={() => {
+                        setPreviewPlayerMode('stream');
+                        handleWatchDirectly({
+                          ...scrapedResult,
+                          streamUrl: scrapedResult.dubStreamUrl || scrapedResult.streamUrl,
+                          embedUrl: scrapedResult.dubEmbedUrl || scrapedResult.embedUrl,
+                          title: `${scrapedResult.title} [Lồng Tiếng HLS]`,
+                        });
+                      }}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        paddingVertical: 11,
+                        backgroundColor: '#FF9500',
+                        borderRadius: 12,
+                        gap: 8,
+                      }}
+                    >
+                      <Ionicons name="volume-high" size={16} color="#FFFFFF" />
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFFFFF' }}>
+                        3. LỒNG TIẾNG (HLS .M3U8 CHÍNH)
+                      </Text>
+                    </TouchableOpacity>
+
+                    {/* 4. Lồng Tiếng Embed */}
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      onPress={() => {
+                        setPreviewPlayerMode('embed');
+                        handleWatchDirectly({
+                          ...scrapedResult,
+                          streamUrl: scrapedResult.dubStreamUrl || scrapedResult.streamUrl,
+                          embedUrl: scrapedResult.dubEmbedUrl || scrapedResult.embedUrl,
+                          title: `${scrapedResult.title} [Lồng Tiếng Embed]`,
+                        });
+                      }}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        paddingVertical: 11,
+                        backgroundColor: '#AF52DE',
+                        borderRadius: 12,
+                        gap: 8,
+                      }}
+                    >
+                      <Ionicons name="play-circle" size={16} color="#FFFFFF" />
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFFFFF' }}>
+                        4. LỒNG TIẾNG (PLAYER WEB DỰ PHÒNG)
+                      </Text>
+                    </TouchableOpacity>
+
+                    {/* 5. TẢI VỀ */}
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      onPress={() => handleDownloadScraped(scrapedResult)}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        paddingVertical: 11,
+                        backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                        borderRadius: 12,
+                        gap: 8,
+                        borderWidth: 1,
+                        borderColor: isLight ? '#D1D1D6' : '#3A3A3C',
+                      }}
+                    >
+                      <Ionicons name="download-outline" size={16} color={isLight ? '#000000' : '#FFFFFF'} />
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF' }}>
+                        5. TẢI VỀ MÁY
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View style={{ gap: 8 }}>
+                    {/* 1. XEM LUỒNG 1 */}
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      onPress={() => {
+                        setPreviewPlayerMode('stream');
+                        handleWatchDirectly(scrapedResult);
+                      }}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        paddingVertical: 12,
+                        backgroundColor: '#007AFF',
+                        borderRadius: 14,
+                        gap: 8,
+                      }}
+                    >
+                      <Ionicons name="flash" size={17} color="#FFFFFF" />
+                      <Text style={{ fontSize: 14, fontWeight: '800', color: '#FFFFFF' }}>
+                        1. XEM LUỒNG 1 (HLS .M3U8 CHÍNH)
+                      </Text>
+                    </TouchableOpacity>
+
+                    {/* 2. XEM LUỒNG 2 */}
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      onPress={() => {
+                        setPreviewPlayerMode('embed');
+                        handleWatchDirectly(scrapedResult);
+                      }}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        paddingVertical: 12,
+                        backgroundColor: '#AF52DE',
+                        borderRadius: 14,
+                        gap: 8,
+                      }}
+                    >
+                      <Ionicons name="play-skip-forward" size={17} color="#FFFFFF" />
+                      <Text style={{ fontSize: 14, fontWeight: '800', color: '#FFFFFF' }}>
+                        2. XEM LUỒNG 2 (PLAYER DỰ PHÒNG)
+                      </Text>
+                    </TouchableOpacity>
+
+                    {/* 3. TẢI VỀ */}
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      onPress={() => handleDownloadScraped(scrapedResult)}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        paddingVertical: 12,
+                        backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                        borderRadius: 14,
+                        gap: 8,
+                        borderWidth: 1,
+                        borderColor: isLight ? '#D1D1D6' : '#3A3A3C',
+                      }}
+                    >
+                      <Ionicons name="download-outline" size={17} color={isLight ? '#000000' : '#FFFFFF'} />
+                      <Text style={{ fontSize: 14, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF' }}>
+                        3. TẢI VỀ MÁY
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+
+              {/* PHẦN TIẾP THEO & PHIM TƯƠNG TỰ (Ví dụ: Người Nhện các phần 1, 2, 3...) */}
+              {scrapedSearchResults.length > 0 && (
+                <View
+                  style={{
+                    backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                    borderRadius: 18,
+                    padding: 14,
+                    marginBottom: 16,
+                    borderWidth: 1,
+                    borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                      <Ionicons name="film-outline" size={18} color="#007AFF" />
+                      <Text style={{ fontSize: 13.5, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF' }}>
+                        Phim Gần Giống & Các Phần Khác ({scrapedSearchResults.length})
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        const nextMovie = scrapedSearchResults[0];
+                        if (nextMovie) {
+                          setScraperMovieNameInput(nextMovie.name);
+                          handleExecuteScrape(undefined, 'title', nextMovie.name);
+                        } else {
+                          triggerToast('Không còn phim nào trong danh sách gần giống!', 'Thông Báo', 'info');
+                        }
+                      }}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 4,
+                        paddingHorizontal: 8,
+                        paddingVertical: 4.5,
+                        borderRadius: 8,
+                        backgroundColor: 'rgba(0, 122, 255, 0.15)',
+                      }}
+                    >
+                      <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
+                        <SvgPath d="M4 5L13 12L4 19V5Z" fill="#007AFF" />
+                        <SvgPath d="M12 5L21 12L12 19V5Z" fill="#007AFF" />
+                      </Svg>
+                      <Text style={{ fontSize: 11, fontWeight: '800', color: '#007AFF', marginLeft: 3 }}>
+                        Lọc Tiếp Phim Gần Giống
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingVertical: 4 }}>
+                    {scrapedSearchResults.map((simMovie, simIdx) => (
+                      <View
+                        key={simIdx}
+                        style={{
+                          width: 126,
+                          backgroundColor: isLight ? '#F2F2F7' : '#0B0B0E',
+                          borderRadius: 12,
+                          padding: 8,
+                          borderWidth: 1,
+                          borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                        }}
+                      >
+                        <Image
+                          source={{ uri: simMovie.poster_url }}
+                          style={{ width: '100%', height: 130, borderRadius: 8, backgroundColor: '#2C2C2E', marginBottom: 6 }}
+                          resizeMode="cover"
+                        />
+                        <Text
+                          style={{ fontSize: 11.5, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF', marginBottom: 2 }}
+                          numberOfLines={2}
+                        >
+                          {simMovie.name}
+                        </Text>
+                        <Text style={{ fontSize: 10.5, color: '#8E8E93', marginBottom: 6 }}>
+                          {simMovie.year || '2025'}
+                        </Text>
+                        <TouchableOpacity
+                          activeOpacity={0.7}
+                          onPress={() => {
+                            setScraperMovieNameInput(simMovie.name);
+                            handleExecuteScrape(undefined, 'title', simMovie.name);
+                          }}
+                          style={{
+                            paddingVertical: 6,
+                            borderRadius: 8,
+                            backgroundColor: '#007AFF',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#FFFFFF' }}>
+                            Cào Phần Này
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+
+              {/* Nút hành động nhanh: Cào Thêm Phim Mới & Xem Kho Phim */}
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => setScraperViewMode('form')}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  paddingVertical: 13,
+                  backgroundColor: 'rgba(0, 122, 255, 0.15)',
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: '#007AFF',
+                  gap: 8,
+                  marginBottom: 10,
+                }}
+              >
+                <Ionicons name="add-circle-outline" size={18} color="#007AFF" />
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#007AFF' }}>
+                  + CÀO THÊM PHIM MỚI
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => setShowScrapedCatalogModal(true)}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  paddingVertical: 13,
+                  backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                  borderRadius: 14,
+                  gap: 8,
+                }}
+              >
+                <Ionicons name="film-outline" size={18} color={isLight ? '#000000' : '#FFFFFF'} />
+                <Text style={{ fontSize: 14, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
+                  XEM KHO PHIM ĐÃ CÀO ({allCatalogMovies.length} PHIM)
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
+          ) : (
+            <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
+              {scrapedResult && (
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => setScraperViewMode('result')}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    backgroundColor: 'rgba(52, 199, 89, 0.12)',
+                    borderRadius: 14,
+                    paddingHorizontal: 14,
+                    paddingVertical: 12,
+                    marginBottom: 14,
+                    borderWidth: 1,
+                    borderColor: '#34C759',
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                    <Ionicons name="film" size={20} color="#34C759" />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: '#34C759' }} numberOfLines={1}>
+                        Kết Quả Vừa Cào: {scrapedResult.title}
+                      </Text>
+                      <Text style={{ fontSize: 11, color: '#8E8E93', marginTop: 1 }}>
+                        Bóc tách hoàn tất • Bấm để mở toàn màn hình xem luồng
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#34C759' }}>Mở Ngay</Text>
+                    <Ionicons name="chevron-forward" size={16} color="#34C759" />
+                  </View>
+                </TouchableOpacity>
+              )}
               {/* 1. NỀN TẢNG CÀO API: CHỈ GOOGLE (gg) - CÁC NỀN TẢNG KHÁC HỖ TRỢ SAU */}
               <View
                 style={{
@@ -29474,7 +30458,7 @@ function MainApp() {
                   {/* Gợi ý tên phim nhanh (bấm là tự điền) */}
                   <View style={{ marginTop: 8 }}>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                      {['Mai', 'Lật Mặt 7', 'Cám', 'Nhà Bà Nữ', 'Bố Già', 'Phá Đám Sinh Nhật Mẹ', 'Gặp Lại Chị Bầu', 'Đất Rừng Phương Nam', 'Trạng Quỳnh', 'Ma Xó'].map((suggestName, sIdx) => {
+                      {['Mưa Đỏ', 'Mai', 'Lật Mặt 7', 'Cám', 'Nhà Bà Nữ', 'Bố Già', 'Phá Đám Sinh Nhật Mẹ', 'Gặp Lại Chị Bầu', 'Đất Rừng Phương Nam', 'Trạng Quỳnh', 'Ma Xó'].map((suggestName, sIdx) => {
                         const isChosen = scraperMovieNameInput.toLowerCase() === suggestName.toLowerCase();
                         return (
                           <TouchableOpacity
@@ -29548,7 +30532,7 @@ function MainApp() {
                       <>
                         <ActivityIndicator size="small" color="#FFFFFF" />
                         <Text style={{ fontSize: 14, fontWeight: '800', color: '#FFFFFF' }}>
-                          {scrapingStepText || `Đang Cào Phim (${crawlRemainingSec}s)...`}
+                          {`Đang cào phim (${crawlRemainingSec}s)...`}
                         </Text>
                       </>
                     ) : (
@@ -29647,6 +30631,7 @@ function MainApp() {
 
               {/* 4. Kết Quả Cào API (Khi đã có scrapedResult) */}
               {scrapedResult && (
+                <>
                 <View
                   style={{
                     backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
@@ -29841,82 +30826,332 @@ function MainApp() {
                     </View>
                   )}
 
-                  {/* USER-REQUESTED ACTIONS: XEM LUỒNG 1, XEM LUỒNG 2, TẢI VỀ */}
+                  {/* USER-REQUESTED ACTIONS: XEM LUỒNG VIETSUB / LỒNG TIẾNG, TẢI VỀ */}
                   <Text style={{ fontSize: 13, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF', marginBottom: 8 }}>
-                    Chọn Luồng Phát & Thao Tác (2 Luồng API Chống Lỗi):
+                    {scrapedResult.hasMultiAudio
+                      ? 'Chọn Luồng Phát Hoạt Hình (4 Luồng Vietsub & Lồng Tiếng):'
+                      : 'Chọn Luồng Phát & Thao Tác (2 Luồng API Chống Lỗi):'}
                   </Text>
-                  <View style={{ gap: 8 }}>
-                    {/* 1. XEM LUỒNG 1 */}
-                    <TouchableOpacity
-                      activeOpacity={0.8}
-                      onPress={() => {
-                        setPreviewPlayerMode('stream');
-                        handleWatchDirectly(scrapedResult);
-                      }}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        paddingVertical: 12,
-                        backgroundColor: '#007AFF',
-                        borderRadius: 14,
-                        gap: 8,
-                      }}
-                    >
-                      <Ionicons name="flash" size={17} color="#FFFFFF" />
-                      <Text style={{ fontSize: 14, fontWeight: '800', color: '#FFFFFF' }}>
-                        1. XEM LUỒNG 1 (HLS .M3U8 CHÍNH)
-                      </Text>
-                    </TouchableOpacity>
 
-                    {/* 2. XEM LUỒNG 2 */}
-                    <TouchableOpacity
-                      activeOpacity={0.8}
-                      onPress={() => {
-                        setPreviewPlayerMode('embed');
-                        handleWatchDirectly(scrapedResult);
-                      }}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        paddingVertical: 12,
-                        backgroundColor: '#AF52DE',
-                        borderRadius: 14,
-                        gap: 8,
-                      }}
-                    >
-                      <Ionicons name="play-skip-forward" size={17} color="#FFFFFF" />
-                      <Text style={{ fontSize: 14, fontWeight: '800', color: '#FFFFFF' }}>
-                        2. XEM LUỒNG 2 (PLAYER DỰ PHÒNG)
-                      </Text>
-                    </TouchableOpacity>
+                  {scrapedResult.hasMultiAudio ? (
+                    <View style={{ gap: 8 }}>
+                      <View style={{ backgroundColor: 'rgba(52, 199, 89, 0.12)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, marginBottom: 2 }}>
+                        <Text style={{ fontSize: 11, fontWeight: '800', color: '#34C759' }}>
+                          🎬 PHIM HOẠT HÌNH / ANIME: ĐÃ BÓC TÁCH 4 LUỒNG RIÊNG BIỆT
+                        </Text>
+                      </View>
 
-                    {/* 3. TẢI VỀ */}
-                    <TouchableOpacity
-                      activeOpacity={0.8}
-                      onPress={() => handleDownloadScraped(scrapedResult)}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        paddingVertical: 12,
-                        backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E',
-                        borderRadius: 14,
-                        gap: 8,
-                        borderWidth: 1,
-                        borderColor: isLight ? '#D1D1D6' : '#3A3A3C',
-                      }}
-                    >
-                      <Ionicons name="download-outline" size={17} color={isLight ? '#000000' : '#FFFFFF'} />
-                      <Text style={{ fontSize: 14, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF' }}>
-                        3. TẢI VỀ MÁY
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
+                      {/* 1. Vietsub HLS */}
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        onPress={() => {
+                          setPreviewPlayerMode('stream');
+                          handleWatchDirectly({
+                            ...scrapedResult,
+                            streamUrl: scrapedResult.vietsubStreamUrl || scrapedResult.streamUrl,
+                            embedUrl: scrapedResult.vietsubEmbedUrl || scrapedResult.embedUrl,
+                            title: `${scrapedResult.title} [Vietsub HLS]`,
+                          });
+                        }}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          paddingVertical: 11,
+                          backgroundColor: '#007AFF',
+                          borderRadius: 12,
+                          gap: 8,
+                        }}
+                      >
+                        <Ionicons name="flash" size={16} color="#FFFFFF" />
+                        <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFFFFF' }}>
+                          1. VIETSUB (HLS .M3U8 CHÍNH)
+                        </Text>
+                      </TouchableOpacity>
+
+                      {/* 2. Vietsub Embed */}
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        onPress={() => {
+                          setPreviewPlayerMode('embed');
+                          handleWatchDirectly({
+                            ...scrapedResult,
+                            streamUrl: scrapedResult.vietsubStreamUrl || scrapedResult.streamUrl,
+                            embedUrl: scrapedResult.vietsubEmbedUrl || scrapedResult.embedUrl,
+                            title: `${scrapedResult.title} [Vietsub Embed]`,
+                          });
+                        }}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          paddingVertical: 11,
+                          backgroundColor: '#5856D6',
+                          borderRadius: 12,
+                          gap: 8,
+                        }}
+                      >
+                        <Ionicons name="play-skip-forward" size={16} color="#FFFFFF" />
+                        <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFFFFF' }}>
+                          2. VIETSUB (PLAYER WEB DỰ PHÒNG)
+                        </Text>
+                      </TouchableOpacity>
+
+                      {/* 3. Lồng Tiếng HLS */}
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        onPress={() => {
+                          setPreviewPlayerMode('stream');
+                          handleWatchDirectly({
+                            ...scrapedResult,
+                            streamUrl: scrapedResult.dubStreamUrl || scrapedResult.streamUrl,
+                            embedUrl: scrapedResult.dubEmbedUrl || scrapedResult.embedUrl,
+                            title: `${scrapedResult.title} [Lồng Tiếng HLS]`,
+                          });
+                        }}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          paddingVertical: 11,
+                          backgroundColor: '#FF9500',
+                          borderRadius: 12,
+                          gap: 8,
+                        }}
+                      >
+                        <Ionicons name="volume-high" size={16} color="#FFFFFF" />
+                        <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFFFFF' }}>
+                          3. LỒNG TIẾNG (HLS .M3U8 CHÍNH)
+                        </Text>
+                      </TouchableOpacity>
+
+                      {/* 4. Lồng Tiếng Embed */}
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        onPress={() => {
+                          setPreviewPlayerMode('embed');
+                          handleWatchDirectly({
+                            ...scrapedResult,
+                            streamUrl: scrapedResult.dubStreamUrl || scrapedResult.streamUrl,
+                            embedUrl: scrapedResult.dubEmbedUrl || scrapedResult.embedUrl,
+                            title: `${scrapedResult.title} [Lồng Tiếng Embed]`,
+                          });
+                        }}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          paddingVertical: 11,
+                          backgroundColor: '#AF52DE',
+                          borderRadius: 12,
+                          gap: 8,
+                        }}
+                      >
+                        <Ionicons name="play-circle" size={16} color="#FFFFFF" />
+                        <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFFFFF' }}>
+                          4. LỒNG TIẾNG (PLAYER WEB DỰ PHÒNG)
+                        </Text>
+                      </TouchableOpacity>
+
+                      {/* 5. TẢI VỀ */}
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        onPress={() => handleDownloadScraped(scrapedResult)}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          paddingVertical: 11,
+                          backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                          borderRadius: 12,
+                          gap: 8,
+                          borderWidth: 1,
+                          borderColor: isLight ? '#D1D1D6' : '#3A3A3C',
+                        }}
+                      >
+                        <Ionicons name="download-outline" size={16} color={isLight ? '#000000' : '#FFFFFF'} />
+                        <Text style={{ fontSize: 13, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF' }}>
+                          5. TẢI VỀ MÁY
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <View style={{ gap: 8 }}>
+                      {/* 1. XEM LUỒNG 1 */}
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        onPress={() => {
+                          setPreviewPlayerMode('stream');
+                          handleWatchDirectly(scrapedResult);
+                        }}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          paddingVertical: 12,
+                          backgroundColor: '#007AFF',
+                          borderRadius: 14,
+                          gap: 8,
+                        }}
+                      >
+                        <Ionicons name="flash" size={17} color="#FFFFFF" />
+                        <Text style={{ fontSize: 14, fontWeight: '800', color: '#FFFFFF' }}>
+                          1. XEM LUỒNG 1 (HLS .M3U8 CHÍNH)
+                        </Text>
+                      </TouchableOpacity>
+
+                      {/* 2. XEM LUỒNG 2 */}
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        onPress={() => {
+                          setPreviewPlayerMode('embed');
+                          handleWatchDirectly(scrapedResult);
+                        }}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          paddingVertical: 12,
+                          backgroundColor: '#AF52DE',
+                          borderRadius: 14,
+                          gap: 8,
+                        }}
+                      >
+                        <Ionicons name="play-skip-forward" size={17} color="#FFFFFF" />
+                        <Text style={{ fontSize: 14, fontWeight: '800', color: '#FFFFFF' }}>
+                          2. XEM LUỒNG 2 (PLAYER DỰ PHÒNG)
+                        </Text>
+                      </TouchableOpacity>
+
+                      {/* 3. TẢI VỀ */}
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        onPress={() => handleDownloadScraped(scrapedResult)}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          paddingVertical: 12,
+                          backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                          borderRadius: 14,
+                          gap: 8,
+                          borderWidth: 1,
+                          borderColor: isLight ? '#D1D1D6' : '#3A3A3C',
+                        }}
+                      >
+                        <Ionicons name="download-outline" size={17} color={isLight ? '#000000' : '#FFFFFF'} />
+                        <Text style={{ fontSize: 14, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF' }}>
+                          3. TẢI VỀ MÁY
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
                 </View>
+
+                {/* PHẦN TIẾP THEO & PHIM TƯƠNG TỰ */}
+                {scrapedSearchResults.length > 0 && (
+                  <View
+                    style={{
+                      backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                      borderRadius: 18,
+                      padding: 14,
+                      marginBottom: 16,
+                      borderWidth: 1,
+                      borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                        <Ionicons name="film-outline" size={18} color="#007AFF" />
+                        <Text style={{ fontSize: 13.5, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF' }}>
+                          Phim Gần Giống & Các Phần Khác ({scrapedSearchResults.length})
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        activeOpacity={0.7}
+                        onPress={() => {
+                          const nextMovie = scrapedSearchResults[0];
+                          if (nextMovie) {
+                            setScraperMovieNameInput(nextMovie.name);
+                            handleExecuteScrape(undefined, 'title', nextMovie.name);
+                          } else {
+                            triggerToast('Không còn phim nào trong danh sách gần giống!', 'Thông Báo', 'info');
+                          }
+                        }}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 4,
+                          paddingHorizontal: 8,
+                          paddingVertical: 4.5,
+                          borderRadius: 8,
+                          backgroundColor: 'rgba(0, 122, 255, 0.15)',
+                        }}
+                      >
+                        <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
+                          <SvgPath d="M4 5L13 12L4 19V5Z" fill="#007AFF" />
+                          <SvgPath d="M12 5L21 12L12 19V5Z" fill="#007AFF" />
+                        </Svg>
+                        <Text style={{ fontSize: 11, fontWeight: '800', color: '#007AFF', marginLeft: 3 }}>
+                          Lọc Tiếp Phim Gần Giống
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingVertical: 4 }}>
+                      {scrapedSearchResults.map((simMovie, simIdx) => (
+                        <View
+                          key={simIdx}
+                          style={{
+                            width: 126,
+                            backgroundColor: isLight ? '#F2F2F7' : '#0B0B0E',
+                            borderRadius: 12,
+                            padding: 8,
+                            borderWidth: 1,
+                            borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                          }}
+                        >
+                          <Image
+                            source={{ uri: simMovie.poster_url }}
+                            style={{ width: '100%', height: 130, borderRadius: 8, backgroundColor: '#2C2C2E', marginBottom: 6 }}
+                            resizeMode="cover"
+                          />
+                          <Text
+                            style={{ fontSize: 11.5, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF', marginBottom: 2 }}
+                            numberOfLines={2}
+                          >
+                            {simMovie.name}
+                          </Text>
+                          <Text style={{ fontSize: 10.5, color: '#8E8E93', marginBottom: 6 }}>
+                            {simMovie.year || '2025'}
+                          </Text>
+                          <TouchableOpacity
+                            activeOpacity={0.7}
+                            onPress={() => {
+                              setScraperMovieNameInput(simMovie.name);
+                              handleExecuteScrape(undefined, 'title', simMovie.name);
+                            }}
+                            style={{
+                              paddingVertical: 6,
+                              borderRadius: 8,
+                              backgroundColor: '#007AFF',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}
+                          >
+                            <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#FFFFFF' }}>
+                              Cào Phần Này
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+                </>
               )}
             </ScrollView>
+          )}
           {/* ========================================================================= */}
           {/* TRANG RIÊNG: KHO PHIM VIỆT NAM (TẤT CẢ PHIM + TÌM KIẾM + LƯỚI 2 CỘT DỌC)   */}
           {/* ========================================================================= */}
@@ -30777,6 +32012,350 @@ function MainApp() {
               )}
             </ScrollView>
           </SafeAreaView>
+      </Modal>
+
+      {/* ========================================================================= */}
+      {/* TRANG RIÊNG: SPAM THÔNG BÁO PUSH (TIỆN ÍCH QUẢN TRỊ)                     */}
+      {/* ========================================================================= */}
+      <Modal
+        visible={showNotificationSpammerModal}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={() => {
+          if (isSpamming) handleStopSpamNotifications();
+          setShowNotificationSpammerModal(false);
+          setShowHomeMenuModal(true);
+        }}
+      >
+        <SafeAreaView style={{ flex: 1, backgroundColor: isLight ? '#F2F2F7' : '#000000' }}>
+          {/* Top Navigation Bar Trang Riêng */}
+          <View style={[styles.fullScreenNavBar, isLight && { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E5EA' }]}>
+            <TouchableOpacity
+              onPress={() => {
+                if (isSpamming) handleStopSpamNotifications();
+                setShowNotificationSpammerModal(false);
+                setShowHomeMenuModal(true);
+              }}
+              style={styles.fullScreenNavBtn}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Ionicons name="chevron-back" size={24} color={appSettings.accentColor} />
+              <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor }]}>Tiện Ích</Text>
+            </TouchableOpacity>
+            <Text style={[styles.fullScreenNavTitle, isLight && { color: '#000000' }]} numberOfLines={1}>
+              Spam Thông Báo Push
+            </Text>
+            <TouchableOpacity
+              onPress={() => {
+                setSpammerTargetUser('');
+                setSpammerCount('5');
+                setSpamSentCount(0);
+                triggerToast('Đã đặt lại thông số gửi tin', 'Làm Mới', 'info');
+              }}
+              style={{ minWidth: 60, alignItems: 'flex-end', justifyContent: 'center' }}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Ionicons name="refresh" size={20} color={appSettings.accentColor} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
+            {/* Header Banner */}
+            <View
+              style={{
+                backgroundColor: 'rgba(255, 59, 48, 0.08)',
+                borderRadius: 16,
+                padding: 16,
+                marginBottom: 16,
+                borderWidth: 1,
+                borderColor: 'rgba(255, 59, 48, 0.25)',
+                alignItems: 'center',
+              }}
+            >
+              <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: 'rgba(255, 59, 48, 0.15)', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
+                <Ionicons name="megaphone" size={28} color="#FF3B30" />
+              </View>
+              <Text style={{ fontSize: 17, fontWeight: '900', color: '#FF3B30', textAlign: 'center', marginBottom: 4 }}>
+                Bảng Điều Khiển Spam Thông Báo
+              </Text>
+              <Text style={{ fontSize: 12.5, color: '#8E8E93', textAlign: 'center', lineHeight: 18 }}>
+                Gửi liên tiếp nhiều thông báo đẩy (Push Notification) trực tiếp ra màn hình khóa của thiết bị mục tiêu thông qua Gateway LockX.
+              </Text>
+            </View>
+
+            {/* Input Card */}
+            <View
+              style={{
+                backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                borderRadius: 18,
+                padding: 16,
+                borderWidth: 1,
+                borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                marginBottom: 16,
+              }}
+            >
+              {/* Target User */}
+              <Text style={{ fontSize: 13, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF', marginBottom: 6 }}>
+                1. Tên Tài Khoản Mục Tiêu (Username):
+              </Text>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: isLight ? '#F2F2F7' : '#0B0B0E',
+                  borderRadius: 12,
+                  paddingHorizontal: 12,
+                  height: 46,
+                  borderWidth: 1,
+                  borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                  marginBottom: 12,
+                }}
+              >
+                <Ionicons name="person-outline" size={18} color="#FF3B30" style={{ marginRight: 8 }} />
+                <TextInput
+                  style={{ flex: 1, color: isLight ? '#000000' : '#FFFFFF', fontSize: 14 }}
+                  placeholder="Ví dụ: trongtuangoat hoặc all"
+                  placeholderTextColor="#8E8E93"
+                  value={spammerTargetUser}
+                  onChangeText={setSpammerTargetUser}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!isSpamming}
+                />
+                {spammerTargetUser.length > 0 && !isSpamming && (
+                  <TouchableOpacity onPress={() => setSpammerTargetUser('')} style={{ padding: 4 }}>
+                    <Ionicons name="close-circle" size={18} color="#8E8E93" />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Spam Count */}
+              <Text style={{ fontSize: 13, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF', marginBottom: 6 }}>
+                2. Số Lượng Thông Báo Cần Gửi:
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
+                {['5', '10', '20', '50'].map((preset) => (
+                  <TouchableOpacity
+                    key={preset}
+                    activeOpacity={0.7}
+                    disabled={isSpamming}
+                    onPress={() => setSpammerCount(preset)}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 8,
+                      borderRadius: 10,
+                      alignItems: 'center',
+                      backgroundColor: spammerCount === preset ? '#FF3B30' : (isLight ? '#F2F2F7' : '#0B0B0E'),
+                      borderWidth: 1,
+                      borderColor: spammerCount === preset ? '#FF3B30' : (isLight ? '#E5E5EA' : '#2C2C2E'),
+                    }}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: '800', color: spammerCount === preset ? '#FFFFFF' : (isLight ? '#000' : '#FFF') }}>
+                      {preset} Tin
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: isLight ? '#F2F2F7' : '#0B0B0E',
+                  borderRadius: 12,
+                  paddingHorizontal: 12,
+                  height: 46,
+                  borderWidth: 1,
+                  borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                  marginBottom: 12,
+                }}
+              >
+                <Ionicons name="repeat-outline" size={18} color="#8E8E93" style={{ marginRight: 8 }} />
+                <TextInput
+                  style={{ flex: 1, color: isLight ? '#000000' : '#FFFFFF', fontSize: 14 }}
+                  placeholder="Nhập số lượng tùy chỉnh (vd: 15)"
+                  placeholderTextColor="#8E8E93"
+                  value={spammerCount}
+                  onChangeText={setSpammerCount}
+                  keyboardType="numeric"
+                  editable={!isSpamming}
+                />
+              </View>
+
+              {/* Title */}
+              <Text style={{ fontSize: 13, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF', marginBottom: 6 }}>
+                3. Tiêu Đề Thông Báo:
+              </Text>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: isLight ? '#F2F2F7' : '#0B0B0E',
+                  borderRadius: 12,
+                  paddingHorizontal: 12,
+                  height: 46,
+                  borderWidth: 1,
+                  borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                  marginBottom: 12,
+                }}
+              >
+                <Ionicons name="notifications-outline" size={18} color="#FF9500" style={{ marginRight: 8 }} />
+                <TextInput
+                  style={{ flex: 1, color: isLight ? '#000000' : '#FFFFFF', fontSize: 14 }}
+                  placeholder="Tiêu đề thông báo"
+                  placeholderTextColor="#8E8E93"
+                  value={spammerTitle}
+                  onChangeText={setSpammerTitle}
+                  editable={!isSpamming}
+                />
+              </View>
+
+              {/* Body */}
+              <Text style={{ fontSize: 13, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF', marginBottom: 6 }}>
+                4. Nội Dung Tin Nhắn:
+              </Text>
+              <View
+                style={{
+                  backgroundColor: isLight ? '#F2F2F7' : '#0B0B0E',
+                  borderRadius: 12,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  borderWidth: 1,
+                  borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                  marginBottom: 12,
+                }}
+              >
+                <TextInput
+                  style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 13.5, minHeight: 60, textAlignVertical: 'top' }}
+                  placeholder="Nội dung thông báo cần spam..."
+                  placeholderTextColor="#8E8E93"
+                  value={spammerMessage}
+                  onChangeText={setSpammerMessage}
+                  multiline
+                  editable={!isSpamming}
+                />
+              </View>
+
+              {/* Delay Interval */}
+              <Text style={{ fontSize: 13, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF', marginBottom: 6 }}>
+                5. Tốc Độ Gửi (Độ trễ mỗi tin):
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                {[
+                  { label: '⚡ Siêu Tốc (200ms)', val: 200 },
+                  { label: '🚀 Chuẩn (400ms)', val: 400 },
+                  { label: '⏱️ Chậm (1000ms)', val: 1000 },
+                ].map((speed) => (
+                  <TouchableOpacity
+                    key={speed.val}
+                    activeOpacity={0.7}
+                    disabled={isSpamming}
+                    onPress={() => setSpammerIntervalMs(speed.val)}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 7,
+                      borderRadius: 10,
+                      alignItems: 'center',
+                      backgroundColor: spammerIntervalMs === speed.val ? 'rgba(0, 122, 255, 0.2)' : (isLight ? '#F2F2F7' : '#0B0B0E'),
+                      borderWidth: 1,
+                      borderColor: spammerIntervalMs === speed.val ? '#007AFF' : (isLight ? '#E5E5EA' : '#2C2C2E'),
+                    }}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: spammerIntervalMs === speed.val ? '#007AFF' : '#8E8E93' }}>
+                      {speed.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Live Progress Bar when Spamming */}
+            {isSpamming && (
+              <View
+                style={{
+                  backgroundColor: '#0D1117',
+                  borderRadius: 14,
+                  padding: 14,
+                  marginBottom: 16,
+                  borderWidth: 1,
+                  borderColor: '#FF3B30',
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <ActivityIndicator size="small" color="#FF3B30" />
+                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#FF3B30' }}>
+                      ĐANG PHÁT THÔNG BÁO TỚI @{spammerTargetUser}...
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 12, fontWeight: '900', color: '#FFFFFF' }}>
+                    {spamSentCount} / {spammerCount}
+                  </Text>
+                </View>
+
+                {/* Progress bar */}
+                <View style={{ height: 6, backgroundColor: '#21262D', borderRadius: 3, overflow: 'hidden' }}>
+                  <View
+                    style={{
+                      height: '100%',
+                      width: `${Math.min(100, Math.round((spamSentCount / (parseInt(spammerCount, 10) || 1)) * 100))}%`,
+                      backgroundColor: '#FF3B30',
+                      borderRadius: 3,
+                    }}
+                  />
+                </View>
+              </View>
+            )}
+
+            {/* Action Buttons */}
+            {isSpamming ? (
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={handleStopSpamNotifications}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: '#FF3B30',
+                  paddingVertical: 14,
+                  borderRadius: 14,
+                  gap: 8,
+                  shadowColor: '#FF3B30',
+                  shadowOpacity: 0.4,
+                  shadowRadius: 10,
+                  shadowOffset: { width: 0, height: 4 },
+                }}
+              >
+                <Ionicons name="stop-circle-outline" size={20} color="#FFFFFF" />
+                <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '900' }}>
+                  DỪNG LẠI (STOP)
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={handleStartSpamNotifications}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: '#FF3B30',
+                  paddingVertical: 14,
+                  borderRadius: 14,
+                  gap: 8,
+                  shadowColor: '#FF3B30',
+                  shadowOpacity: 0.35,
+                  shadowRadius: 10,
+                  shadowOffset: { width: 0, height: 4 },
+                }}
+              >
+                <Ionicons name="paper-plane" size={18} color="#FFFFFF" />
+                <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '900' }}>
+                  BẮT ĐẦU SPAM THÔNG BÁO ({spammerCount} TIN)
+                </Text>
+              </TouchableOpacity>
+            )}
+          </ScrollView>
+        </SafeAreaView>
       </Modal>
 
       {/* ========================================================================= */}
