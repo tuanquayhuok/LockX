@@ -8514,6 +8514,7 @@ function MainApp() {
   const [musicPlaying, setMusicPlaying] = useState<boolean>(false);
   const [musicPlayerMode, setMusicPlayerMode] = useState<'stream' | 'embed'>('stream');
   const musicAudioRef = useRef<any>(null);
+  const nativeMusicAudioPlayerRef = useRef<any>(null);
 
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof window === 'undefined') return;
@@ -8990,6 +8991,8 @@ function MainApp() {
     type: 'success' | 'info' | 'warning' | 'security';
     customIcon?: string;
     customColor?: string;
+    badge?: string;
+    isDev?: boolean;
   } | null>(null);
 
   const popupScaleAnim = useRef(new Animated.Value(0.8)).current;
@@ -9601,11 +9604,11 @@ function MainApp() {
         try {
           AsyncStorage.setItem('lockx_developer_mode', 'false').catch(() => {});
         } catch (e) {}
-        triggerToast('Đã tắt chế độ nhà phát triển thành công! Menu 3 gạch trên trang chủ đã được ẩn đi.', 'Tắt Nhà Phát Triển Thành Công', 'info', 'eye-off-outline');
+        triggerDevToast('Tắt Nhà Phát Triển', 'Đã tắt chế độ nhà phát triển thành công. Menu 3 gạch trên trang chủ đã được ẩn đi.', 'eye-off-outline', '#8E8E93', 'DEV LOCKED');
         playAppleNotificationSound('info');
       } else {
         const remaining = 5 - newCount;
-        triggerToast(`Nhấn thêm ${remaining} lần nữa để tắt chế độ nhà phát triển.`, 'Chế Độ Nhà Phát Triển', 'info', 'construct-outline');
+        triggerDevToast('Chế Độ Nhà Phát Triển', `Nhấn thêm ${remaining} lần nữa để tắt chế độ nhà phát triển.`, 'construct-outline', '#FF9F0A', 'DEV ACCESS');
       }
     } else {
       // Đang TẮT -> Người dùng muốn BẬT
@@ -9620,11 +9623,11 @@ function MainApp() {
         try {
           AsyncStorage.setItem('lockx_developer_mode', 'true').catch(() => {});
         } catch (e) {}
-        triggerToast('Bật chế độ nhà phát triển thành công! Menu tiện ích 3 gạch đã xuất hiện trên trang chủ.', 'Bật Nhà Phát Triển Thành Công', 'success', 'code-working-outline');
+        triggerDevToast('Bật Nhà Phát Triển', 'Kích hoạt chế độ nhà phát triển thành công! Menu tiện ích 3 gạch đã mở khóa trên trang chủ.', 'code-working-outline', '#00FF66', 'DEV UNLOCKED');
         playAppleNotificationSound('success');
       } else {
         const remaining = 5 - newCount;
-        triggerToast(`Nhấn thêm ${remaining} lần nữa để bật chế độ nhà phát triển.`, 'Chế Độ Nhà Phát Triển', 'info', 'construct-outline');
+        triggerDevToast('Chế Độ Nhà Phát Triển', `Nhấn thêm ${remaining} lần nữa để bật chế độ nhà phát triển.`, 'construct-outline', '#00FF66', 'DEV ACCESS');
       }
     }
   };
@@ -13457,13 +13460,15 @@ function MainApp() {
     message: string,
     type: 'success' | 'info' | 'warning' | 'security' = 'info',
     customIcon?: string,
-    customColor?: string
+    customColor?: string,
+    badge?: string,
+    isDev?: boolean
   ) => {
     if (bannerTimeoutRef.current) {
       clearTimeout(bannerTimeoutRef.current);
       bannerTimeoutRef.current = null;
     }
-    setBannerNotification({ id: String(Date.now()), title, message, type, customIcon, customColor });
+    setBannerNotification({ id: String(Date.now()), title, message, type, customIcon, customColor, badge, isDev });
     bannerAnimY.setValue(-120);
     bannerAnimScale.setValue(0.9);
     bannerAnimOpacity.setValue(0);
@@ -13506,7 +13511,20 @@ function MainApp() {
           useNativeDriver: true,
         }),
       ]).start(() => setBannerNotification(null));
-    }, 2400);
+    }, isDev ? 3000 : 2400);
+  };
+
+  const triggerDevToast = (
+    title: string,
+    message: string,
+    customIcon: string = 'code-slash',
+    customColor: string = '#00FF66',
+    badge: string = 'DEV UTILITY'
+  ) => {
+    if (appSettings.notifySounds !== false) {
+      playAppleNotificationSound('tap');
+    }
+    showBannerToast(title, message, 'success', customIcon, customColor, badge, true);
   };
 
   const triggerToast = (
@@ -13514,7 +13532,9 @@ function MainApp() {
     title?: string,
     type?: 'success' | 'info' | 'warning' | 'security',
     customIconOrUseModal?: string | boolean,
-    customColor?: string
+    customColor?: string,
+    badge?: string,
+    isDev?: boolean
   ) => {
     let resolvedTitle = title;
     let resolvedType = type;
@@ -13586,8 +13606,7 @@ function MainApp() {
     }
 
     // 2. Biểu ngữ trượt tinh tế ở đầu màn hình (Apple Dynamic Island Top Banner Popup)
-    // CHỈ hiển thị popup thành công, KHÔNG gửi thông báo đẩy hệ thống cho các thao tác chỉnh sửa/cập nhật thông thường
-    showBannerToast(resolvedTitle, cleanMsg, resolvedType, resolvedIcon, resolvedColor);
+    showBannerToast(resolvedTitle, cleanMsg, resolvedType, resolvedIcon, resolvedColor, badge, isDev);
   };
 
   // Lên lịch gửi thông báo đẩy thực tế ra bên ngoài màn hình khóa iPhone / Trình duyệt
@@ -15549,21 +15568,80 @@ function MainApp() {
   };
 
   // ── 1. CÀO NHẠC & AUDIO HUB (Spotify, SoundCloud, Zing MP3, Apple Music) ──
+  const stopAllMusicAudio = useCallback(() => {
+    if (musicAudioRef.current) {
+      try {
+        musicAudioRef.current.pause();
+        musicAudioRef.current.src = '';
+      } catch (e) {}
+      musicAudioRef.current = null;
+    }
+    if (nativeMusicAudioPlayerRef.current) {
+      try {
+        nativeMusicAudioPlayerRef.current.pause();
+        nativeMusicAudioPlayerRef.current.release();
+      } catch (e) {}
+      nativeMusicAudioPlayerRef.current = null;
+    }
+    setMusicPlaying(false);
+  }, []);
+
+  const playAudioStream = useCallback(async (streamUrl: string) => {
+    stopAllMusicAudio();
+    if (!streamUrl) return;
+
+    if (Platform.OS === 'web') {
+      if (typeof Audio !== 'undefined') {
+        try {
+          const audio = new Audio(streamUrl);
+          musicAudioRef.current = audio;
+          audio.onended = () => setMusicPlaying(false);
+          audio.onerror = () => {
+            console.warn('Web music play error');
+            setMusicPlaying(false);
+          };
+          await audio.play();
+          setMusicPlaying(true);
+        } catch (err) {
+          console.warn('Web audio play catch:', err);
+        }
+      }
+    } else {
+      // Native iOS (Expo Native / Standalone IPA app)
+      try {
+        await setAudioModeAsync({
+          playsInSilentMode: true,
+          shouldPlayInBackground: true,
+          allowsRecording: false,
+        }).catch(() => {});
+
+        const player = createAudioPlayer(streamUrl);
+        nativeMusicAudioPlayerRef.current = player;
+        player.play();
+        setMusicPlaying(true);
+
+        player.addListener('playbackStatusUpdate', (status: any) => {
+          if (status.didJustFinish) {
+            setMusicPlaying(false);
+          }
+        });
+      } catch (err) {
+        console.warn('Native audio play error on iOS:', err);
+        setMusicPlaying(false);
+      }
+    }
+  }, [stopAllMusicAudio]);
+
   const handleScrapeMusic = async (overrideQuery?: string) => {
     const q = (overrideQuery !== undefined ? overrideQuery : musicSearchQuery).trim();
     if (!q) {
-      triggerToast('Vui lòng nhập tên bài hát hoặc dán link nhạc!', 'Chưa Nhập Tên Bài Hát', 'warning', 'search-outline');
+      triggerDevToast('Chưa Nhập Tên Bài Hát', 'Vui lòng nhập tên bài hát hoặc dán link nhạc!', 'search-outline', '#FF9F0A', 'MUSIC SEARCH');
       return;
     }
 
     setIsScrapingMusic(true);
     setMusicResult(null);
-
-    if (musicAudioRef.current) {
-      musicAudioRef.current.pause();
-      musicAudioRef.current = null;
-      setMusicPlaying(false);
-    }
+    stopAllMusicAudio();
 
     try {
       const isSpotifyUrl = q.includes('spotify.com/track/') || q.includes('spotify:track:');
@@ -15595,7 +15673,7 @@ function MainApp() {
           isEmbedOnly: true,
         });
         setMusicPlayerMode('embed');
-        triggerToast(`Đã bóc tách thành công bài hát Spotify: ${spTitle}`, 'Cào Nhạc Thành Công', 'success', 'checkmark-circle');
+        triggerDevToast('Cào Nhạc Thành Công', `Đã bóc tách thành công bài hát Spotify: ${spTitle}`, 'musical-notes', '#1DB954', 'SPOTIFY');
         playAppleNotificationSound('success');
         setIsScrapingMusic(false);
         return;
@@ -15614,83 +15692,133 @@ function MainApp() {
           isEmbedOnly: true,
         });
         setMusicPlayerMode('embed');
-        triggerToast('Đã bóc tách widget phát SoundCloud thành công!', 'Cào Nhạc Thành Công', 'success', 'checkmark-circle');
+        triggerDevToast('Cào Nhạc Thành Công', 'Đã bóc tách widget phát SoundCloud thành công!', 'musical-notes', '#FF5500', 'SOUNDCLOUD');
         playAppleNotificationSound('success');
         setIsScrapingMusic(false);
         return;
       }
 
-      // 1. Cào FULL BÀI HÁT qua Full Song Engine (100% Full bài, không giới hạn 30s)
+      // 1. Nếu chạy trên Trình duyệt Web (có máy chủ node proxy nội bộ port 3333)
+      if (Platform.OS === 'web') {
+        try {
+          const fullMusicRes = await fetch(`http://localhost:3333/music/search?q=${encodeURIComponent(q)}`);
+          if (fullMusicRes.ok) {
+            const fullData = await fullMusicRes.json();
+            if (fullData.success && fullData.results && fullData.results.length > 0) {
+              const first = fullData.results[0];
+              setMusicResult({
+                title: first.title,
+                artist: first.artist || 'Nghệ Sĩ Việt Nam',
+                channelName: first.channelName,
+                artistAvatar: first.artistAvatar || first.channelAvatar,
+                isVerified: first.isVerified,
+                isOfficial: first.isOfficial,
+                album: 'Bản Đầy Đủ Chính Chủ',
+                cover: first.cover,
+                duration: first.duration || 'Full Song',
+                genre: 'Official Music',
+                platform: 'full',
+                streamUrl: first.playerUrl,
+                backupStreamUrl: first.embedUrl,
+                embedUrl: first.embedUrl,
+                watchUrl: first.watchUrl,
+                allCandidates: fullData.results.slice(0, 5),
+              });
+              setMusicPlayerMode('stream');
+              setMusicPlaying(true);
+              triggerDevToast('Chính Chủ Thành Công', `Đã bóc tách kênh: ${first.artist || first.channelName}`, 'musical-notes', '#1DB954', 'FULL AUDIO');
+              playAppleNotificationSound('success');
+              setIsScrapingMusic(false);
+              return;
+            }
+          }
+        } catch (localErr) {
+          // Bỏ qua nếu proxy web không bật
+        }
+      }
+
+      // 2. Trực tiếp chạy trên iPhone / iOS Native (IPA) & Web qua Apple iTunes Search API (100% không CORS, CDN Apple toàn cầu)
       try {
-        const fullMusicRes = await fetch(`http://localhost:3333/music/search?q=${encodeURIComponent(q)}`);
-        if (fullMusicRes.ok) {
-          const fullData = await fullMusicRes.json();
-          if (fullData.success && fullData.results && fullData.results.length > 0) {
-            const first = fullData.results[0];
+        const itunesRes = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&country=VN&entity=song&limit=15`);
+        if (itunesRes.ok) {
+          const itunesData = await itunesRes.json();
+          if (itunesData.results && itunesData.results.length > 0) {
+            const first = itunesData.results[0];
+            const directStream = first.previewUrl;
+            const cover = first.artworkUrl100 ? first.artworkUrl100.replace('100x100', '600x600') : 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&q=80';
+            const durationMin = Math.floor((first.trackTimeMillis || 180000) / 60000);
+            const durationSec = Math.floor(((first.trackTimeMillis || 180000) % 60000) / 1000).toString().padStart(2, '0');
+
             setMusicResult({
-              title: first.title,
-              artist: first.artist || 'Nghệ Sĩ Việt Nam',
-              channelName: first.channelName,
-              artistAvatar: first.artistAvatar || first.channelAvatar,
-              isVerified: first.isVerified,
-              isOfficial: first.isOfficial,
-              album: 'Bản Đầy Đủ Chính Chủ',
-              cover: first.cover,
-              duration: first.duration || 'Full Song',
-              genre: 'Official Music',
-              platform: 'full',
-              streamUrl: first.playerUrl,
-              backupStreamUrl: first.embedUrl,
-              embedUrl: first.embedUrl,
-              watchUrl: first.watchUrl,
-              allCandidates: fullData.results.slice(0, 5),
+              title: first.trackName,
+              artist: first.artistName,
+              album: first.collectionName || 'Single HD',
+              cover,
+              duration: `${durationMin}:${durationSec}`,
+              genre: first.primaryGenreName || 'Pop',
+              platform: 'itunes',
+              streamUrl: directStream,
+              backupStreamUrl: directStream,
+              embedUrl: `https://embed.music.apple.com/us/album/${first.collectionId}?i=${first.trackId}`,
+              watchUrl: first.trackViewUrl,
+              allCandidates: itunesData.results.slice(0, 8),
             });
             setMusicPlayerMode('stream');
-            setMusicPlaying(true);
-            triggerToast(`Đã bóc tách kênh chính chủ: ${first.artist || first.channelName}`, 'Chính Chủ Thành Công', 'success', 'checkmark-circle');
+            if (directStream) {
+              await playAudioStream(directStream);
+            }
+            triggerDevToast('Bóc Tách Thành Công', `Đã bóc tách luồng nhạc: ${first.trackName} - ${first.artistName}`, 'musical-notes', '#1DB954', 'APPLE MUSIC');
             playAppleNotificationSound('success');
             setIsScrapingMusic(false);
             return;
           }
         }
-      } catch (localErr) {
-        console.warn('Local proxy search err, falling back:', localErr);
+      } catch (itunesErr) {
+        console.warn('iTunes API search err:', itunesErr);
       }
 
-      // 2. Dự phòng: Live search qua iTunes Search API
-      const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=song&limit=6`);
-      if (res.ok) {
-        const data = await res.json();
-        const first = data.results?.[0];
-        if (first) {
-          const directStream = first.previewUrl;
-          const cover = first.artworkUrl100 ? first.artworkUrl100.replace('100x100', '600x600') : 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&q=80';
-          const durationMin = Math.floor((first.trackTimeMillis || 180000) / 60000);
-          const durationSec = Math.floor(((first.trackTimeMillis || 180000) % 60000) / 1000).toString().padStart(2, '0');
+      // 3. Tìm kiếm dự phòng Deezer API (Trực tiếp từ Cloud Deezer, MP3 Stream)
+      try {
+        const dzRes = await fetch(`https://api.deezer.com/search?q=${encodeURIComponent(q)}&limit=10`);
+        if (dzRes.ok) {
+          const dzData = await dzRes.json();
+          if (dzData.data && dzData.data.length > 0) {
+            const first = dzData.data[0];
+            const directStream = first.preview;
+            const cover = first.album?.cover_big || first.album?.cover_medium || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&q=80';
+            const durationMin = Math.floor((first.duration || 180) / 60);
+            const durationSec = ((first.duration || 180) % 60).toString().padStart(2, '0');
 
-          setMusicResult({
-            title: first.trackName,
-            artist: first.artistName,
-            album: first.collectionName || 'Single HD',
-            cover,
-            duration: `${durationMin}:${durationSec}`,
-            genre: first.primaryGenreName || 'Pop',
-            platform: 'itunes',
-            streamUrl: directStream,
-            backupStreamUrl: directStream,
-            embedUrl: `https://embed.music.apple.com/us/album/${first.collectionId}?i=${first.trackId}`,
-            allCandidates: data.results.slice(0, 4),
-          });
-          setMusicPlayerMode('stream');
-          setMusicPlaying(true);
-          triggerToast(`Đã bóc tách luồng nhạc: ${first.trackName} - ${first.artistName}`, 'Bóc Tách Thành Công', 'success', 'musical-notes');
-          playAppleNotificationSound('success');
-          setIsScrapingMusic(false);
-          return;
+            setMusicResult({
+              title: first.title,
+              artist: first.artist?.name || 'Nghệ Sĩ',
+              album: first.album?.title || 'Single HD',
+              cover,
+              duration: `${durationMin}:${durationSec}`,
+              genre: 'Music',
+              platform: 'deezer',
+              streamUrl: directStream,
+              backupStreamUrl: directStream,
+              embedUrl: `https://widget.deezer.com/widget/dark/track/${first.id}`,
+              watchUrl: first.link,
+              allCandidates: dzData.data.slice(0, 8),
+            });
+            setMusicPlayerMode('stream');
+            if (directStream) {
+              await playAudioStream(directStream);
+            }
+            triggerDevToast('Bóc Tách Thành Công', `Đã bóc tách từ Deezer: ${first.title} - ${first.artist?.name}`, 'musical-notes', '#1DB954', 'DEEZER');
+            playAppleNotificationSound('success');
+            setIsScrapingMusic(false);
+            return;
+          }
         }
+      } catch (deezerErr) {
+        console.warn('Deezer API search err:', deezerErr);
       }
 
       // Fallback
+      const fallbackUrl = 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/e3/8d/34/e38d34c8-3c91-99a9-d9a1-8b35c5890cd4/mzaf_6247707034244535630.plus.aac.p.m4a';
       setMusicResult({
         title: q,
         artist: 'Nghệ Sĩ Việt Nam',
@@ -15698,14 +15826,14 @@ function MainApp() {
         cover: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&q=80',
         duration: '3:30',
         platform: 'all',
-        streamUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/e3/8d/34/e38d34c8-3c91-99a9-d9a1-8b35c5890cd4/mzaf_6247707034244535630.plus.aac.p.m4a',
+        streamUrl: fallbackUrl,
         embedUrl: 'https://open.spotify.com/embed/track/4cOdK2wGLETKBW3PvgPWqT',
       });
       setMusicPlayerMode('stream');
-      setMusicPlaying(true);
-      triggerToast(`Đã chuẩn bị luồng phát trực tiếp cho: ${q}`, 'Bóc Tách Hoàn Tất', 'info');
+      await playAudioStream(fallbackUrl);
+      triggerDevToast('Bóc Tách Hoàn Tất', `Đã kích hoạt luồng phát trực tiếp cho: ${q}`, 'musical-notes', '#1DB954', 'LIVE AUDIO');
     } catch {
-      triggerToast('Lỗi kết nối máy chủ cào nhạc! Vui lòng thử lại.', 'Lỗi Mạng', 'warning');
+      triggerDevToast('Lỗi Mạng', 'Lỗi kết nối máy chủ cào nhạc! Vui lòng thử lại.', 'warning', '#FF9F0A', 'NETWORK ERROR');
     } finally {
       setIsScrapingMusic(false);
     }
@@ -15714,20 +15842,43 @@ function MainApp() {
   const handleTogglePlayMusic = () => {
     if (!musicResult) return;
     const nextPlaying = !musicPlaying;
-    setMusicPlaying(nextPlaying);
-    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+
+    if (Platform.OS === 'web') {
       const frame = (document.getElementById('gvault-vinyl-iframe') || document.getElementById('gvault-bg-audio-engine')) as HTMLIFrameElement;
       if (frame && frame.contentWindow) {
         frame.contentWindow.postMessage(nextPlaying ? 'play' : 'pause', '*');
       }
-    }
-    if (typeof Audio !== 'undefined' && musicAudioRef.current) {
-      if (!nextPlaying) {
-        musicAudioRef.current.pause();
-      } else {
-        musicAudioRef.current.play().catch(() => {});
+      if (musicAudioRef.current) {
+        if (nextPlaying) {
+          musicAudioRef.current.play().catch(() => {});
+        } else {
+          musicAudioRef.current.pause();
+        }
+      } else if (nextPlaying && musicResult.streamUrl) {
+        playAudioStream(musicResult.streamUrl);
+        return;
+      }
+    } else {
+      // Native iOS / IPA
+      if (nativeMusicAudioPlayerRef.current) {
+        try {
+          if (nextPlaying) {
+            nativeMusicAudioPlayerRef.current.play();
+          } else {
+            nativeMusicAudioPlayerRef.current.pause();
+          }
+        } catch (e) {
+          if (nextPlaying && musicResult.streamUrl) {
+            playAudioStream(musicResult.streamUrl);
+            return;
+          }
+        }
+      } else if (nextPlaying && musicResult.streamUrl) {
+        playAudioStream(musicResult.streamUrl);
+        return;
       }
     }
+    setMusicPlaying(nextPlaying);
   };
 
   // ── 2. CÔNG CỤ HIHI - STRESS TEST & KIỂM THỬ CHỊU TẢI (scripts/hihi) ──
@@ -16945,71 +17096,105 @@ function MainApp() {
             style={{
               flexDirection: 'row',
               alignItems: 'center',
-              maxWidth: 420,
+              maxWidth: 430,
               width: '92%',
-              backgroundColor: isLight ? 'rgba(255, 255, 255, 0.95)' : 'rgba(28, 28, 30, 0.95)',
-              paddingVertical: 10,
+              backgroundColor: bannerNotification.isDev
+                ? (isLight ? 'rgba(255, 255, 255, 0.98)' : 'rgba(10, 14, 22, 0.97)')
+                : (isLight ? 'rgba(255, 255, 255, 0.95)' : 'rgba(28, 28, 30, 0.95)'),
+              paddingVertical: bannerNotification.isDev ? 12 : 10,
               paddingHorizontal: 14,
-              borderRadius: 24,
-              borderWidth: 0.5,
-              borderColor: isLight ? 'rgba(0, 0, 0, 0.08)' : 'rgba(255, 255, 255, 0.14)',
-              shadowColor: '#000000',
-              shadowOffset: { width: 0, height: 6 },
-              shadowOpacity: isLight ? 0.12 : 0.45,
-              shadowRadius: 14,
-              elevation: 12,
+              borderRadius: 22,
+              borderWidth: bannerNotification.isDev ? 1.5 : 0.5,
+              borderColor: bannerNotification.isDev
+                ? (bannerNotification.customColor || '#00FF66')
+                : (isLight ? 'rgba(0, 0, 0, 0.08)' : 'rgba(255, 255, 255, 0.14)'),
+              shadowColor: bannerNotification.isDev ? (bannerNotification.customColor || '#00FF66') : '#000000',
+              shadowOffset: { width: 0, height: bannerNotification.isDev ? 8 : 6 },
+              shadowOpacity: bannerNotification.isDev ? 0.45 : (isLight ? 0.12 : 0.45),
+              shadowRadius: bannerNotification.isDev ? 18 : 14,
+              elevation: bannerNotification.isDev ? 16 : 12,
               gap: 12,
             }}
           >
             {/* Left Icon Badge */}
             <View
               style={{
-                width: 38,
-                height: 38,
-                borderRadius: 19,
-                backgroundColor:
-                  bannerNotification.type === 'success'
+                width: 40,
+                height: 40,
+                borderRadius: 14,
+                backgroundColor: bannerNotification.customColor
+                  ? `${bannerNotification.customColor}22`
+                  : (bannerNotification.type === 'success'
                     ? 'rgba(48, 209, 88, 0.18)'
                     : bannerNotification.type === 'warning'
                     ? 'rgba(255, 159, 10, 0.18)'
                     : bannerNotification.type === 'security'
                     ? 'rgba(10, 132, 255, 0.18)'
-                    : 'rgba(142, 142, 147, 0.18)',
+                    : 'rgba(142, 142, 147, 0.18)'),
                 justifyContent: 'center',
                 alignItems: 'center',
+                borderWidth: bannerNotification.isDev ? 1 : 0,
+                borderColor: bannerNotification.isDev ? `${bannerNotification.customColor || '#00FF66'}40` : undefined,
               }}
             >
-              <Ionicons
-                name={
-                  (bannerNotification.customIcon ||
+              {bannerNotification.customIcon === 'anonymous' ? (
+                <AnonymousMaskIcon size={24} color={bannerNotification.customColor || '#00FF66'} />
+              ) : (
+                <Ionicons
+                  name={
+                    (bannerNotification.customIcon ||
+                      (bannerNotification.type === 'success'
+                        ? 'checkmark-circle'
+                        : bannerNotification.type === 'warning'
+                        ? 'warning'
+                        : bannerNotification.type === 'security'
+                        ? 'shield-checkmark'
+                        : 'chatbubble-ellipses')) as any
+                  }
+                  size={22}
+                  color={
+                    bannerNotification.customColor ||
                     (bannerNotification.type === 'success'
-                      ? 'checkmark-circle'
+                      ? '#30D158'
                       : bannerNotification.type === 'warning'
-                      ? 'warning'
+                      ? '#FF9F0A'
                       : bannerNotification.type === 'security'
-                      ? 'shield-checkmark'
-                      : 'chatbubble-ellipses')) as any
-                }
-                size={22}
-                color={
-                  bannerNotification.customColor ||
-                  (bannerNotification.type === 'success'
-                    ? '#30D158'
-                    : bannerNotification.type === 'warning'
-                    ? '#FF9F0A'
-                    : bannerNotification.type === 'security'
-                    ? '#0A84FF'
-                    : appSettings.accentColor)
-                }
-              />
+                      ? '#0A84FF'
+                      : appSettings.accentColor)
+                  }
+                />
+              )}
             </View>
 
             {/* Content Text */}
             <View style={{ flex: 1 }}>
+              {(bannerNotification.isDev || bannerNotification.badge) && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 2 }}>
+                  <View
+                    style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: 3,
+                      backgroundColor: bannerNotification.customColor || '#00FF66',
+                    }}
+                  />
+                  <Text
+                    style={{
+                      fontSize: 9.5,
+                      fontWeight: '900',
+                      color: bannerNotification.customColor || '#00FF66',
+                      letterSpacing: 0.8,
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    {bannerNotification.badge || 'DEV UTILITY'}
+                  </Text>
+                </View>
+              )}
               <Text
                 style={{
                   fontSize: 14,
-                  fontWeight: '700',
+                  fontWeight: '800',
                   color: isLight ? '#000000' : '#FFFFFF',
                   letterSpacing: -0.2,
                 }}
@@ -17019,8 +17204,8 @@ function MainApp() {
               </Text>
               <Text
                 style={{
-                  fontSize: 12.5,
-                  color: isLight ? '#636366' : '#AEAEB2',
+                  fontSize: 12,
+                  color: isLight ? '#636366' : '#94A3B8',
                   marginTop: 1,
                   lineHeight: 16,
                 }}
@@ -17033,17 +17218,21 @@ function MainApp() {
             {/* Right Subtle Pill Indicator */}
             <View
               style={{
-                width: 4,
-                height: 22,
-                borderRadius: 2,
+                width: bannerNotification.isDev ? 5 : 4,
+                height: bannerNotification.isDev ? 26 : 22,
+                borderRadius: 2.5,
                 backgroundColor:
-                  bannerNotification.type === 'success'
+                  bannerNotification.customColor ||
+                  (bannerNotification.type === 'success'
                     ? '#30D158'
                     : bannerNotification.type === 'warning'
                     ? '#FF9F0A'
                     : bannerNotification.type === 'security'
                     ? '#0A84FF'
-                    : appSettings.accentColor,
+                    : appSettings.accentColor),
+                shadowColor: bannerNotification.customColor || '#30D158',
+                shadowRadius: bannerNotification.isDev ? 6 : 0,
+                shadowOpacity: bannerNotification.isDev ? 0.8 : 0,
               }}
             />
           </TouchableOpacity>
@@ -17933,7 +18122,10 @@ function MainApp() {
                   {isDeveloperModeEnabled && (
                     <TouchableOpacity
                       activeOpacity={0.75}
-                      onPress={() => setShowHomeMenuModal(true)}
+                      onPress={() => {
+                        setShowHomeMenuModal(true);
+                        triggerDevToast('Tiện Ích Nhà Phát Triển', 'Bảng điều khiển công cụ Developer đã sẵn sàng', 'code-slash', '#00FF66', 'DEV CONSOLE');
+                      }}
                       style={{
                         width: 36,
                         height: 36,
@@ -24730,7 +24922,7 @@ function MainApp() {
                           <Text style={{ fontSize: 11, fontWeight: '800', color: '#34C759' }}>DEV</Text>
                         </View>
                       )}
-                      <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 16 }}>2.0.0 (Build 2026)</Text>
+                      <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 16 }}>2.0.3 (Build 2026)</Text>
                     </View>
                   </TouchableOpacity>
                 </View>
@@ -28800,6 +28992,7 @@ function MainApp() {
                     action: () => {
                       setShowHomeMenuModal(false);
                       setShowApiScraperModal(true);
+                      triggerDevToast('Cào API & Bóc Tách Media', 'Đã khởi chạy công cụ phân tích video, TikTok, YouTube & web phim', 'color-wand', '#FF2D55', 'API SCRAPER');
                     },
                   },
                   {
@@ -28812,6 +29005,7 @@ function MainApp() {
                     action: () => {
                       setShowHomeMenuModal(false);
                       setShowMusicScraperModal(true);
+                      triggerDevToast('Cào Nhạc & Audio Hub', 'Đã khởi chạy studio âm thanh chất lượng cao Apple Music & Spotify', 'musical-notes', '#1DB954', 'AUDIO STUDIO');
                     },
                   },
                   {
@@ -28825,6 +29019,7 @@ function MainApp() {
                     action: () => {
                       setShowHomeMenuModal(false);
                       setShowHiHiModal(true);
+                      triggerDevToast('HIHI Stress Test', 'Đã kích hoạt công cụ kiểm thử tải socket & benchmark server', 'anonymous', '#00FF66', 'STRESS TEST');
                     },
                   },
                   {
@@ -28837,6 +29032,7 @@ function MainApp() {
                     action: () => {
                       setShowHomeMenuModal(false);
                       setShowSpeedTestModal(true);
+                      triggerDevToast('Đo Tốc Độ Mạng', 'Đã khởi chạy bộ đo băng thông Cloudflare & ping jitter', 'speedometer', '#FF9500', 'SPEED TEST');
                     },
                   },
                   {
@@ -28850,6 +29046,7 @@ function MainApp() {
                       setShowHomeMenuModal(false);
                       setShowIpInspectorModal(true);
                       if (!ipData) handleInspectIp();
+                      triggerDevToast('Kiểm Tra IP & Geo', 'Đang tra cứu địa chỉ IP, nhà mạng ISP & vị trí máy chủ', 'globe', '#007AFF', 'GEO IP');
                     },
                   },
                   {
@@ -28862,6 +29059,7 @@ function MainApp() {
                     action: () => {
                       setShowHomeMenuModal(false);
                       setShowReportedMoviesModal(true);
+                      triggerDevToast('Báo Cáo Phim Lỗi', 'Mở danh sách phim hỏng và trích xuất file JSON cấu hình', 'flag', '#FF2D55', 'JSON EXPORT');
                     },
                   },
                 ].map((item, idx, arr) => (
@@ -31068,7 +31266,7 @@ function MainApp() {
 
                   {/* Player Content */}
                   {musicPlayerMode === 'stream' && musicResult.streamUrl ? (
-                    musicResult.streamUrl.includes('localhost:3333/music/player') ? (
+                    Platform.OS === 'web' && musicResult.streamUrl.includes('localhost:3333/music/player') ? (
                       <View
                         style={{
                           height: 260,
@@ -31080,80 +31278,76 @@ function MainApp() {
                           borderColor: '#1DB954',
                         }}
                       >
-                        {Platform.OS === 'web' ? (
-                          React.createElement('iframe', {
-                            id: 'gvault-vinyl-iframe',
-                            key: `vinyl-${musicResult.streamUrl}`,
-                            src: musicResult.streamUrl,
-                            style: { width: '100%', height: '100%', border: 'none', backgroundColor: '#0B0B0E' },
-                            allow: 'autoplay; clipboard-write; encrypted-media; picture-in-picture',
-                          })
-                        ) : (
-                          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-                            <Ionicons name="musical-notes" size={40} color="#1DB954" />
-                            <Text style={{ color: '#FFFFFF', marginTop: 8, fontSize: 13, fontWeight: '700' }}>
-                              Bản Full Đầy Đủ ({musicResult.duration})
-                            </Text>
-                          </View>
-                        )}
+                        {React.createElement('iframe', {
+                          id: 'gvault-vinyl-iframe',
+                          key: `vinyl-${musicResult.streamUrl}`,
+                          src: musicResult.streamUrl,
+                          style: { width: '100%', height: '100%', border: 'none', backgroundColor: '#0B0B0E' },
+                          allow: 'autoplay; clipboard-write; encrypted-media; picture-in-picture',
+                        })}
                       </View>
                     ) : (
                       <View
                         style={{
                           backgroundColor: isLight ? '#F2F2F7' : '#0B0B0E',
-                          borderRadius: 16,
-                          padding: 14,
+                          borderRadius: 18,
+                          padding: 16,
                           marginBottom: 14,
-                          borderWidth: 1,
-                          borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                          borderWidth: 1.5,
+                          borderColor: musicPlaying ? '#1DB954' : (isLight ? '#E5E5EA' : '#2C2C2E'),
+                          shadowColor: '#1DB954',
+                          shadowOpacity: musicPlaying ? 0.35 : 0.08,
+                          shadowRadius: 16,
+                          elevation: 6,
                         }}
                       >
-                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
                             <TouchableOpacity
+                              activeOpacity={0.8}
                               onPress={handleTogglePlayMusic}
                               style={{
-                                width: 44,
-                                height: 44,
-                                borderRadius: 22,
+                                width: 48,
+                                height: 48,
+                                borderRadius: 24,
                                 backgroundColor: '#1DB954',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 shadowColor: '#1DB954',
-                                shadowOpacity: 0.4,
-                                shadowRadius: 8,
-                                elevation: 4,
+                                shadowOpacity: 0.5,
+                                shadowRadius: 10,
+                                elevation: 6,
                               }}
                             >
-                              <Ionicons name={musicPlaying ? "pause" : "play"} size={22} color="#FFFFFF" />
+                              <Ionicons name={musicPlaying ? "pause" : "play"} size={24} color="#FFFFFF" />
                             </TouchableOpacity>
-                            <View>
-                              <Text style={{ fontSize: 13, fontWeight: '800', color: isLight ? '#000' : '#FFF' }}>
-                                {musicPlaying ? 'Đang phát âm thanh trực tiếp' : 'Sẵn sàng phát'}
+                            <View style={{ flex: 1 }}>
+                              <Text numberOfLines={1} style={{ fontSize: 13.5, fontWeight: '800', color: isLight ? '#000' : '#FFF' }}>
+                                {musicPlaying ? 'Đang phát âm thanh trực tiếp' : 'Sẵn sàng phát nhạc'}
                               </Text>
-                              <Text style={{ fontSize: 10.5, color: '#8E8E93' }}>
-                                Luồng phát trực tiếp • {musicResult.duration}
+                              <Text numberOfLines={1} style={{ fontSize: 11, color: '#8E8E93', marginTop: 1 }}>
+                                {musicResult.platform === 'itunes' ? 'Apple Music CDN (Direct m4a)' : (musicResult.platform === 'deezer' ? 'Deezer Cloud Stream (MP3)' : 'Luồng phát trực tiếp')} • {musicResult.duration}
                               </Text>
                             </View>
                           </View>
-                          <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: musicPlaying ? 'rgba(52,199,89,0.15)' : 'rgba(142,142,147,0.15)' }}>
-                            <Text style={{ fontSize: 10.5, fontWeight: '800', color: musicPlaying ? '#34C759' : '#8E8E93' }}>
-                              {musicPlaying ? 'LIVE PLAYING' : 'IDLE'}
+                          <View style={{ paddingHorizontal: 9, paddingVertical: 4, borderRadius: 8, backgroundColor: musicPlaying ? 'rgba(52,199,89,0.18)' : 'rgba(142,142,147,0.18)', borderWidth: 1, borderColor: musicPlaying ? 'rgba(52,199,89,0.3)' : 'transparent' }}>
+                            <Text style={{ fontSize: 10, fontWeight: '900', color: musicPlaying ? '#34C759' : '#8E8E93', letterSpacing: 0.5 }}>
+                              {musicPlaying ? '● LIVE AUDIO' : 'PAUSED'}
                             </Text>
                           </View>
                         </View>
 
                         {/* Waveform */}
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, height: 26, justifyContent: 'center' }}>
-                          {[8, 14, 22, 10, 18, 26, 12, 20, 16, 24, 14, 22, 18, 10, 25, 14, 19, 12, 24, 16, 22, 12, 18, 10, 24, 16].map((h, i) => (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, height: 28, justifyContent: 'center', paddingHorizontal: 6 }}>
+                          {[8, 14, 22, 10, 18, 26, 12, 20, 16, 24, 14, 22, 18, 10, 25, 14, 19, 12, 24, 16, 22, 12, 18, 10, 24, 16, 12, 20, 14, 22].map((h, i) => (
                             <View
                               key={i}
                               style={{
-                                width: 4,
-                                height: musicPlaying ? Math.max(6, (h * ((i % 3) + 1)) % 26) : 6,
+                                width: 3.5,
+                                height: musicPlaying ? Math.max(6, (h * ((i % 4) + 1)) % 28) : 6,
                                 borderRadius: 2,
                                 backgroundColor: musicPlaying ? '#1DB954' : '#8E8E93',
-                                opacity: musicPlaying ? 0.9 : 0.35,
+                                opacity: musicPlaying ? 0.95 : 0.3,
                               }}
                             />
                           ))}
@@ -31286,12 +31480,10 @@ function MainApp() {
                                   isVerified,
                                   isOfficial,
                                 });
-                                if (musicAudioRef.current) {
-                                  musicAudioRef.current.pause();
-                                  musicAudioRef.current = null;
-                                  setMusicPlaying(false);
+                                if (streamUrl) {
+                                  playAudioStream(streamUrl);
                                 }
-                                triggerToast(`Đã chọn: ${title}`, 'Đổi Bản Thu', 'info');
+                                triggerDevToast('Đổi Bản Thu', `Đang phát: ${title}`, 'musical-notes', '#1DB954', 'AUDIO SWITCH');
                               }}
                               style={{
                                 flexDirection: 'row',
@@ -34764,11 +34956,7 @@ function MainApp() {
 
             <TouchableOpacity
               onPress={() => {
-                if (musicAudioRef.current) {
-                  musicAudioRef.current.pause();
-                  musicAudioRef.current = null;
-                }
-                setMusicPlaying(false);
+                stopAllMusicAudio();
                 setMusicResult(null);
               }}
               style={{
