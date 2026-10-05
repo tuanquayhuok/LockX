@@ -28801,25 +28801,21 @@ function MainApp() {
       </Modal>
 
       {/* ========================================================================= */}
-      {/* TRANG RIÊNG: MENU TIỆN ÍCH NHÀ PHÁT TRIỂN (FULL-SCREEN VIEW)            */}
+      {/* MODAL: MENU 3 GẠCH TRANG CHỦ (TIỆN ÍCH & TRUY CẬP NHANH CHUẨN APPLE HIG) */}
       {/* ========================================================================= */}
-      <Modal visible={showHomeMenuModal} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setShowHomeMenuModal(false)}>
-        <SafeAreaView style={{ flex: 1, backgroundColor: isLight ? '#F2F2F7' : '#000000' }}>
-          {/* Top Navigation Bar Trang Riêng */}
-          <View style={[styles.fullScreenNavBar, isLight && { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E5EA' }]}>
-            <TouchableOpacity
-              onPress={() => setShowHomeMenuModal(false)}
-              style={styles.fullScreenNavBtn}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            >
-              <Ionicons name="chevron-back" size={24} color={appSettings.accentColor} />
-              <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor }]}>Trang Chủ</Text>
-            </TouchableOpacity>
-            <Text style={[styles.fullScreenNavTitle, isLight && { color: '#000000' }]}>Tiện Ích Nhà Phát Triển</Text>
-            <View style={{ width: 60 }} />
-          </View>
+      <Modal visible={showHomeMenuModal} animationType="slide" transparent onRequestClose={() => setShowHomeMenuModal(false)}>
+        <View style={styles.modalBackdrop}>
+          <SafeAreaView style={[styles.sheetCard, isLight && { backgroundColor: '#F2F2F7' }]}>
+            {/* Header */}
+            <View style={[styles.sheetHeader, isLight && { borderBottomColor: '#E5E5EA', backgroundColor: '#FFFFFF' }]}>
+              <TouchableOpacity onPress={() => setShowHomeMenuModal(false)}>
+                <Text style={[styles.sheetBtnBlue, { color: appSettings.accentColor }]}>Đóng</Text>
+              </TouchableOpacity>
+              <Text style={[styles.sheetTitle, isLight && { color: '#000000' }]}>Tiện Ích Nhà Phát Triển</Text>
+              <View style={{ width: 44 }} />
+            </View>
 
-          <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
+            <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
               {/* User Summary Card */}
               <TouchableOpacity
                 activeOpacity={0.8}
@@ -29004,6 +29000,7 @@ function MainApp() {
               </View>
             </ScrollView>
           </SafeAreaView>
+        </View>
       </Modal>
 
       {/* ========================================================================= */}
