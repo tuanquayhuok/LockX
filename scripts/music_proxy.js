@@ -606,7 +606,11 @@ const server = http.createServer(async (req, res) => {
           logs: [`[*] Khởi tạo kiểm thử chịu tải Target: ${target}:${port} (Luồng: ${threads}, Thời gian: ${duration}s, Method: ${method.toUpperCase()})`]
         };
 
-        const pythonScript = 'D:\\GVault-Expo\\scripts\\hihi\\dos.py';
+        const hihiDir = path.join(__dirname, 'hihi');
+        const pythonScript = fs.existsSync(path.join(hihiDir, 'netbench.py'))
+          ? path.join(hihiDir, 'netbench.py')
+          : path.join(hihiDir, 'dos.py');
+
         hihiProcess = spawn('python', [
           pythonScript,
           '--cli',
@@ -615,7 +619,9 @@ const server = http.createServer(async (req, res) => {
           '--threads', String(threads),
           '--duration', String(duration),
           '--method', method
-        ]);
+        ], {
+          cwd: hihiDir
+        });
 
         hihiProcess.stdout.on('data', (chunk) => {
           const lines = chunk.toString().split('\n');
@@ -684,7 +690,12 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname === '/hihi/gui') {
     try {
-      const child = spawn('python', ['D:\\GVault-Expo\\scripts\\hihi\\dos.py'], {
+      const hihiDir = path.join(__dirname, 'hihi');
+      const pythonScript = fs.existsSync(path.join(hihiDir, 'netbench.py'))
+        ? path.join(hihiDir, 'netbench.py')
+        : path.join(hihiDir, 'dos.py');
+      const child = spawn('python', [pythonScript], {
+        cwd: hihiDir,
         detached: true,
         stdio: 'ignore'
       });

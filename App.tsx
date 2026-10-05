@@ -8579,7 +8579,7 @@ function MainApp() {
   const [hihiPort, setHihiPort] = useState<string>('80');
   const [hihiThreads, setHihiThreads] = useState<string>('100');
   const [hihiDuration, setHihiDuration] = useState<string>('30');
-  const [hihiMethod, setHihiMethod] = useState<'http' | 'post' | 'https' | 'slowloris' | 'keepalive'>('http');
+  const [hihiMethod, setHihiMethod] = useState<'http' | 'post' | 'https' | 'slowloris' | 'keepalive' | 'proxy'>('http');
   const [hihiStatus, setHihiStatus] = useState<any>({
     isRunning: false,
     requestsSent: 0,
@@ -32154,7 +32154,7 @@ function MainApp() {
                     Cấu Hình Mục Tiêu (Target)
                   </Text>
                   <View style={{ paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, backgroundColor: 'rgba(0, 255, 102, 0.15)' }}>
-                    <Text style={{ fontSize: 10, fontWeight: '800', color: '#00FF66' }}>scripts/hihi/dos.py</Text>
+                    <Text style={{ fontSize: 10, fontWeight: '800', color: '#00FF66' }}>scripts/hihi/netbench.py</Text>
                   </View>
                 </View>
 
@@ -32259,6 +32259,7 @@ function MainApp() {
                     { key: 'https', label: 'HTTPS SSL' },
                     { key: 'slowloris', label: 'SLOWLORIS' },
                     { key: 'keepalive', label: 'KEEP-ALIVE' },
+                    { key: 'proxy', label: 'PROXY ROTATION' },
                   ].map((m) => (
                     <TouchableOpacity
                       key={m.key}
@@ -32274,7 +32275,7 @@ function MainApp() {
                         style={{
                           fontSize: 11,
                           fontWeight: '800',
-                          color: hihiMethod === m.key ? '#000000' : (isLight ? '#000000' : '#FFFFFF'),
+                          color: hihiMethod === m.key ? '#00FF66' : (isLight ? '#000000' : '#FFFFFF'),
                         }}
                       >
                         {m.label}
@@ -32325,7 +32326,7 @@ function MainApp() {
                       ) : (
                         <Ionicons name="terminal" size={16} color="#000000" />
                       )}
-                      <Text style={{ fontSize: 13, fontWeight: '800', color: '#000000' }}>
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: '#00FF66' }}>
                         {isHiHiCurling ? 'ĐANG CURL...' : 'CURL -I'}
                       </Text>
                     </TouchableOpacity>
@@ -32345,7 +32346,7 @@ function MainApp() {
                   >
                     <Ionicons name="desktop-outline" size={15} color={isLight ? '#000' : '#FFF'} />
                     <Text style={{ fontSize: 12, fontWeight: '700', color: isLight ? '#000' : '#FFF' }}>
-                      Mở GUI Python (scripts/hihi/dos.py)
+                      Mở GUI Python (scripts/hihi/netbench.py)
                     </Text>
                   </TouchableOpacity>
                 </View>
