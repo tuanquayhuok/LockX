@@ -8481,7 +8481,7 @@ function MainApp() {
   const [catalogSearchQuery, setCatalogSearchQuery] = useState<string>('');
   const [catalogFilterYear, setCatalogFilterYear] = useState<string>('all');
   const [scraperPlatform, setScraperPlatform] = useState<'gg' | 'tiktok' | 'ytb'>('gg');
-  const [scraperUrlInput, setScraperUrlInput] = useState<string>('https://ghienphimz.mom/videoinfo?id=pha-dam-sinh-nhat-me');
+  const [scraperUrlInput, setScraperUrlInput] = useState<string>('https://ghienphimz.mom');
   const [scraperMovieNameInput, setScraperMovieNameInput] = useState<string>('');
   const [scrapeFilterMode, setScrapeFilterMode] = useState<'title' | 'all'>('title');
   const [isScraping, setIsScraping] = useState<boolean>(false);
@@ -15120,12 +15120,12 @@ function MainApp() {
 
   // Helper bóc tách cụ thể một phim theo mã code (ví dụ 'ma-xo')
   const handleSelectScrapedMovie = (movieItem: any) => {
-    setScraperUrlInput(`https://ghienphimz.mom/videoinfo?id=${movieItem.code}`);
+    setScraperUrlInput(`https://ghienphimz.mom/${movieItem.code}`);
     setScrapedThumbnailFailed(false);
     setScrapedResult({
       title: `${movieItem.title}.m3u8`,
       platform: 'gg',
-      originalUrl: `https://ghienphimz.mom/videoinfo?id=${movieItem.code}`,
+      originalUrl: `https://ghienphimz.mom/${movieItem.code}`,
       streamUrl: movieItem.streamUrl,
       embedUrl: movieItem.embedUrl,
       backupStreamUrl: movieItem.hlsUrl,
@@ -29007,7 +29007,21 @@ function MainApp() {
       {/* ========================================================================= */}
       {/* TRANG RIÊNG: CÀO API & BÓC TÁCH MEDIA (TIKTOK / YOUTUBE / GOOGLE WEB PHIM) */}
       {/* ========================================================================= */}
-      <Modal visible={showApiScraperModal} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => { setShowApiScraperModal(false); setShowHomeMenuModal(true); }}>
+      <Modal
+        visible={showApiScraperModal}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={() => {
+          if (showVideoPreviewModal) {
+            setShowVideoPreviewModal(false);
+          } else if (showScrapedCatalogModal) {
+            setShowScrapedCatalogModal(false);
+          } else {
+            setShowApiScraperModal(false);
+            setShowHomeMenuModal(true);
+          }
+        }}
+      >
         <SafeAreaView style={{ flex: 1, backgroundColor: isLight ? '#F2F2F7' : '#000000' }}>
           {/* Top Navigation Bar Trang Riêng */}
           <View style={[styles.fullScreenNavBar, isLight && { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E5EA' }]}>
@@ -29189,7 +29203,10 @@ function MainApp() {
                       <TouchableOpacity
                         key={mIdx}
                         activeOpacity={0.7}
-                        onPress={() => handleSelectScrapedMovie(movieItem)}
+                        onPress={() => {
+                          handleSelectScrapedMovie(movieItem);
+                          handleWatchDirectly(movieItem);
+                        }}
                         style={{
                           flexDirection: 'row',
                           alignItems: 'center',
@@ -29255,7 +29272,7 @@ function MainApp() {
                     {[
                       { name: 'Motchill', domain: 'https://motchill.tv/phim/mai-2024', badge: 'motchill.tv' },
                       { name: 'RoPhim', domain: 'https://rophim.net/phim/lat-mat-7-mot-dieu-uoc', badge: 'rophim.net' },
-                      { name: 'GhienPhimz', domain: 'https://ghienphimz.mom/videoinfo?id=pha-dam-sinh-nhat-me', badge: 'ghienphimz.mom' },
+                      { name: 'GhienPhimz', domain: 'https://ghienphimz.mom', badge: 'ghienphimz.mom' },
                       { name: 'PhimMoi', domain: 'https://phimmoichill.net/phim/nha-ba-nu', badge: 'phimmoichill.net' },
                       { name: 'OPhim', domain: 'https://ophim1.com/phim/cam-2024', badge: 'ophim1.com' },
                     ].map((dom, dIdx) => {
@@ -29900,45 +29917,44 @@ function MainApp() {
                 </View>
               )}
             </ScrollView>
-          </SafeAreaView>
-      </Modal>
+          {/* ========================================================================= */}
+          {/* TRANG RIÊNG: KHO PHIM VIỆT NAM (TẤT CẢ PHIM + TÌM KIẾM + LƯỚI 2 CỘT DỌC)   */}
+          {/* ========================================================================= */}
+          {showScrapedCatalogModal && (
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: isLight ? '#F2F2F7' : '#000000', zIndex: 100 }]}>
+              <SafeAreaView style={{ flex: 1, backgroundColor: isLight ? '#F2F2F7' : '#000000' }}>
+                {/* Top Navigation Bar Trang Riêng */}
+                <View style={[styles.fullScreenNavBar, isLight && { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E5EA' }]}>
+                  <TouchableOpacity
+                    onPress={() => setShowScrapedCatalogModal(false)}
+                    style={styles.fullScreenNavBtn}
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  >
+                    <Ionicons name="chevron-back" size={24} color={appSettings.accentColor} />
+                    <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor }]}>Cào API</Text>
+                  </TouchableOpacity>
 
-      {/* ========================================================================= */}
-      {/* TRANG MỚI: KHO PHIM VIỆT NAM (TẤT CẢ PHIM + THANH TÌM KIẾM + LƯỚI 2 CỘT DỌC) */}
-      {/* ========================================================================= */}
-      <Modal visible={showScrapedCatalogModal} animationType="slide" transparent onRequestClose={() => setShowScrapedCatalogModal(false)}>
-        <View style={styles.modalBackdrop}>
-          <SafeAreaView style={[styles.sheetCard, { maxHeight: '95%', height: '95%' }, isLight && { backgroundColor: '#F2F2F7' }]}>
-            {/* Header */}
-            <View style={[styles.sheetHeader, isLight && { borderBottomColor: '#E5E5EA', backgroundColor: '#FFFFFF' }]}>
-              <TouchableOpacity
-                onPress={() => setShowScrapedCatalogModal(false)}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
-              >
-                <Ionicons name="chevron-back" size={22} color={appSettings.accentColor} />
-                <Text style={[styles.sheetBtnBlue, { color: appSettings.accentColor }]}>Quay Lại</Text>
-              </TouchableOpacity>
+                  <View style={{ flex: 1, alignItems: 'center' }}>
+                    <Text style={[styles.fullScreenNavTitle, isLight && { color: '#000000' }]} numberOfLines={1}>
+                      Kho Phim Đã Cào
+                    </Text>
+                    <Text style={{ fontSize: 11, color: '#8E8E93', fontWeight: '600', marginTop: -2 }}>
+                      {filteredCatalogMovies.length} phim sẵn sàng phát
+                    </Text>
+                  </View>
 
-              <View style={{ alignItems: 'center' }}>
-                <Text style={[styles.sheetTitle, isLight && { color: '#000000' }]}>
-                  Kho Phim Việt Nam
-                </Text>
-                <Text style={{ fontSize: 11, color: '#8E8E93', fontWeight: '600' }}>
-                  {filteredCatalogMovies.length} phim sẵn sàng phát
-                </Text>
-              </View>
-
-              <TouchableOpacity
-                onPress={() => {
-                  setCatalogSearchQuery('');
-                  setCatalogFilterYear('all');
-                  triggerToast('Đã làm mới danh sách phim', 'Làm Mới', 'info');
-                }}
-                style={{ width: 44, alignItems: 'flex-end' }}
-              >
-                <Ionicons name="refresh" size={20} color={appSettings.accentColor} />
-              </TouchableOpacity>
-            </View>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setCatalogSearchQuery('');
+                      setCatalogFilterYear('all');
+                      triggerToast('Đã làm mới danh sách phim', 'Làm Mới', 'info');
+                    }}
+                    style={{ minWidth: 60, alignItems: 'flex-end', justifyContent: 'center' }}
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  >
+                    <Ionicons name="refresh" size={22} color={appSettings.accentColor} />
+                  </TouchableOpacity>
+                </View>
 
             {/* Thanh Tìm Kiếm Phim */}
             <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 6 }}>
@@ -30244,26 +30260,31 @@ function MainApp() {
             </ScrollView>
           </SafeAreaView>
         </View>
-      </Modal>
+      )}
 
       {/* ========================================================================= */}
-      {/* MODAL: XEM TRỰC TIẾP VIDEO PLAYER - CINEMA REDESIGN */}
+      {/* TRANG RIÊNG: XEM TRỰC TIẾP VIDEO PLAYER - CINEMA VIEW                      */}
       {/* ========================================================================= */}
-      <Modal visible={showVideoPreviewModal} animationType="slide" transparent onRequestClose={() => setShowVideoPreviewModal(false)}>
-        <View style={styles.modalBackdrop}>
-          <SafeAreaView style={[styles.sheetCard, { maxHeight: '92%' }, isLight && { backgroundColor: '#F2F2F7' }]}>
-            {/* Header */}
-            <View style={[styles.sheetHeader, isLight && { borderBottomColor: '#E5E5EA', backgroundColor: '#FFFFFF' }]}>
-              <TouchableOpacity onPress={() => setShowVideoPreviewModal(false)}>
-                <Text style={[styles.sheetBtnBlue, { color: appSettings.accentColor }]}>Đóng</Text>
+      {showVideoPreviewModal && (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: isLight ? '#F2F2F7' : '#000000', zIndex: 200 }]}>
+          <SafeAreaView style={{ flex: 1, backgroundColor: isLight ? '#F2F2F7' : '#000000' }}>
+            {/* Top Navigation Bar Trang Riêng */}
+            <View style={[styles.fullScreenNavBar, isLight && { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E5EA' }]}>
+              <TouchableOpacity
+                onPress={() => setShowVideoPreviewModal(false)}
+                style={styles.fullScreenNavBtn}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Ionicons name="chevron-back" size={24} color={appSettings.accentColor} />
+                <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor }]}>Quay Lại</Text>
               </TouchableOpacity>
-              <Text style={[styles.sheetTitle, isLight && { color: '#000000' }]} numberOfLines={1}>
-                Xem Phim
+              <Text style={[styles.fullScreenNavTitle, isLight && { color: '#000000' }]} numberOfLines={1}>
+                {previewVideoTitle || 'Xem Phim'}
               </Text>
-              {/* Nút Báo Lỗi nhanh ở header */}
               <TouchableOpacity
                 onPress={() => handleReportBrokenMovie(previewMovieItem || { title: previewVideoTitle, streamUrl: previewVideoUrl, embedUrl: previewEmbedUrl })}
-                style={{ padding: 4 }}
+                style={{ minWidth: 60, alignItems: 'flex-end', justifyContent: 'center' }}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
                 <Ionicons name="flag" size={20} color="#FF2D55" />
               </TouchableOpacity>
@@ -30578,6 +30599,8 @@ function MainApp() {
             </ScrollView>
           </SafeAreaView>
         </View>
+      )}
+        </SafeAreaView>
       </Modal>
 
       {/* ========================================================================= */}
