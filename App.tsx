@@ -32275,7 +32275,7 @@ function MainApp() {
                         style={{
                           fontSize: 11,
                           fontWeight: '800',
-                          color: hihiMethod === m.key ? '#00FF66' : (isLight ? '#000000' : '#FFFFFF'),
+                          color: hihiMethod === m.key ? '#000000' : (isLight ? '#000000' : '#FFFFFF'),
                         }}
                       >
                         {m.label}
@@ -32326,7 +32326,7 @@ function MainApp() {
                       ) : (
                         <Ionicons name="terminal" size={16} color="#000000" />
                       )}
-                      <Text style={{ fontSize: 13, fontWeight: '800', color: '#00FF66' }}>
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: '#000000' }}>
                         {isHiHiCurling ? 'ĐANG CURL...' : 'CURL -I'}
                       </Text>
                     </TouchableOpacity>

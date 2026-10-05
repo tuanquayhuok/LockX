@@ -1,6 +1,8 @@
 const http = require('http');
 const https = require('https');
 const url = require('url');
+const path = require('path');
+const fs = require('fs');
 const { spawn, exec } = require('child_process');
 
 let hihiProcess = null;
