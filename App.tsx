@@ -28801,21 +28801,25 @@ function MainApp() {
       </Modal>
 
       {/* ========================================================================= */}
-      {/* MODAL: MENU 3 GẠCH TRANG CHỦ (TIỆN ÍCH & TRUY CẬP NHANH CHUẨN APPLE HIG) */}
+      {/* TRANG RIÊNG: MENU TIỆN ÍCH NHÀ PHÁT TRIỂN (FULL-SCREEN VIEW)            */}
       {/* ========================================================================= */}
-      <Modal visible={showHomeMenuModal} animationType="slide" transparent onRequestClose={() => setShowHomeMenuModal(false)}>
-        <View style={styles.modalBackdrop}>
-          <SafeAreaView style={[styles.sheetCard, isLight && { backgroundColor: '#F2F2F7' }]}>
-            {/* Header */}
-            <View style={[styles.sheetHeader, isLight && { borderBottomColor: '#E5E5EA', backgroundColor: '#FFFFFF' }]}>
-              <TouchableOpacity onPress={() => setShowHomeMenuModal(false)}>
-                <Text style={[styles.sheetBtnBlue, { color: appSettings.accentColor }]}>Đóng</Text>
-              </TouchableOpacity>
-              <Text style={[styles.sheetTitle, isLight && { color: '#000000' }]}>Tiện Ích Nhà Phát Triển</Text>
-              <View style={{ width: 44 }} />
-            </View>
+      <Modal visible={showHomeMenuModal} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setShowHomeMenuModal(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: isLight ? '#F2F2F7' : '#000000' }}>
+          {/* Top Navigation Bar Trang Riêng */}
+          <View style={[styles.fullScreenNavBar, isLight && { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E5EA' }]}>
+            <TouchableOpacity
+              onPress={() => setShowHomeMenuModal(false)}
+              style={styles.fullScreenNavBtn}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Ionicons name="chevron-back" size={24} color={appSettings.accentColor} />
+              <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor }]}>Trang Chủ</Text>
+            </TouchableOpacity>
+            <Text style={[styles.fullScreenNavTitle, isLight && { color: '#000000' }]}>Tiện Ích Nhà Phát Triển</Text>
+            <View style={{ width: 60 }} />
+          </View>
 
-            <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+          <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
               {/* User Summary Card */}
               <TouchableOpacity
                 activeOpacity={0.8}
@@ -29000,31 +29004,42 @@ function MainApp() {
               </View>
             </ScrollView>
           </SafeAreaView>
-        </View>
       </Modal>
 
       {/* ========================================================================= */}
-      {/* MODAL MỚI: CÀO API & BÓC TÁCH LUỒNG MEDIA (TIKTOK / YOUTUBE / GOOGLE WEB PHIM) */}
       {/* ========================================================================= */}
-      <Modal visible={showApiScraperModal} animationType="slide" transparent onRequestClose={() => setShowApiScraperModal(false)}>
-        <View style={styles.modalBackdrop}>
-          <SafeAreaView style={[styles.sheetCard, isLight && { backgroundColor: '#F2F2F7' }]}>
-            {/* Header */}
-            <View style={[styles.sheetHeader, isLight && { borderBottomColor: '#E5E5EA', backgroundColor: '#FFFFFF' }]}>
-              <TouchableOpacity onPress={() => setShowApiScraperModal(false)}>
-                <Text style={[styles.sheetBtnBlue, { color: appSettings.accentColor }]}>Đóng</Text>
-              </TouchableOpacity>
-              <Text style={[styles.sheetTitle, isLight && { color: '#000000' }]}>Cào API & Bóc Tách Media</Text>
-              <TouchableOpacity onPress={() => {
+      {/* TRANG RIÊNG: CÀO API & BÓC TÁCH MEDIA (TIKTOK / YOUTUBE / GOOGLE WEB PHIM) */}
+      {/* ========================================================================= */}
+      <Modal visible={showApiScraperModal} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => { setShowApiScraperModal(false); setShowHomeMenuModal(true); }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: isLight ? '#F2F2F7' : '#000000' }}>
+          {/* Top Navigation Bar Trang Riêng */}
+          <View style={[styles.fullScreenNavBar, isLight && { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E5EA' }]}>
+            <TouchableOpacity
+              onPress={() => {
+                setShowApiScraperModal(false);
+                setShowHomeMenuModal(true);
+              }}
+              style={styles.fullScreenNavBtn}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Ionicons name="chevron-back" size={24} color={appSettings.accentColor} />
+              <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor }]}>Tiện Ích</Text>
+            </TouchableOpacity>
+            <Text style={[styles.fullScreenNavTitle, isLight && { color: '#000000' }]} numberOfLines={1}>Cào API & Media</Text>
+            <TouchableOpacity
+              onPress={() => {
                 setScraperUrlInput('');
                 setScrapedResult(null);
                 triggerToast('Đã làm mới dữ liệu cào API', 'Làm Mới', 'info');
-              }}>
-                <Ionicons name="refresh" size={20} color={appSettings.accentColor} />
-              </TouchableOpacity>
-            </View>
+              }}
+              style={{ minWidth: 60, alignItems: 'flex-end', justifyContent: 'center' }}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Ionicons name="refresh" size={22} color={appSettings.accentColor} />
+            </TouchableOpacity>
+          </View>
 
-            <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+          <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
               {/* 1. NỀN TẢNG CÀO API: CHỈ GOOGLE (gg) - CÁC NỀN TẢNG KHÁC HỖ TRỢ SAU */}
               <View
                 style={{
@@ -29889,7 +29904,6 @@ function MainApp() {
               )}
             </ScrollView>
           </SafeAreaView>
-        </View>
       </Modal>
 
       {/* ========================================================================= */}
@@ -30570,29 +30584,40 @@ function MainApp() {
       </Modal>
 
       {/* ========================================================================= */}
-      {/* MODAL: BÁO CÁO PHIM LỖI & XUẤT JSON */}
+      {/* TRANG RIÊNG: BÁO CÁO PHIM LỖI & XUẤT JSON                                 */}
       {/* ========================================================================= */}
-      <Modal visible={showReportedMoviesModal} animationType="slide" transparent onRequestClose={() => setShowReportedMoviesModal(false)}>
-        <View style={styles.modalBackdrop}>
-          <SafeAreaView style={[styles.sheetCard, { maxHeight: '92%' }, isLight && { backgroundColor: '#F2F2F7' }]}>
-            {/* Header */}
-            <View style={[styles.sheetHeader, isLight && { borderBottomColor: '#E5E5EA', backgroundColor: '#FFFFFF' }]}>
-              <TouchableOpacity onPress={() => setShowReportedMoviesModal(false)}>
-                <Text style={[styles.sheetBtnBlue, { color: appSettings.accentColor }]}>Đóng</Text>
-              </TouchableOpacity>
-              <Text style={[styles.sheetTitle, isLight && { color: '#000000' }]} numberOfLines={1}>
-                Phim Báo Cáo Lỗi ({reportedBrokenMovies.length})
-              </Text>
-              <TouchableOpacity onPress={() => {
+      <Modal visible={showReportedMoviesModal} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => { setShowReportedMoviesModal(false); setShowHomeMenuModal(true); }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: isLight ? '#F2F2F7' : '#000000' }}>
+          {/* Top Navigation Bar Trang Riêng */}
+          <View style={[styles.fullScreenNavBar, isLight && { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E5EA' }]}>
+            <TouchableOpacity
+              onPress={() => {
+                setShowReportedMoviesModal(false);
+                setShowHomeMenuModal(true);
+              }}
+              style={styles.fullScreenNavBtn}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Ionicons name="chevron-back" size={24} color={appSettings.accentColor} />
+              <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor }]}>Tiện Ích</Text>
+            </TouchableOpacity>
+            <Text style={[styles.fullScreenNavTitle, isLight && { color: '#000000' }]} numberOfLines={1}>
+              Phim Báo Cáo Lỗi ({reportedBrokenMovies.length})
+            </Text>
+            <TouchableOpacity
+              onPress={() => {
                 if (reportedBrokenMovies.length === 0) return;
                 setReportedBrokenMovies([]);
                 triggerToast('Đã xóa toàn bộ danh sách phim lỗi!', 'Xóa Tất Cả', 'info', 'trash-outline');
-              }}>
-                <Ionicons name="trash-outline" size={20} color="#FF453A" />
-              </TouchableOpacity>
-            </View>
+              }}
+              style={{ minWidth: 60, alignItems: 'flex-end', justifyContent: 'center' }}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Ionicons name="trash-outline" size={20} color="#FF453A" />
+            </TouchableOpacity>
+          </View>
 
-            <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 48 }} showsVerticalScrollIndicator={false}>
+          <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
               {/* Banner Card */}
               <View
                 style={{
@@ -30732,7 +30757,6 @@ function MainApp() {
               )}
             </ScrollView>
           </SafeAreaView>
-        </View>
       </Modal>
 
       {/* ========================================================================= */}
@@ -30871,7 +30895,7 @@ function MainApp() {
       </Modal>
 
       {/* ========================================================================= */}
-      {/* MODAL MỚI 1: CÀO NHẠC & AUDIO HUB (Spotify, SoundCloud, iTunes)           */}
+      {/* TRANG RIÊNG: CÀO NHẠC & AUDIO HUB (Spotify, SoundCloud, iTunes)           */}
       {/* ========================================================================= */}
       <View
         pointerEvents={showMusicScraperModal ? 'auto' : 'none'}
@@ -30884,30 +30908,35 @@ function MainApp() {
           width: '100%',
           height: '100%',
           zIndex: showMusicScraperModal ? 99999 : -1,
-          backgroundColor: showMusicScraperModal ? 'rgba(0, 0, 0, 0.75)' : 'transparent',
-          justifyContent: 'flex-end',
-          alignItems: 'center',
+          backgroundColor: isLight ? '#F2F2F7' : '#000000',
           opacity: showMusicScraperModal ? 1 : 0,
           transform: [{ translateY: showMusicScraperModal ? 0 : 3500 }],
         }}
       >
-        <SafeAreaView style={[styles.sheetCard, { width: '100%', maxHeight: '92%' }, isLight && { backgroundColor: '#F2F2F7' }]}>
-          {/* Header */}
-          <View style={[styles.sheetHeader, isLight && { borderBottomColor: '#E5E5EA', backgroundColor: '#FFFFFF' }]}>
-            <TouchableOpacity onPress={() => setShowMusicScraperModal(false)} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <Ionicons name="chevron-down" size={18} color={appSettings.accentColor} />
-                <Text style={[styles.sheetBtnBlue, { color: appSettings.accentColor }]}>Thu Nhỏ</Text>
-              </View>
+        <SafeAreaView style={{ flex: 1, width: '100%', backgroundColor: isLight ? '#F2F2F7' : '#000000' }}>
+          {/* Top Navigation Bar Trang Riêng */}
+          <View style={[styles.fullScreenNavBar, isLight && { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E5EA' }]}>
+            <TouchableOpacity
+              onPress={() => {
+                setShowMusicScraperModal(false);
+                setShowHomeMenuModal(true);
+              }}
+              style={styles.fullScreenNavBtn}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Ionicons name="chevron-back" size={24} color={appSettings.accentColor} />
+              <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor }]}>Tiện Ích</Text>
             </TouchableOpacity>
-            <Text style={[styles.sheetTitle, isLight && { color: '#000000' }]}>Cào Nhạc & Audio Hub</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(29, 185, 84, 0.15)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
-              <Ionicons name="musical-notes" size={14} color="#1DB954" />
-              <Text style={{ fontSize: 11, fontWeight: '800', color: '#1DB954' }}>320kbps</Text>
+            <Text style={[styles.fullScreenNavTitle, isLight && { color: '#000000' }]} numberOfLines={1}>Cào Nhạc & Audio</Text>
+            <View style={{ minWidth: 60, alignItems: 'flex-end', justifyContent: 'center' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(29, 185, 84, 0.15)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
+                <Ionicons name="musical-notes" size={14} color="#1DB954" />
+                <Text style={{ fontSize: 11, fontWeight: '800', color: '#1DB954' }}>320kbps</Text>
+              </View>
             </View>
           </View>
 
-            <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+          <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 80 }} showsVerticalScrollIndicator={false}>
               {/* Search Card */}
               <View
                 style={{
@@ -31414,23 +31443,33 @@ function MainApp() {
         </View>
 
       {/* ========================================================================= */}
-      {/* MODAL MỚI 3: KIỂM TRA TỐC ĐỘ MẠNG & CDN (Speedtest by Ookla Style)        */}
+      {/* TRANG RIÊNG: KIỂM TRA TỐC ĐỘ MẠNG & CDN (Speedtest by Ookla Style)        */}
       {/* ========================================================================= */}
-      <Modal visible={showSpeedTestModal} animationType="slide" transparent onRequestClose={() => setShowSpeedTestModal(false)}>
-        <View style={styles.modalBackdrop}>
-          <SafeAreaView style={[styles.sheetCard, { maxHeight: '94%' }, isLight && { backgroundColor: '#F2F2F7' }]}>
-            <View style={[styles.sheetHeader, isLight && { borderBottomColor: '#E5E5EA', backgroundColor: '#FFFFFF' }]}>
-              <TouchableOpacity onPress={() => setShowSpeedTestModal(false)}>
-                <Text style={[styles.sheetBtnBlue, { color: appSettings.accentColor }]}>Đóng</Text>
-              </TouchableOpacity>
-              <Text style={[styles.sheetTitle, isLight && { color: '#000000' }]}>SPEEDTEST BĂNG THÔNG</Text>
+      <Modal visible={showSpeedTestModal} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => { setShowSpeedTestModal(false); setShowHomeMenuModal(true); }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: isLight ? '#F2F2F7' : '#000000' }}>
+          {/* Top Navigation Bar Trang Riêng */}
+          <View style={[styles.fullScreenNavBar, isLight && { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E5EA' }]}>
+            <TouchableOpacity
+              onPress={() => {
+                setShowSpeedTestModal(false);
+                setShowHomeMenuModal(true);
+              }}
+              style={styles.fullScreenNavBtn}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Ionicons name="chevron-back" size={24} color={appSettings.accentColor} />
+              <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor }]}>Tiện Ích</Text>
+            </TouchableOpacity>
+            <Text style={[styles.fullScreenNavTitle, isLight && { color: '#000000' }]} numberOfLines={1}>Speedtest Băng Thông</Text>
+            <View style={{ minWidth: 60, alignItems: 'flex-end', justifyContent: 'center' }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(0, 240, 255, 0.15)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
                 <Ionicons name="flash" size={13} color="#00F0FF" />
-                <Text style={{ fontSize: 11, fontWeight: '800', color: '#00F0FF' }}>Ookla Engine</Text>
+                <Text style={{ fontSize: 11, fontWeight: '800', color: '#00F0FF' }}>Ookla</Text>
               </View>
             </View>
+          </View>
 
-            <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40, alignItems: 'center' }} showsVerticalScrollIndicator={false}>
+          <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60, alignItems: 'center' }} showsVerticalScrollIndicator={false}>
               {/* Ookla Speedtest Dashboard Container */}
               <View
                 style={{
@@ -31661,26 +31700,38 @@ function MainApp() {
               </TouchableOpacity>
             </ScrollView>
           </SafeAreaView>
-        </View>
       </Modal>
 
       {/* ========================================================================= */}
-      {/* MODAL MỚI 4: KIỂM TRA IP & NHÀ MẠNG (Live Geo IP, ISP, WHOIS DNS)        */}
+      {/* TRANG RIÊNG: KIỂM TRA IP & NHÀ MẠNG (Live Geo IP, ISP, WHOIS DNS)        */}
       {/* ========================================================================= */}
-      <Modal visible={showIpInspectorModal} animationType="slide" transparent onRequestClose={() => setShowIpInspectorModal(false)}>
-        <View style={styles.modalBackdrop}>
-          <SafeAreaView style={[styles.sheetCard, { maxHeight: '92%' }, isLight && { backgroundColor: '#F2F2F7' }]}>
-            <View style={[styles.sheetHeader, isLight && { borderBottomColor: '#E5E5EA', backgroundColor: '#FFFFFF' }]}>
-              <TouchableOpacity onPress={() => setShowIpInspectorModal(false)}>
-                <Text style={[styles.sheetBtnBlue, { color: appSettings.accentColor }]}>Đóng</Text>
-              </TouchableOpacity>
-              <Text style={[styles.sheetTitle, isLight && { color: '#000000' }]}>Kiểm Tra IP & Nhà Mạng</Text>
-              <TouchableOpacity onPress={handleInspectIp} disabled={isLoadingIp}>
-                <Ionicons name="refresh" size={19} color={appSettings.accentColor} />
-              </TouchableOpacity>
-            </View>
+      <Modal visible={showIpInspectorModal} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => { setShowIpInspectorModal(false); setShowHomeMenuModal(true); }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: isLight ? '#F2F2F7' : '#000000' }}>
+          {/* Top Navigation Bar Trang Riêng */}
+          <View style={[styles.fullScreenNavBar, isLight && { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E5EA' }]}>
+            <TouchableOpacity
+              onPress={() => {
+                setShowIpInspectorModal(false);
+                setShowHomeMenuModal(true);
+              }}
+              style={styles.fullScreenNavBtn}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Ionicons name="chevron-back" size={24} color={appSettings.accentColor} />
+              <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor }]}>Tiện Ích</Text>
+            </TouchableOpacity>
+            <Text style={[styles.fullScreenNavTitle, isLight && { color: '#000000' }]} numberOfLines={1}>Kiểm Tra IP & Mạng</Text>
+            <TouchableOpacity
+              onPress={handleInspectIp}
+              disabled={isLoadingIp}
+              style={{ minWidth: 60, alignItems: 'flex-end', justifyContent: 'center' }}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Ionicons name="refresh" size={22} color={appSettings.accentColor} />
+            </TouchableOpacity>
+          </View>
 
-            <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+          <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
               {/* Primary IP Banner Card */}
               <View
                 style={{
@@ -31995,7 +32046,6 @@ function MainApp() {
               </View>
             </ScrollView>
           </SafeAreaView>
-        </View>
       </Modal>
 
 
