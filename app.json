@@ -84,6 +84,12 @@
       ],
       "expo-audio",
       [
+        "expo-camera",
+        {
+          "cameraPermission": "LockX cần quyền truy cập camera để quét mã QR kết bạn và bảo mật."
+        }
+      ],
+      [
         "expo-notifications",
         {
           "icon": "./assets/icon.png",

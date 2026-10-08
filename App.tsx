@@ -28,6 +28,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Svg, Path as SvgPath, Circle as SvgCircle, G as SvgGroup, Text as SvgText, Defs, LinearGradient as SvgLinearGradient, Stop, Line as SvgLine, Polygon as SvgPolygon } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MUA_DO_POSTER_IMAGE } from './components/muadoPoster';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 // Safe Dynamic Native Notification Loader (Chống crash iOS, chống màn hình đen, tự động kích hoạt native trên iPhone)
 let Notifications: any = {
   setNotificationHandler: (_handler: any) => {},
@@ -8444,6 +8445,11 @@ function MainApp() {
   const [scannedFoundUser, setScannedFoundUser] = useState<(FriendUser & { isAlreadyFriend?: boolean }) | null>(null);
   const [qrManualInput, setQrManualInput] = useState<string>('');
   const qrLaserAnim = useRef(new Animated.Value(0)).current;
+  // Camera Real QR Scanner State (Yêu cầu quyền và quét thật)
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const [isQrCameraFacing, setIsQrCameraFacing] = useState<'back' | 'front'>('back');
+  const [isQrTorchOn, setIsQrTorchOn] = useState<boolean>(false);
+  const [isQrScanningLocked, setIsQrScanningLocked] = useState<boolean>(false);
   const [showHomeMenuModal, setShowHomeMenuModal] = useState<boolean>(false);
 
   // Chế Độ Nhà Phát Triển (Mở khóa menu 3 gạch khi ấn 5 lần vào phiên bản)
@@ -13017,10 +13023,12 @@ function MainApp() {
     handleAddFriendByUsername(newFriendInput || addFriendSearchText);
   };
 
-  // Hiệu ứng tia laser quét camera QR
+  // Hiệu ứng tia laser quét camera QR & Tự động kiểm tra quyền camera
   useEffect(() => {
     let anim: Animated.CompositeAnimation | null = null;
     if (showQrScanModal) {
+      setIsQrScanningLocked(false);
+      setIsQrTorchOn(false);
       qrLaserAnim.setValue(0);
       anim = Animated.loop(
         Animated.sequence([
@@ -13037,16 +13045,32 @@ function MainApp() {
         ])
       );
       anim.start();
+
+      // Tự động yêu cầu quyền truy cập Camera nếu chưa được cấp
+      if (!cameraPermission?.granted && cameraPermission?.canAskAgain) {
+        requestCameraPermission().catch(() => {});
+      }
     } else {
       qrLaserAnim.setValue(0);
       setScannedFoundUser(null);
       setScannedQrResult('');
       setQrManualInput('');
+      setIsQrScanningLocked(false);
+      setIsQrTorchOn(false);
     }
     return () => {
       if (anim) anim.stop();
     };
   }, [showQrScanModal]);
+
+  // Xử lý khi Camera quét trúng mã Barcode/QR thật trên thiết bị
+  const handleBarCodeScanned = (barcodeResult: { data: string; type?: string }) => {
+    if (isQrScanningLocked || !showQrScanModal || scannedFoundUser) return;
+    const rawData = (barcodeResult?.data || '').trim();
+    if (!rawData) return;
+    setIsQrScanningLocked(true);
+    handleProcessScannedQr(rawData);
+  };
 
   // Giải mã và nhận diện mã QR cá nhân của bạn bè
   const handleProcessScannedQr = (qrData: string) => {
@@ -28922,110 +28946,262 @@ function MainApp() {
             </TouchableOpacity>
           </View>
 
-          <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 50, alignItems: 'center' }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-            {/* Viewfinder Target Area */}
+          <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 50, alignItems: 'center' }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            
+            {/* Quick Camera Controls Bar (Bật Flash & Đổi Camera) */}
+            {cameraPermission?.granted ? (
+              <View style={{ flexDirection: 'row', gap: 12, marginBottom: 14 }}>
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => setIsQrTorchOn(!isQrTorchOn)}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    backgroundColor: isQrTorchOn ? '#FFCC00' : 'rgba(255, 255, 255, 0.12)',
+                    paddingHorizontal: 14,
+                    paddingVertical: 8,
+                    borderRadius: 20,
+                    borderWidth: 1,
+                    borderColor: isQrTorchOn ? '#FFCC00' : 'rgba(255, 255, 255, 0.18)',
+                  }}
+                >
+                  <Ionicons name={isQrTorchOn ? "flash" : "flash-off"} size={16} color={isQrTorchOn ? "#000000" : "#FFFFFF"} />
+                  <Text style={{ color: isQrTorchOn ? "#000000" : "#FFFFFF", fontSize: 12, fontWeight: '700' }}>
+                    {isQrTorchOn ? 'Đèn Flash: Bật' : 'Đèn Flash'}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => setIsQrCameraFacing(isQrCameraFacing === 'back' ? 'front' : 'back')}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+                    paddingHorizontal: 14,
+                    paddingVertical: 8,
+                    borderRadius: 20,
+                    borderWidth: 1,
+                    borderColor: 'rgba(255, 255, 255, 0.18)',
+                  }}
+                >
+                  <Ionicons name="camera-reverse-outline" size={16} color="#FFFFFF" />
+                  <Text style={{ color: "#FFFFFF", fontSize: 12, fontWeight: '700' }}>
+                    {isQrCameraFacing === 'back' ? 'Cam Sau' : 'Cam Trước'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
+
+            {/* Viewfinder Target Area with Real CameraView */}
             <View
               style={{
-                width: 270,
-                height: 270,
-                borderRadius: 24,
-                backgroundColor: 'rgba(15, 23, 42, 0.75)',
-                borderWidth: 1,
-                borderColor: 'rgba(255, 255, 255, 0.1)',
+                width: 280,
+                height: 280,
+                borderRadius: 26,
+                backgroundColor: '#0F172A',
+                borderWidth: 1.5,
+                borderColor: cameraPermission?.granted ? '#007AFF' : 'rgba(255, 255, 255, 0.15)',
                 position: 'relative',
                 justifyContent: 'center',
                 alignItems: 'center',
                 overflow: 'hidden',
-                marginTop: 10,
-                marginBottom: 20,
+                marginBottom: 16,
               }}
             >
-              {/* Corner 1: Top-Left */}
-              <View
-                style={{
-                  position: 'absolute',
-                  top: 12,
-                  left: 12,
-                  width: 28,
-                  height: 28,
-                  borderTopWidth: 3.5,
-                  borderLeftWidth: 3.5,
-                  borderColor: '#007AFF',
-                  borderTopLeftRadius: 10,
-                }}
-              />
-              {/* Corner 2: Top-Right */}
-              <View
-                style={{
-                  position: 'absolute',
-                  top: 12,
-                  right: 12,
-                  width: 28,
-                  height: 28,
-                  borderTopWidth: 3.5,
-                  borderRightWidth: 3.5,
-                  borderColor: '#007AFF',
-                  borderTopRightRadius: 10,
-                }}
-              />
-              {/* Corner 3: Bottom-Left */}
-              <View
-                style={{
-                  position: 'absolute',
-                  bottom: 12,
-                  left: 12,
-                  width: 28,
-                  height: 28,
-                  borderBottomWidth: 3.5,
-                  borderLeftWidth: 3.5,
-                  borderColor: '#007AFF',
-                  borderBottomLeftRadius: 10,
-                }}
-              />
-              {/* Corner 4: Bottom-Right */}
-              <View
-                style={{
-                  position: 'absolute',
-                  bottom: 12,
-                  right: 12,
-                  width: 28,
-                  height: 28,
-                  borderBottomWidth: 3.5,
-                  borderRightWidth: 3.5,
-                  borderColor: '#007AFF',
-                  borderBottomRightRadius: 10,
-                }}
-              />
+              {/* Camera State 1: Chưa cấp quyền / Đã từ chối */}
+              {!cameraPermission?.granted ? (
+                <View style={{ flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center', padding: 20, backgroundColor: 'rgba(15, 23, 42, 0.95)' }}>
+                  <View
+                    style={{
+                      width: 64,
+                      height: 64,
+                      borderRadius: 32,
+                      backgroundColor: 'rgba(0, 122, 255, 0.18)',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginBottom: 12,
+                      borderWidth: 1,
+                      borderColor: 'rgba(0, 122, 255, 0.35)',
+                    }}
+                  >
+                    <Ionicons name="camera-reverse-outline" size={32} color="#007AFF" />
+                  </View>
 
-              {/* Animated Laser Beam */}
-              <Animated.View
-                style={{
-                  position: 'absolute',
-                  left: 14,
-                  right: 14,
-                  height: 3,
-                  backgroundColor: '#007AFF',
-                  shadowColor: '#007AFF',
-                  shadowRadius: 10,
-                  shadowOpacity: 1,
-                  transform: [
-                    {
-                      translateY: qrLaserAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [-110, 110],
-                      }),
-                    },
-                  ],
-                }}
-              />
+                  <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '800', textAlign: 'center', marginBottom: 6 }}>
+                    Yêu Cầu Quyền Camera
+                  </Text>
+                  <Text style={{ color: '#8E8E93', fontSize: 12, textAlign: 'center', lineHeight: 17, marginBottom: 16, paddingHorizontal: 8 }}>
+                    {cameraPermission && !cameraPermission.canAskAgain
+                      ? 'Quyền truy cập Camera đã bị tắt trong Cài đặt hệ thống. Vui lòng mở Cài đặt để cho phép LockX quét mã QR.'
+                      : 'LockX cần quyền truy cập camera để quét mã QR bạn bè và nhận diện kết nối tức thì.'}
+                  </Text>
 
-              {/* Center Camera Icon Guide */}
-              <Ionicons name="scan-outline" size={54} color="rgba(255, 255, 255, 0.25)" />
+                  {cameraPermission && !cameraPermission.canAskAgain ? (
+                    <TouchableOpacity
+                      activeOpacity={0.85}
+                      onPress={() => Linking.openSettings()}
+                      style={{
+                        backgroundColor: '#FF3B30',
+                        paddingHorizontal: 20,
+                        paddingVertical: 10,
+                        borderRadius: 12,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 6,
+                      }}
+                    >
+                      <Ionicons name="settings-outline" size={16} color="#FFFFFF" />
+                      <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '700' }}>
+                        Mở Cài Đặt Hệ Thống
+                      </Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity
+                      activeOpacity={0.85}
+                      onPress={() => requestCameraPermission()}
+                      style={{
+                        backgroundColor: '#007AFF',
+                        paddingHorizontal: 20,
+                        paddingVertical: 10,
+                        borderRadius: 12,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 6,
+                      }}
+                    >
+                      <Ionicons name="camera" size={16} color="#FFFFFF" />
+                      <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '700' }}>
+                        Cấp Quyền Camera
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ) : (
+                /* Camera State 2: Camera thật đang hoạt động */
+                <>
+                  <CameraView
+                    style={StyleSheet.absoluteFill}
+                    facing={isQrCameraFacing}
+                    enableTorch={isQrTorchOn}
+                    barcodeScannerSettings={{
+                      barcodeTypes: ['qr'],
+                    }}
+                    onBarcodeScanned={isQrScanningLocked || scannedFoundUser ? undefined : handleBarCodeScanned}
+                  />
+
+                  {/* Corner 1: Top-Left */}
+                  <View
+                    style={{
+                      position: 'absolute',
+                      top: 12,
+                      left: 12,
+                      width: 28,
+                      height: 28,
+                      borderTopWidth: 3.5,
+                      borderLeftWidth: 3.5,
+                      borderColor: '#007AFF',
+                      borderTopLeftRadius: 10,
+                    }}
+                  />
+                  {/* Corner 2: Top-Right */}
+                  <View
+                    style={{
+                      position: 'absolute',
+                      top: 12,
+                      right: 12,
+                      width: 28,
+                      height: 28,
+                      borderTopWidth: 3.5,
+                      borderRightWidth: 3.5,
+                      borderColor: '#007AFF',
+                      borderTopRightRadius: 10,
+                    }}
+                  />
+                  {/* Corner 3: Bottom-Left */}
+                  <View
+                    style={{
+                      position: 'absolute',
+                      bottom: 12,
+                      left: 12,
+                      width: 28,
+                      height: 28,
+                      borderBottomWidth: 3.5,
+                      borderLeftWidth: 3.5,
+                      borderColor: '#007AFF',
+                      borderBottomLeftRadius: 10,
+                    }}
+                  />
+                  {/* Corner 4: Bottom-Right */}
+                  <View
+                    style={{
+                      position: 'absolute',
+                      bottom: 12,
+                      right: 12,
+                      width: 28,
+                      height: 28,
+                      borderBottomWidth: 3.5,
+                      borderRightWidth: 3.5,
+                      borderColor: '#007AFF',
+                      borderBottomRightRadius: 10,
+                    }}
+                  />
+
+                  {/* Animated Laser Beam (Chỉ chạy khi chưa khóa quét) */}
+                  {!scannedFoundUser && (
+                    <Animated.View
+                      style={{
+                        position: 'absolute',
+                        left: 14,
+                        right: 14,
+                        height: 3,
+                        backgroundColor: '#007AFF',
+                        shadowColor: '#007AFF',
+                        shadowRadius: 10,
+                        shadowOpacity: 1,
+                        transform: [
+                          {
+                            translateY: qrLaserAnim.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [-115, 115],
+                            }),
+                          },
+                        ],
+                      }}
+                    />
+                  )}
+
+                  {/* Overlay Đang Xử Lý Khi Quét Trúng */}
+                  {isQrScanningLocked && !scannedFoundUser && (
+                    <View
+                      style={{
+                        ...StyleSheet.absoluteFill,
+                        backgroundColor: 'rgba(0, 0, 0, 0.65)',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <ActivityIndicator size="small" color="#34C759" />
+                      <Text style={{ color: '#34C759', fontSize: 12, fontWeight: '800', marginTop: 8 }}>
+                        ĐANG NHẬN DIỆN MÃ QR...
+                      </Text>
+                    </View>
+                  )}
+                </>
+              )}
             </View>
 
-            <Text style={{ color: '#8E8E93', fontSize: 13, textAlign: 'center', maxWidth: 280, lineHeight: 18, marginBottom: 20 }}>
-              Căn chỉnh mã QR cá nhân của bạn bè vào trong khung vuông để tự động nhận diện tài khoản.
-            </Text>
+            {/* Status Guide Text */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 18 }}>
+              <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: cameraPermission?.granted ? '#34C759' : '#FF9500' }} />
+              <Text style={{ color: '#8E8E93', fontSize: 12.5, textAlign: 'center', maxWidth: 300, lineHeight: 18 }}>
+                {cameraPermission?.granted
+                  ? 'Camera đang quét trực tiếp. Căn chỉnh mã QR bạn bè vào trong khung.'
+                  : 'Vui lòng cấp quyền Camera để bắt đầu quét mã QR tự động.'}
+              </Text>
+            </View>
 
             {/* IF USER FOUND / SCANNED */}
             {scannedFoundUser ? (
@@ -29041,7 +29217,7 @@ function MainApp() {
                   shadowOffset: { width: 0, height: 4 },
                   shadowOpacity: 0.3,
                   shadowRadius: 12,
-                  marginBottom: 16,
+                  marginBottom: 18,
                 }}
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
@@ -29115,6 +29291,7 @@ function MainApp() {
                     onPress={() => {
                       setScannedFoundUser(null);
                       setScannedQrResult('');
+                      setIsQrScanningLocked(false);
                     }}
                     style={{
                       backgroundColor: '#2C2C2E',
@@ -29131,7 +29308,60 @@ function MainApp() {
               </View>
             ) : null}
 
-
+            {/* Nhập mã QR / Link bạn bè thủ công */}
+            <View
+              style={{
+                width: '100%',
+                backgroundColor: '#1C1C1E',
+                borderRadius: 16,
+                padding: 14,
+                marginBottom: 16,
+                borderWidth: 1,
+                borderColor: 'rgba(255, 255, 255, 0.08)',
+              }}
+            >
+              <Text style={{ color: '#8E8E93', fontSize: 12, fontWeight: '700', marginBottom: 8 }}>
+                HOẶC NHẬP @USERNAME / DÁN LINK THỦ CÔNG:
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TextInput
+                  value={qrManualInput}
+                  onChangeText={setQrManualInput}
+                  placeholder="Ví dụ: @tuan hoặc LOCKX_USER:tuan"
+                  placeholderTextColor="#636366"
+                  style={{
+                    flex: 1,
+                    backgroundColor: '#000000',
+                    borderRadius: 10,
+                    paddingHorizontal: 12,
+                    paddingVertical: 9,
+                    color: '#FFFFFF',
+                    fontSize: 13,
+                    borderWidth: 1,
+                    borderColor: 'rgba(255, 255, 255, 0.12)',
+                  }}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => {
+                    if (qrManualInput.trim()) {
+                      handleProcessScannedQr(qrManualInput.trim());
+                    }
+                  }}
+                  style={{
+                    backgroundColor: '#007AFF',
+                    paddingHorizontal: 14,
+                    borderRadius: 10,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '700' }}>Tìm Kiếm</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
 
             {/* Bottom button: Xem mã QR của chính bạn */}
             <TouchableOpacity
