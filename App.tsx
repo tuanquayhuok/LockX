@@ -8709,7 +8709,7 @@ function MainApp() {
   const [isEditingPlayerUrl, setIsEditingPlayerUrl] = useState<boolean>(false);
   const [editPlayerStreamInput, setEditPlayerStreamInput] = useState<string>('');
   const [editPlayerEmbedInput, setEditPlayerEmbedInput] = useState<string>('');
-  const [playerTab, setPlayerTab] = useState<'episodes' | 'similar' | 'comments'>('episodes');
+  const [playerTab, setPlayerTab] = useState<'episodes' | 'similar' | 'comments'>('comments');
   const [isSynopsisExpanded, setIsSynopsisExpanded] = useState<boolean>(false);
   const [isSavedMovie, setIsSavedMovie] = useState<boolean>(false);
   const [isLikedMovie, setIsLikedMovie] = useState<boolean>(false);
@@ -33712,12 +33712,12 @@ function MainApp() {
                   </TouchableOpacity>
                 </View>
 
-                {/* ── 4. TABS NAVIGATION (TẬP PHIM | TƯƠNG TỰ | BÌNH LUẬN) ── */}
+                {/* ── 4. TABS NAVIGATION (BÌNH LUẬN | TƯƠNG TỰ | CHỌN SERVER) ── */}
                 <View style={{ flexDirection: 'row', gap: 14, marginBottom: 14, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)' }}>
                   {[
-                    { key: 'episodes', label: 'Tập Phim' },
-                    { key: 'similar', label: 'Nội Dung Tương Tự' },
-                    { key: 'comments', label: `Bình Luận (${movieComments.length})` },
+                    { key: 'comments', label: `Bình Luận (${movieComments.length})`, icon: null },
+                    { key: 'similar', label: 'Nội Dung Tương Tự', icon: null },
+                    { key: 'episodes', label: 'Chọn Server', icon: 'server' },
                   ].map((tab) => {
                     const isActive = playerTab === tab.key;
                     return (
@@ -33728,8 +33728,16 @@ function MainApp() {
                           paddingBottom: 10,
                           borderBottomWidth: 3,
                           borderBottomColor: isActive ? '#E50914' : 'transparent',
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 5,
                         }}
                       >
+                        {tab.icon === 'server' && (
+                          <Svg width={13} height={13} viewBox="0 0 24 24" fill="none">
+                            <SvgPath d="M3 6H21M3 12H21M3 18H21" stroke={isActive ? '#FFFFFF' : '#8E8E93'} strokeWidth="2.5" strokeLinecap="round" />
+                          </Svg>
+                        )}
                         <Text style={{ fontSize: 13, fontWeight: isActive ? '800' : '600', color: isActive ? '#FFFFFF' : '#8E8E93' }}>
                           {tab.label}
                         </Text>
@@ -34124,6 +34132,113 @@ function MainApp() {
                     </View>
                   </View>
                 )}
+              </View>
+
+              {/* ── FOOTER — THÔNG TIN APP, DEV & PHIM CHI TIẾT ── */}
+              <View
+                style={{
+                  marginTop: 20,
+                  paddingTop: 20,
+                  paddingHorizontal: 16,
+                  paddingBottom: 40,
+                  borderTopWidth: 1,
+                  borderTopColor: 'rgba(255, 255, 255, 0.06)',
+                  backgroundColor: '#0A0A0E',
+                }}
+              >
+                {/* Thông tin phim chi tiết */}
+                <View style={{ marginBottom: 16, gap: 6 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFFFFF', marginBottom: 4 }}>
+                    Thông Tin Phim
+                  </Text>
+                  {previewMovieItem?.title && (
+                    <View style={{ flexDirection: 'row', gap: 6 }}>
+                      <Text style={{ fontSize: 11, color: '#71717A', fontWeight: '600' }}>Tên:</Text>
+                      <Text style={{ fontSize: 11, color: '#D4D4D8', flex: 1 }}>{previewMovieItem.title}</Text>
+                    </View>
+                  )}
+                  {previewMovieItem?.year && (
+                    <View style={{ flexDirection: 'row', gap: 6 }}>
+                      <Text style={{ fontSize: 11, color: '#71717A', fontWeight: '600' }}>Năm:</Text>
+                      <Text style={{ fontSize: 11, color: '#D4D4D8' }}>{previewMovieItem.year}</Text>
+                    </View>
+                  )}
+                  {previewMovieItem?.duration && (
+                    <View style={{ flexDirection: 'row', gap: 6 }}>
+                      <Text style={{ fontSize: 11, color: '#71717A', fontWeight: '600' }}>Thời lượng:</Text>
+                      <Text style={{ fontSize: 11, color: '#D4D4D8' }}>{previewMovieItem.duration}</Text>
+                    </View>
+                  )}
+                  {previewMovieItem?.quality && (
+                    <View style={{ flexDirection: 'row', gap: 6 }}>
+                      <Text style={{ fontSize: 11, color: '#71717A', fontWeight: '600' }}>Chất lượng:</Text>
+                      <Text style={{ fontSize: 11, color: '#D4D4D8' }}>{previewMovieItem.quality}</Text>
+                    </View>
+                  )}
+                  {previewMovieItem?.language && (
+                    <View style={{ flexDirection: 'row', gap: 6 }}>
+                      <Text style={{ fontSize: 11, color: '#71717A', fontWeight: '600' }}>Ngôn ngữ:</Text>
+                      <Text style={{ fontSize: 11, color: '#D4D4D8' }}>{previewMovieItem.language}</Text>
+                    </View>
+                  )}
+                  {previewMovieItem?.country && (
+                    <View style={{ flexDirection: 'row', gap: 6 }}>
+                      <Text style={{ fontSize: 11, color: '#71717A', fontWeight: '600' }}>Quốc gia:</Text>
+                      <Text style={{ fontSize: 11, color: '#D4D4D8' }}>{previewMovieItem.country}</Text>
+                    </View>
+                  )}
+                  {previewMovieItem?.genres && (
+                    <View style={{ flexDirection: 'row', gap: 6 }}>
+                      <Text style={{ fontSize: 11, color: '#71717A', fontWeight: '600' }}>Thể loại:</Text>
+                      <Text style={{ fontSize: 11, color: '#D4D4D8', flex: 1 }}>{previewMovieItem.genres}</Text>
+                    </View>
+                  )}
+                  {previewMovieItem?.rating && (
+                    <View style={{ flexDirection: 'row', gap: 6 }}>
+                      <Text style={{ fontSize: 11, color: '#71717A', fontWeight: '600' }}>Đánh giá:</Text>
+                      <Text style={{ fontSize: 11, color: '#FFD60A' }}>★ {previewMovieItem.rating}</Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Đường phân cách */}
+                <View style={{ height: 1, backgroundColor: 'rgba(255, 255, 255, 0.06)', marginBottom: 16 }} />
+
+                {/* Thông tin App */}
+                <View style={{ marginBottom: 16, gap: 4 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                    <Svg width={16} height={16} viewBox="0 0 24 24" fill="#E50914">
+                      <SvgPath d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" />
+                    </Svg>
+                    <Text style={{ fontSize: 13, fontWeight: '900', color: '#FFFFFF' }}>LockX Cinema</Text>
+                    <View style={{ backgroundColor: '#E50914', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 3 }}>
+                      <Text style={{ fontSize: 8, fontWeight: '800', color: '#FFFFFF' }}>VIP</Text>
+                    </View>
+                  </View>
+                  <Text style={{ fontSize: 10.5, color: '#71717A', lineHeight: 15 }}>
+                    Xem phim chiếu rạp Full HD 1080p miễn phí, hỗ trợ HLS CDN siêu tốc, phụ đề tiếng Việt, âm thanh chuẩn rạp chiếu.
+                  </Text>
+                  <Text style={{ fontSize: 10.5, color: '#71717A', lineHeight: 15 }}>
+                    Nguồn phim: phimapi.com • Player: JWPlayer 8.38
+                  </Text>
+                </View>
+
+                {/* Thông tin Developer */}
+                <View style={{ gap: 4 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#8E8E93' }}>Phát triển bởi</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: '#E50914', justifyContent: 'center', alignItems: 'center' }}>
+                      <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '900' }}>L</Text>
+                    </View>
+                    <View>
+                      <Text style={{ fontSize: 11, fontWeight: '800', color: '#FFFFFF' }}>LockX Team</Text>
+                      <Text style={{ fontSize: 9.5, color: '#71717A' }}>LockX Toolbox Pro • Phiên bản 2026</Text>
+                    </View>
+                  </View>
+                  <Text style={{ fontSize: 9, color: '#52525B', marginTop: 6, textAlign: 'center' }}>
+                    © 2026 LockX. Nội dung phim thuộc quyền sở hữu của nhà sản xuất.
+                  </Text>
+                </View>
               </View>
             </ScrollView>
           </SafeAreaView>
