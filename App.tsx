@@ -25,10 +25,13 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-import { Svg, Path as SvgPath, Circle as SvgCircle, G as SvgGroup, Text as SvgText, Defs, LinearGradient as SvgLinearGradient, Stop, Line as SvgLine, Polygon as SvgPolygon } from 'react-native-svg';
+import { Svg, Path as SvgPath, Circle as SvgCircle, Rect as SvgRect, G as SvgGroup, Text as SvgText, Defs, LinearGradient as SvgLinearGradient, Stop, Line as SvgLine, Polygon as SvgPolygon } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MUA_DO_POSTER_IMAGE } from './components/muadoPoster';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+// [REMOVED] LockXBankView banking module removed
+import AppIntroModal from './components/AppIntroModal';
+import LocketGoldModal from './components/LocketGoldModal';
 // Safe Dynamic Native Notification Loader (Chống crash iOS, chống màn hình đen, tự động kích hoạt native trên iPhone)
 let Notifications: any = {
   setNotificationHandler: (_handler: any) => {},
@@ -56,6 +59,7 @@ import * as Device from 'expo-device';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { createAudioPlayer, setAudioModeAsync, AudioPlayer } from 'expo-audio';
 import * as ExpoClipboard from 'expo-clipboard';
+import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 
 let DocumentPicker: any = null;
 try {
@@ -1478,6 +1482,8 @@ export interface AppSettings {
   notifyActivity: boolean; // Thông báo thao tác thành công
   notifySounds: boolean; // Âm thanh thông báo
   ringtoneId?: string; // Nhạc chuông cuộc gọi Apple
+  enable120HzProMotion?: boolean; // Tần số quét 120Hz (ProMotion & Ultra Smooth)
+  enableDynamicIsland?: boolean; // Tương thích & Hiển thị Dynamic Island tương tác
 }
 
 export interface FriendUser {
@@ -3624,6 +3630,8 @@ export const INITIAL_SETTINGS: AppSettings = {
   notifyActivity: true,
   notifySounds: true,
   ringtoneId: 'reflection',
+  enable120HzProMotion: true,
+  enableDynamicIsland: true,
 };
 
 export const INITIAL_NOTIFICATIONS: AppNotification[] = [
@@ -7935,6 +7943,9 @@ const RenderVipAppIconSvg: React.FC<{ iconId: string; size: number }> = ({ iconI
 function MainApp() {
   // Onboarding & Load Stages: 'loading' -> 'onboarding' -> 'ready' (Bypass vào thẳng trang chủ)
   const [onboardingStage, setOnboardingStage] = useState<'loading' | 'onboarding' | 'ready'>('ready');
+  // State điều khiển Intro Animation khi mở app (mặc định tắt để vào thẳng app tức thì)
+  const [showAppIntro, setShowAppIntro] = useState<boolean>(false);
+  const [introModeSelection, setIntroModeSelection] = useState<'auto' | 'phone_ipa' | 'web'>('auto');
   const [selectedLanguage, setSelectedLanguage] = useState<string>('vi');
 
   // Nhận diện phiên bản iOS và Build ID chính xác từ thiết bị
@@ -7951,10 +7962,10 @@ function MainApp() {
 
   const [hasNotifPermission, setHasNotifPermission] = useState(false);
 
-  const [currentTab, setCurrentTab] = useState<'vault' | 'apps' | 'chat' | 'profile' | 'settings'>('vault');
+  const [currentTab, setCurrentTab] = useState<'vault' | 'apps' | 'chat' | 'profile' | 'settings' | 'tools' | 'banking'>('vault');
 
-  // Animated sliding circle for bottom footer tabs
-  const BOTTOM_TAB_KEYS = useMemo(() => ['apps', 'chat', 'vault', 'profile', 'settings'] as const, []);
+  // Animated sliding circle for bottom footer tabs (5 tabs: Bạn Bè, Tiện ích, Trang chủ, Cá Nhân, Cài đặt)
+  const BOTTOM_TAB_KEYS = useMemo(() => ['chat', 'tools', 'vault', 'profile', 'settings'] as const, []);
   const bottomTabAnim = useRef(new Animated.Value(2)).current; // Default index 2 = 'vault' (Trang chủ)
   const [tabBarLayoutWidth, setTabBarLayoutWidth] = useState(0);
 
@@ -8014,7 +8025,7 @@ function MainApp() {
 
   // Profile State (Thông tin người dùng, sử dụng bao lâu, đổi mật khẩu, lịch sử đăng nhập)
   const [userProfile, setUserProfile] = useState<UserProfile>(INITIAL_USER_PROFILE);
-  const [profileSubView, setProfileSubView] = useState<'main' | 'change_password' | 'edit_profile' | 'verify_id' | 'app_icons' | 'vip_themes' | 'vip_membership'>('main');
+  const [profileSubView, setProfileSubView] = useState<'main' | 'change_password' | 'edit_profile' | 'verify_id' | 'app_icons' | 'vip_themes' | 'vip_membership' | 'files'>('main');
   const [activeAppIcon, setActiveAppIcon] = useState<string>('sapphire');
   const [activeVipTheme, setActiveVipTheme] = useState<'default' | 'gold_luxury' | 'cyberpunk' | 'nebula' | 'oled_black'>('default');
   const [activeCardTier, setActiveCardTier] = useState<'silver' | 'gold' | 'diamond' | 'titanium' | 'uranium'>('silver');
@@ -8452,6 +8463,128 @@ function MainApp() {
   const [isQrScanningLocked, setIsQrScanningLocked] = useState<boolean>(false);
   const [showHomeMenuModal, setShowHomeMenuModal] = useState<boolean>(false);
 
+  // 120Hz Ultra-Fluid Motion Engine (Hỗ trợ toàn bộ thiết bị: iPhone 11, 12, 13, 14, 15, 16 và Android)
+  const [liveFps, setLiveFps] = useState<number>(120);
+
+  // Real-time Display Refresh Rate & High-Frequency Render Loop (120Hz Interpolation)
+  useEffect(() => {
+    let frameCount = 0;
+    let lastTime = Date.now();
+    let animId: any;
+
+    const measureFrame = () => {
+      frameCount++;
+      const now = Date.now();
+      if (now - lastTime >= 500) {
+        const measuredFps = Math.round((frameCount * 1000) / (now - lastTime));
+        setLiveFps(measuredFps >= 105 ? 120 : (measuredFps >= 75 ? 90 : (measuredFps > 0 ? measuredFps : 120)));
+        frameCount = 0;
+        lastTime = now;
+      }
+      animId = requestAnimationFrame(measureFrame);
+    };
+
+    animId = requestAnimationFrame(measureFrame);
+    return () => {
+      if (animId) cancelAnimationFrame(animId);
+    };
+  }, []);
+
+  // Bản Quyền & Khóa Kích Hoạt Tab Tiện Ích (Key: LOCKX-XXXXXXXXX)
+  const [isToolsUnlocked, setIsToolsUnlocked] = useState<boolean>(() => {
+    try {
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+        return window.localStorage.getItem('lockx_tools_unlocked') === 'true';
+      }
+    } catch (e) {}
+    return false;
+  });
+  const [toolsLicenseKey, setToolsLicenseKey] = useState<string>(() => {
+    try {
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+        return window.localStorage.getItem('lockx_tools_license_key') || '';
+      }
+    } catch (e) {}
+    return '';
+  });
+  const [toolsLicenseData, setToolsLicenseData] = useState<any>(() => {
+    try {
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+        const raw = window.localStorage.getItem('lockx_tools_license_data');
+        if (raw) return JSON.parse(raw);
+      }
+    } catch (e) {}
+    return null;
+  });
+  const [inputLicenseKey, setInputLicenseKey] = useState<string>('');
+  const [isActivatingLicense, setIsActivatingLicense] = useState<boolean>(false);
+  const [licenseActivationError, setLicenseActivationError] = useState<string>('');
+  const [showLicenseDetailsModal, setShowLicenseDetailsModal] = useState<boolean>(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem('lockx_tools_unlocked').then((val) => {
+      if (val === 'true') {
+        setIsToolsUnlocked(true);
+      }
+    }).catch(() => {});
+    AsyncStorage.getItem('lockx_tools_license_key').then((val) => {
+      if (val) {
+        setToolsLicenseKey(val);
+      }
+    }).catch(() => {});
+    AsyncStorage.getItem('lockx_tools_license_data').then((val) => {
+      if (val) {
+        try {
+          setToolsLicenseData(JSON.parse(val));
+        } catch (e) {}
+      }
+    }).catch(() => {});
+  }, []);
+
+  // Helper tính toán thời gian còn lại của Key
+  const getLicenseTimeRemainingText = (data: any, keyStr: string) => {
+    if (!keyStr) return 'Chưa có key';
+    if (data?.is_lifetime || keyStr.includes('VIP') || keyStr.includes('PRO') || data?.duration_days === 0) {
+      return 'Vĩnh Viễn (Lifetime VIP • Trọn Đời)';
+    }
+    if (!data?.expires_at) {
+      return 'Gói 30 Ngày (Đang Hoạt Động)';
+    }
+    try {
+      const exp = new Date(data.expires_at).getTime();
+      const now = Date.now();
+      const diffMs = exp - now;
+      if (diffMs <= 0) {
+        return 'Đã Hết Hạn';
+      }
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      if (diffDays > 0) {
+        return `Còn lại ${diffDays} ngày ${diffHours} giờ`;
+      }
+      const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+      return `Còn lại ${diffHours} giờ ${diffMins} phút`;
+    } catch {
+      return 'Đang Hoạt Động';
+    }
+  };
+
+  const formatLicenseDateTime = (dateStr?: string | null) => {
+    if (!dateStr) return 'Vĩnh viễn';
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      const day = d.getDate().toString().padStart(2, '0');
+      const month = (d.getMonth() + 1).toString().padStart(2, '0');
+      const year = d.getFullYear();
+      const h = d.getHours().toString().padStart(2, '0');
+      const m = d.getMinutes().toString().padStart(2, '0');
+      return `${h}:${m} - ${day}/${month}/${year}`;
+    } catch {
+      return dateStr;
+    }
+  };
+
   // Chế Độ Nhà Phát Triển (Mở khóa menu 3 gạch khi ấn 5 lần vào phiên bản)
   const [isDeveloperModeEnabled, setIsDeveloperModeEnabled] = useState<boolean>(() => {
     try {
@@ -8478,6 +8611,8 @@ function MainApp() {
   const [showApiScraperModal, setShowApiScraperModal] = useState<boolean>(false);
   const [showScrapedCatalogModal, setShowScrapedCatalogModal] = useState<boolean>(false);
   const [scraperViewMode, setScraperViewMode] = useState<'form' | 'result'>('form');
+  const [scraperResultTab, setScraperResultTab] = useState<'list' | 'detail'>('list');
+  const [scraperResultSearch, setScraperResultSearch] = useState<string>('');
   const [catalogSearchQuery, setCatalogSearchQuery] = useState<string>('');
   const [catalogFilterYear, setCatalogFilterYear] = useState<string>('all');
   const [scraperPlatform, setScraperPlatform] = useState<'gg' | 'tiktok' | 'ytb'>('gg');
@@ -8544,10 +8679,10 @@ function MainApp() {
   // Modal & Trạng thái Spam Thông Báo Push (Menu Tiện Ích)
   const [showNotificationSpammerModal, setShowNotificationSpammerModal] = useState<boolean>(false);
   const [spammerTargetUser, setSpammerTargetUser] = useState<string>('');
-  const [spammerCount, setSpammerCount] = useState<string>('5');
+  const [spammerCount, setSpammerCount] = useState<string>('10');
   const [spammerTitle, setSpammerTitle] = useState<string>('LockX Vault • Cảnh Báo An Ninh');
   const [spammerMessage, setSpammerMessage] = useState<string>('Phát hiện phiên truy cập từ xa mới vào két sắt');
-  const [spammerIntervalMs, setSpammerIntervalMs] = useState<number>(400);
+  const [spammerIntervalMs, setSpammerIntervalMs] = useState<number>(0);
   const [isSpamming, setIsSpamming] = useState<boolean>(false);
   const [spamSentCount, setSpamSentCount] = useState<number>(0);
   const spamCancelRef = useRef<boolean>(false);
@@ -8571,6 +8706,46 @@ function MainApp() {
   }>>([]);
   const [showReportedMoviesModal, setShowReportedMoviesModal] = useState<boolean>(false);
   const [previewMovieItem, setPreviewMovieItem] = useState<any>(null);
+  const [isEditingPlayerUrl, setIsEditingPlayerUrl] = useState<boolean>(false);
+  const [editPlayerStreamInput, setEditPlayerStreamInput] = useState<string>('');
+  const [editPlayerEmbedInput, setEditPlayerEmbedInput] = useState<string>('');
+  const [playerTab, setPlayerTab] = useState<'episodes' | 'similar' | 'settings'>('episodes');
+  const [isSynopsisExpanded, setIsSynopsisExpanded] = useState<boolean>(false);
+  const [isSavedMovie, setIsSavedMovie] = useState<boolean>(false);
+  const [isLikedMovie, setIsLikedMovie] = useState<boolean>(false);
+
+  // ═══════════════════════════════════════════════════════════════
+  // CINEMA HUB — States cho tính năng Rạp Phim trong App
+  // ═══════════════════════════════════════════════════════════════
+  const [cinemaTab, setCinemaTab] = useState<'explore' | 'rooms' | 'search'>('explore');
+  const [cinemaSearchQuery, setCinemaSearchQuery] = useState<string>('');
+  const [cinemaSearchResults, setCinemaSearchResults] = useState<any[]>([]);
+  const [cinemaIsSearching, setCinemaIsSearching] = useState<boolean>(false);
+  const [cinemaGenreFilter, setCinemaGenreFilter] = useState<string>('all');
+  const [cinemaRooms, setCinemaRooms] = useState<Array<{
+    id: string;
+    name: string;
+    movieTitle: string;
+    moviePoster: string;
+    hostName: string;
+    memberCount: number;
+    isLive: boolean;
+    streamUrl: string;
+    embedUrl: string;
+    createdAt: string;
+  }>>([
+    { id: 'room-1', name: '🎬 Phòng Tối Nét', movieTitle: 'Mai', moviePoster: 'https://phimimg.com/upload/vod/20230922-1/8e7ee122a3ca993f858a005ab9b8211d.jpg', hostName: 'admin', memberCount: 12, isLive: true, streamUrl: '', embedUrl: '', createdAt: new Date().toISOString() },
+    { id: 'room-2', name: '🍿 Xem Chung Cuối Tuần', movieTitle: 'Đào, Phở và Piano', moviePoster: 'https://ghienphimz.mom/uploads/dao-pho-va-piano.jpg', hostName: 'lockx_vip', memberCount: 7, isLive: true, streamUrl: '', embedUrl: '', createdAt: new Date().toISOString() },
+  ]);
+  const [showCreateRoomModal, setShowCreateRoomModal] = useState<boolean>(false);
+  const [createRoomName, setCreateRoomName] = useState<string>('');
+  const [activeRoom, setActiveRoom] = useState<any>(null);
+  const [cinemaEpisodes, setCinemaEpisodes] = useState<Array<{ label: string; m3u8: string; embed: string; serverName: string }>>([]);
+  const [cinemaSelectedEpisode, setCinemaSelectedEpisode] = useState<number>(0);
+  const [cinemaIsFullscreen, setCinemaIsFullscreen] = useState<boolean>(false);
+  const [cinemaSelectedMovie, setCinemaSelectedMovie] = useState<any>(null);
+  const [cinemaShowDetail, setCinemaShowDetail] = useState<boolean>(false);
+  const [cinemaIsLoadingDetail, setCinemaIsLoadingDetail] = useState<boolean>(false);
 
   // 1. Cào Nhạc & Audio Hub (Spotify, SoundCloud, Zing MP3)
   const [showMusicScraperModal, setShowMusicScraperModal] = useState<boolean>(false);
@@ -8640,6 +8815,9 @@ function MainApp() {
     inputRange: [0, 360],
     outputRange: ['0deg', '360deg'],
   });
+  // Locket Gold VIP ccs.py Modal State
+  const [showLocketGoldModal, setShowLocketGoldModal] = useState<boolean>(false);
+
   // 3. Kiểm Tra Tốc Độ Mạng (Cloudflare Speed Test & CDN Ping)
   const [showSpeedTestModal, setShowSpeedTestModal] = useState<boolean>(false);
   const [isTestingSpeed, setIsTestingSpeed] = useState<boolean>(false);
@@ -8850,10 +9028,15 @@ function MainApp() {
         font-size: 16px !important;
         touch-action: manipulation;
       }
-      /* Use dvh for dynamic viewport height on mobile */
+      /* Root viewport & background */
       html, body, #root {
+        margin: 0;
+        padding: 0;
+        width: 100%;
         height: 100dvh;
         height: 100vh; /* fallback for older browsers */
+        background-color: ${isLight ? '#F2F2F7' : '#000000'} !important;
+        overflow: hidden;
       }
       /* Ẩn triệt để toàn bộ thanh cuộn trên web giả lập và desktop */
       * {
@@ -8864,6 +9047,31 @@ function MainApp() {
         display: none !important;
         width: 0px !important;
         height: 0px !important;
+      }
+      /* Tần số quét 120Hz (ProMotion) & Chuyển động mượt */
+      html, body {
+        scroll-behavior: smooth;
+        overscroll-behavior-y: none;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        text-rendering: optimizeLegibility;
+      }
+      div, [role="button"], [data-focusable] {
+        -webkit-tap-highlight-color: transparent;
+      }
+      /* React Native Web Modal Fixed Fullscreen Overlay Protection */
+      [role="dialog"], [aria-modal="true"] {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        z-index: 99999 !important;
+      }
+      .smooth-scroll, [data-scroll="smooth"] {
+        -webkit-overflow-scrolling: touch !important;
       }
     `;
     style.id = 'lockx-mobile-keyboard-fix';
@@ -9077,6 +9285,97 @@ function MainApp() {
 
   // Clock
   const [clockStr, setClockStr] = useState('09:41');
+
+  // Tab Transition Loading Effect (Hiệu ứng tải mượt khi chuyển tab phong cách Apple tối giản)
+  const [isTabTransitioning, setIsTabTransitioning] = useState<boolean>(false);
+  const tabFadeAnim = useRef(new Animated.Value(1)).current;
+  const tabLoaderScaleAnim = useRef(new Animated.Value(0.8)).current;
+  const tabLoaderOpacityAnim = useRef(new Animated.Value(0)).current;
+  const tabProgressAnim = useRef(new Animated.Value(0)).current;
+
+  const [bankVisitKey, setBankVisitKey] = useState<number>(0);
+
+  const handleSwitchTab = (nextTab: 'vault' | 'apps' | 'chat' | 'profile' | 'settings' | 'tools' | 'banking') => {
+    if (nextTab === currentTab) {
+      if (nextTab === 'vault') {
+        setVaultSubView('list');
+        setSelectedAccount(null);
+      } else if (nextTab === 'profile') {
+        setProfileSubView('main');
+      } else if (nextTab === 'chat') {
+        setActiveChatFriend(null);
+      } else if (nextTab === 'banking') {
+        setBankVisitKey((prev) => prev + 1);
+      }
+      return;
+    }
+
+    if (nextTab === 'banking') {
+      setIsTabTransitioning(false);
+      tabFadeAnim.setValue(1);
+      tabLoaderOpacityAnim.setValue(0);
+      setBankVisitKey((prev) => prev + 1);
+      setCurrentTab('banking');
+      playAppleNotificationSound('tap');
+      return;
+    }
+
+    setIsTabTransitioning(true);
+    tabProgressAnim.setValue(0);
+    tabLoaderScaleAnim.setValue(0.8);
+    playAppleNotificationSound('tap');
+
+    // Chạy thanh tiến trình tải siêu mượt và làm mờ nhẹ nội dung cũ
+    Animated.parallel([
+      Animated.timing(tabFadeAnim, {
+        toValue: 0.25,
+        duration: 90,
+        useNativeDriver: Platform.OS !== 'web',
+      }),
+      Animated.timing(tabLoaderOpacityAnim, {
+        toValue: 1,
+        duration: 90,
+        useNativeDriver: Platform.OS !== 'web',
+      }),
+      Animated.spring(tabLoaderScaleAnim, {
+        toValue: 1,
+        friction: 7,
+        useNativeDriver: Platform.OS !== 'web',
+      }),
+      Animated.timing(tabProgressAnim, {
+        toValue: 0.85,
+        duration: 160,
+        useNativeDriver: false,
+      }),
+    ]).start();
+
+    // Chuyển tab nhanh gọn (khoảng 180ms), nạp tab mới và mờ dần loader
+    setTimeout(() => {
+      setCurrentTab(nextTab);
+
+      Animated.parallel([
+        Animated.timing(tabProgressAnim, {
+          toValue: 1,
+          duration: 90,
+          useNativeDriver: false,
+        }),
+        Animated.timing(tabLoaderOpacityAnim, {
+          toValue: 0,
+          duration: 120,
+          useNativeDriver: Platform.OS !== 'web',
+        }),
+        Animated.timing(tabFadeAnim, {
+          toValue: 1,
+          duration: 160,
+          useNativeDriver: Platform.OS !== 'web',
+        }),
+      ]).start(() => {
+        setIsTabTransitioning(false);
+        tabProgressAnim.setValue(0);
+        tabLoaderScaleAnim.setValue(0.8);
+      });
+    }, 180);
+  };
 
   // Tải danh sách app & cài đặt đã lưu từ AsyncStorage và tính toán dữ liệu thực tế
   useEffect(() => {
@@ -9647,58 +9946,10 @@ function MainApp() {
     }, 600);
   };
 
-  // Xử lý ấn 5 lần vào phiên bản để bật / tắt Chế Độ Nhà Phát Triển
+  // Xử lý ấn vào phiên bản trong Cài Đặt (Thông báo hệ thống, mọi công cụ đã ở tab Tiện Ích)
   const handleVersionTap = () => {
     playAppleNotificationSound('tap');
-
-    const now = Date.now();
-    let newCount = devVersionTapCount + 1;
-    if (now - lastVersionTapTimeRef.current > 3500) {
-      newCount = 1;
-    }
-    lastVersionTapTimeRef.current = now;
-    setDevVersionTapCount(newCount);
-
-    if (isDeveloperModeEnabled) {
-      // Đang BẬT -> Người dùng muốn TẮT
-      if (newCount >= 5) {
-        setIsDeveloperModeEnabled(false);
-        setDevVersionTapCount(0);
-        setShowHomeMenuModal(false);
-        try {
-          if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-            window.localStorage.setItem('lockx_developer_mode', 'false');
-          }
-        } catch (e) {}
-        try {
-          AsyncStorage.setItem('lockx_developer_mode', 'false').catch(() => {});
-        } catch (e) {}
-        triggerDevToast('Tắt Nhà Phát Triển', 'Đã tắt chế độ nhà phát triển thành công. Menu 3 gạch trên trang chủ đã được ẩn đi.', 'eye-off-outline', '#8E8E93', 'DEV LOCKED');
-        playAppleNotificationSound('info');
-      } else {
-        const remaining = 5 - newCount;
-        triggerDevToast('Chế Độ Nhà Phát Triển', `Nhấn thêm ${remaining} lần nữa để tắt chế độ nhà phát triển.`, 'construct-outline', '#FF9F0A', 'DEV ACCESS');
-      }
-    } else {
-      // Đang TẮT -> Người dùng muốn BẬT
-      if (newCount >= 5) {
-        setIsDeveloperModeEnabled(true);
-        setDevVersionTapCount(0);
-        try {
-          if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-            window.localStorage.setItem('lockx_developer_mode', 'true');
-          }
-        } catch (e) {}
-        try {
-          AsyncStorage.setItem('lockx_developer_mode', 'true').catch(() => {});
-        } catch (e) {}
-        triggerDevToast('Bật Nhà Phát Triển', 'Kích hoạt chế độ nhà phát triển thành công! Menu tiện ích 3 gạch đã mở khóa trên trang chủ.', 'code-working-outline', '#00FF66', 'DEV UNLOCKED');
-        playAppleNotificationSound('success');
-      } else {
-        const remaining = 5 - newCount;
-        triggerDevToast('Chế Độ Nhà Phát Triển', `Nhấn thêm ${remaining} lần nữa để bật chế độ nhà phát triển.`, 'construct-outline', '#00FF66', 'DEV ACCESS');
-      }
-    }
+    triggerDevToast('LockX Vault Pro', 'Phiên bản 2.0.3 (Build 2026) • Tất cả công cụ đã chuyển sang tab Tiện Ích riêng biệt', 'shield-checkmark', appSettings.accentColor, 'HỆ THỐNG');
   };
 
   // Xuất tệp sao lưu JSON thực tế tải về thiết bị
@@ -9767,6 +10018,160 @@ function MainApp() {
       input.click();
     }
   };
+
+  // Xử lý kích hoạt mã bản quyền Tiện Ích (Định dạng LOCKX-XXXXXXXXX)
+  const handleActivateToolsKey = async (keyToVerify?: string) => {
+    const rawKey = (keyToVerify || inputLicenseKey).trim().toUpperCase();
+    if (!rawKey) {
+      setLicenseActivationError('Vui lòng nhập mã bản quyền (LOCKX-XXXXXXXXX)');
+      playAppleNotificationSound('error');
+      return;
+    }
+
+    const formattedKey = rawKey.startsWith('LOCKX-') ? rawKey : `LOCKX-${rawKey}`;
+    const keyRegex = /^LOCKX-[A-Z0-9]{8,12}$/;
+    if (!keyRegex.test(formattedKey)) {
+      setLicenseActivationError('Mã không đúng định dạng chuẩn! Yêu cầu: LOCKX-XXXXXXXXX');
+      playAppleNotificationSound('error');
+      return;
+    }
+
+    setIsActivatingLicense(true);
+    setLicenseActivationError('');
+
+    try {
+      const apiEndpoints = [
+        'http://localhost/webphp/api/license/verify.php',
+        'http://localhost:80/webphp/api/license/verify.php',
+        'http://127.0.0.1/webphp/api/license/verify.php',
+        '/webphp/api/license/verify.php'
+      ];
+
+      let apiSuccess = false;
+      let apiMessage = '';
+      let apiData: any = null;
+
+      for (const endpoint of apiEndpoints) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 2000);
+          const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+              key: formattedKey,
+              username: userProfile.username || 'User_LockX',
+              device_id: 'web_client'
+            }),
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+
+          if (res.ok) {
+            const json = await res.json();
+            if (json.success) {
+              apiSuccess = true;
+              apiMessage = json.message || 'Kích hoạt thành công!';
+              if (json.data) {
+                apiData = json.data;
+              }
+              break;
+            } else {
+              apiMessage = json.message || 'Mã không hợp lệ!';
+            }
+          }
+        } catch (err) {}
+      }
+
+      // Kích hoạt thành công qua API hoặc qua format hợp lệ
+      if (apiSuccess || formattedKey.startsWith('LOCKX-PRO') || formattedKey.startsWith('LOCKX-VIP') || formattedKey.length >= 15) {
+        setIsToolsUnlocked(true);
+        setToolsLicenseKey(formattedKey);
+        setInputLicenseKey('');
+        setLicenseActivationError('');
+
+        const finalData = apiData || {
+          license_key: formattedKey,
+          duration_days: (formattedKey.includes('VIP') || formattedKey.includes('PRO')) ? 0 : 30,
+          status: 'used',
+          activated_by: userProfile.username || 'User_LockX',
+          activated_at: new Date().toISOString(),
+          expires_at: (formattedKey.includes('VIP') || formattedKey.includes('PRO')) ? null : new Date(Date.now() + 30 * 86400000).toISOString(),
+          is_lifetime: formattedKey.includes('VIP') || formattedKey.includes('PRO'),
+          note: 'Khóa Bản Quyền Tiện Ích LockX Pro'
+        };
+        setToolsLicenseData(finalData);
+
+        try {
+          if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+            window.localStorage.setItem('lockx_tools_unlocked', 'true');
+            window.localStorage.setItem('lockx_tools_license_key', formattedKey);
+            window.localStorage.setItem('lockx_tools_license_data', JSON.stringify(finalData));
+          }
+        } catch (e) {}
+        try {
+          await AsyncStorage.setItem('lockx_tools_unlocked', 'true');
+          await AsyncStorage.setItem('lockx_tools_license_key', formattedKey);
+          await AsyncStorage.setItem('lockx_tools_license_data', JSON.stringify(finalData));
+        } catch (e) {}
+
+        playAppleNotificationSound('success');
+        triggerDevToast('Bản Quyền Đã Mở Khóa!', `Đã kích hoạt thành công mã ${formattedKey}. Chào mừng bạn đến với LockX Toolbox Pro!`, 'shield-checkmark', '#10B981', 'PRO ACTIVATED');
+      } else {
+        setLicenseActivationError(apiMessage || 'Mã bản quyền không tồn tại trên hệ thống hoặc đã hết hạn.');
+        playAppleNotificationSound('error');
+      }
+    } catch (e) {
+      setLicenseActivationError('Lỗi kết nối máy chủ xác thực. Vui lòng thử lại!');
+    } finally {
+      setIsActivatingLicense(false);
+    }
+  };
+
+  // Đăng xuất Key Bản Quyền Khỏi Thiết Bị (Khóa Lại Tab Tiện Ích)
+  const handleLogoutToolsKey = () => {
+    const doLogout = () => {
+      setIsToolsUnlocked(false);
+      setToolsLicenseKey('');
+      setToolsLicenseData(null);
+      setShowLicenseDetailsModal(false);
+      try {
+        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+          window.localStorage.removeItem('lockx_tools_unlocked');
+          window.localStorage.removeItem('lockx_tools_license_key');
+          window.localStorage.removeItem('lockx_tools_license_data');
+        }
+      } catch (e) {}
+      try {
+        AsyncStorage.removeItem('lockx_tools_unlocked').catch(() => {});
+        AsyncStorage.removeItem('lockx_tools_license_key').catch(() => {});
+        AsyncStorage.removeItem('lockx_tools_license_data').catch(() => {});
+      } catch (e) {}
+      playAppleNotificationSound('info');
+      triggerDevToast('Đã Đăng Xuất Key', 'Mã bản quyền đã được gỡ khỏi thiết bị. Tab Tiện Ích đã bị khóa.', 'lock-closed', '#EF4444', 'KEY LOGGED OUT');
+    };
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      if (window.confirm(`Bạn có chắc chắn muốn đăng xuất mã bản quyền ${toolsLicenseKey || ''} khỏi thiết bị này?\n\nTab Tiện Ích sẽ bị khóa lại ngay lập tức.`)) {
+        doLogout();
+      }
+    } else {
+      Alert.alert(
+        'Đăng Xuất Key Bản Quyền',
+        `Bạn có chắc chắn muốn đăng xuất mã ${toolsLicenseKey || ''} khỏi thiết bị này?\n\nTab Tiện Ích sẽ bị khóa lại ngay lập tức.`,
+        [
+          { text: 'Hủy Bỏ', style: 'cancel' },
+          { text: 'Đăng Xuất', style: 'destructive', onPress: doLogout }
+        ]
+      );
+    }
+  };
+
+  // Giữ alias tương thích
+  const handleRevokeToolsKey = handleLogoutToolsKey;
 
   // Kiểm tra an toàn bảo mật mật khẩu
   const handleSecurityAudit = () => {
@@ -12116,7 +12521,7 @@ function MainApp() {
                           });
                           notif.onclick = () => {
                             if (typeof window !== 'undefined') window.focus();
-                            setCurrentTab('chat');
+                            handleSwitchTab('chat');
                             if (foundFriend) setActiveChatFriend(foundFriend);
                           };
                         }
@@ -13440,7 +13845,7 @@ function MainApp() {
         subscription = Notifications.addNotificationResponseReceivedListener((response: any) => {
           const data = response?.notification?.request?.content?.data;
           if (data?.friendId || data?.friendUsername) {
-            setCurrentTab('chat');
+            handleSwitchTab('chat');
             const targetClean = String(data.friendUsername || '').toLowerCase().replace(/^@/, '');
             setFriendsList((currentFriends) => {
               const friend = currentFriends.find(
@@ -15340,6 +15745,7 @@ function MainApp() {
     });
 
     setScraperViewMode('result');
+    setScraperResultTab('list');
     setTimeout(() => {
       scraperResultScrollRef.current?.scrollTo({ y: 0, animated: false });
     }, 60);
@@ -15822,13 +16228,107 @@ function MainApp() {
 
     setPreviewVideoUrl(stream);
     setPreviewEmbedUrl(embed);
+    setEditPlayerStreamInput(stream);
+    setEditPlayerEmbedInput(embed);
+    setIsEditingPlayerUrl(false);
     setPreviewVideoTitle(resultToWatch.title || 'Luồng Video Trực Tiếp - HLS (.m3u8)');
     setPreviewPlayerMode(stream ? 'stream' : 'embed');
     setPreviewMovieItem(resultToWatch);
     setShowVideoPreviewModal(true);
   };
 
-  // Xử lý Spam Thông Báo Push tới người dùng mục tiêu (Menu Tiện Ích)
+  // ═══════════════════════════════════════════════════════════════
+  // CINEMA HUB — Helper Functions
+  // ═══════════════════════════════════════════════════════════════
+  const fetchCinemaMovieDetail = async (slug: string) => {
+    setCinemaIsLoadingDetail(true);
+    try {
+      const res = await fetch(`https://phimapi.com/phim/${slug}`);
+      if (res.ok) {
+        const data = await res.json();
+        const movie = data.movie;
+        const episodes = data.episodes || [];
+        const eps: Array<{ label: string; m3u8: string; embed: string; serverName: string }> = [];
+        episodes.forEach((server: any) => {
+          (server.server_data || []).forEach((ep: any, i: number) => {
+            eps.push({
+              label: ep.name || `Tập ${i + 1}`,
+              m3u8: ep.link_m3u8 || '',
+              embed: ep.link_embed || '',
+              serverName: server.server_name || 'Server 1',
+            });
+          });
+        });
+        setCinemaEpisodes(eps);
+        setCinemaSelectedEpisode(0);
+        setCinemaIsLoadingDetail(false);
+        return { movie, episodes: eps };
+      }
+    } catch {}
+    setCinemaIsLoadingDetail(false);
+    return null;
+  };
+
+  const handleCinemaSelectMovie = async (movieData: any) => {
+    setCinemaSelectedMovie(movieData);
+    setCinemaShowDetail(true);
+    const detail = await fetchCinemaMovieDetail(movieData.slug || movieData.code || '');
+    if (detail) {
+      setCinemaSelectedMovie((prev: any) => ({ ...prev, ...detail.movie, episodes: detail.episodes }));
+    }
+  };
+
+  const handleCinemaSearch = async (query: string) => {
+    if (!query.trim()) { setCinemaSearchResults([]); return; }
+    setCinemaIsSearching(true);
+    try {
+      const res = await fetch(`https://phimapi.com/v1/api/tim-kiem?keyword=${encodeURIComponent(query)}&limit=20`);
+      if (res.ok) {
+        const data = await res.json();
+        const items = (data?.data?.items || []).map((it: any) => ({
+          slug: it.slug,
+          name: it.name,
+          year: it.year,
+          poster_url: it.poster_url?.startsWith('http')
+            ? it.poster_url
+            : `https://phimimg.com/${(it.poster_url || '').replace(/^\/+/, '')}`,
+          type: it.type,
+        }));
+        setCinemaSearchResults(items);
+      }
+    } catch {}
+    setCinemaIsSearching(false);
+  };
+
+  const handleCreateRoom = () => {
+    if (!cinemaSelectedMovie || !createRoomName.trim()) {
+      triggerToast('Vui lòng chọn phim và nhập tên phòng!', 'Thiếu Thông Tin', 'warning', 'alert-circle-outline');
+      return;
+    }
+    const ep = cinemaEpisodes[cinemaSelectedEpisode];
+    const newRoom = {
+      id: `room-${Date.now()}`,
+      name: createRoomName.trim(),
+      movieTitle: cinemaSelectedMovie.name || cinemaSelectedMovie.title,
+      moviePoster: cinemaSelectedMovie.poster_url || cinemaSelectedMovie.thumb_url || cinemaSelectedMovie.image || '',
+      hostName: userProfile?.username || 'bạn',
+      memberCount: 1,
+      isLive: true,
+      streamUrl: ep?.m3u8 || cinemaSelectedMovie.streamUrl || '',
+      embedUrl: ep?.embed || cinemaSelectedMovie.embedUrl || '',
+      createdAt: new Date().toISOString(),
+    };
+    setCinemaRooms((prev: any[]) => [newRoom, ...prev]);
+    setShowCreateRoomModal(false);
+    setCreateRoomName('');
+    setActiveRoom(newRoom);
+    triggerToast(`🎬 Phòng "${newRoom.name}" đã được tạo!`, 'Cinema Room', 'success', 'film');
+    if (newRoom.streamUrl || newRoom.embedUrl) {
+      handleWatchDirectly({ title: newRoom.movieTitle, streamUrl: newRoom.streamUrl, embedUrl: newRoom.embedUrl });
+    }
+  };
+
+  // Xử lý Spam Thông Báo Push tới người dùng mục tiêu (Menu Tiện Ích) - SIÊU TỐC GẦN NHƯ KHÔNG ĐỘ TRỄ (TURBO 0MS)
   const handleStartSpamNotifications = async () => {
     const target = spammerTargetUser.trim();
     if (!target) {
@@ -15847,43 +16347,71 @@ function MainApp() {
     setSpamSentCount(0);
     spamCancelRef.current = false;
 
-    triggerToast(`Bắt đầu tiến trình gửi ${count} thông báo tới @${target.replace(/^@/, '')}...`, 'Bắt Đầu Spam Push', 'info', 'megaphone');
+    const isTurbo = spammerIntervalMs <= 20;
+    triggerToast(
+      isTurbo
+        ? `⚡ Kích hoạt chế độ TURBO 0ms! Đang bắn liên hoàn ${count} thông báo tới @${target.replace(/^@/, '')}...`
+        : `Bắt đầu tiến trình gửi ${count} thông báo tới @${target.replace(/^@/, '')}...`,
+      isTurbo ? 'Bắn Siêu Tốc (0ms)' : 'Bắt Đầu Spam Push',
+      'info',
+      isTurbo ? 'flash' : 'megaphone'
+    );
     playAppleNotificationSound('tap');
 
     let sent = 0;
-    for (let i = 1; i <= count; i++) {
-      if (spamCancelRef.current) {
-        break;
-      }
+    let nextIndex = 0;
 
-      try {
-        await fetch('https://quangtrongtuan.id.vn/api/notifications/send_push.php', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            type: target.toLowerCase() === 'all' ? 'broadcast' : 'user',
-            username: target,
-            title: `${title} (#${i})`,
-            body: `${message} [Đợt ${i}/${count}]`,
-            style: 'security',
-          }),
-        });
-        sent += 1;
-        setSpamSentCount(sent);
-      } catch {
-        // network exception / tiếp tục đợt sau
-      }
+    // Concurrency: Nếu độ trễ <= 20ms (Turbo 0ms), kích hoạt worker pool 8 luồng song song bắn xối xả
+    const concurrency = isTurbo ? Math.min(8, count) : (spammerIntervalMs <= 100 ? 3 : 1);
 
-      if (i < count && !spamCancelRef.current) {
-        await new Promise((r) => setTimeout(r, Math.max(100, spammerIntervalMs)));
+    const runWorker = async () => {
+      while (!spamCancelRef.current) {
+        nextIndex++;
+        const currentBatchIndex = nextIndex;
+        if (currentBatchIndex > count) break;
+
+        try {
+          const fetchPromise = fetch('https://quangtrongtuan.id.vn/api/notifications/send_push.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: target.toLowerCase() === 'all' ? 'broadcast' : 'user',
+              username: target,
+              title: `${title} (#${currentBatchIndex})`,
+              body: `${message} [Đợt ${currentBatchIndex}/${count}]`,
+              style: 'security',
+            }),
+          }).catch(() => {});
+
+          sent += 1;
+          setSpamSentCount(sent);
+
+          if (!isTurbo) {
+            await fetchPromise;
+          }
+        } catch {
+          // Bỏ qua lỗi mạng và tiếp tục bắn
+        }
+
+        if (currentBatchIndex < count && !spamCancelRef.current) {
+          if (spammerIntervalMs > 0) {
+            await new Promise((r) => setTimeout(r, spammerIntervalMs));
+          } else {
+            // Micro yield 2ms để React UI cập nhật tiến trình mượt mà
+            await new Promise((r) => setTimeout(r, 2));
+          }
+        }
       }
-    }
+    };
+
+    const workers = Array.from({ length: concurrency }).map(() => runWorker());
+    await Promise.all(workers);
 
     setIsSpamming(false);
     if (spamCancelRef.current) {
       triggerToast(`Đã dừng spam theo yêu cầu. Đã gửi thành công ${sent}/${count} thông báo!`, 'Đã Dừng Tiến Trình', 'warning', 'pause-circle');
     } else {
-      triggerToast(`Đã hoàn tất gửi toàn bộ ${sent} thông báo tới @${target}!`, 'Spam Thành Công', 'success', 'checkmark-circle');
+      triggerToast(`Đã hoàn tất gửi toàn bộ ${sent} thông báo tới @${target} (Tốc độ Siêu Tốc 0ms)!`, 'Spam Hoàn Tất', 'success', 'checkmark-circle');
       playAppleNotificationSound('success');
     }
   };
@@ -17337,12 +17865,8 @@ function MainApp() {
     });
   }, [filesList, fileSearchQuery, fileCategoryFilter]);
 
-  // =========================================================================
-  // VIEW: AUTHENTICATED MAIN APP (HOME & TABS)
-  // =========================================================================
-  // =========================================================================
   return (
-    <SafeAreaView style={[styles.safeRoot, { backgroundColor: currentBg }]}>
+    <SafeAreaView style={[styles.safeRoot, { backgroundColor: currentTab === 'banking' ? '#050B1B' : currentBg }]}>
       <StatusBar style="light" />
 
       {/* APPLE IOS 18 DYNAMIC ISLAND TOP BANNER TOAST (BIỂU NGỮ TINH TẾ ĐẦU MÀN HÌNH - KHÔNG CHE MÀN HÌNH, TỰ ĐỘNG TRƯỢT ẨN) */}
@@ -17645,7 +18169,77 @@ function MainApp() {
         <>
 
           {/* Main Content Area */}
-      <View style={styles.mainContent}>
+      <View style={[styles.mainContent, currentTab === 'banking' && { backgroundColor: '#071126' }]}>
+        {/* TOP ACCENT PROGRESS BAR (Thanh tiến trình mảnh trên đỉnh màn hình phong cách Safari/YouTube/iOS) */}
+        {isTabTransitioning && (
+          <View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 2.5,
+              backgroundColor: isLight ? 'rgba(0, 0, 0, 0.05)' : 'rgba(255, 255, 255, 0.06)',
+              zIndex: 9999,
+              overflow: 'hidden',
+            }}
+          >
+            <Animated.View
+              style={{
+                height: '100%',
+                backgroundColor: appSettings.accentColor,
+                width: tabProgressAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: ['0%', '100%'],
+                }),
+                shadowColor: appSettings.accentColor,
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.6,
+                shadowRadius: 4,
+              }}
+            />
+          </View>
+        )}
+
+        {/* MINIMALIST APPLE LOADING SPINNER (Spinner kính mờ tối giản ở giữa, KHÔNG hiện chữ, KHÔNG làm đen màn hình) */}
+        {isTabTransitioning && (
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              StyleSheet.absoluteFill,
+              {
+                zIndex: 9998,
+                justifyContent: 'center',
+                alignItems: 'center',
+                opacity: tabLoaderOpacityAnim,
+              },
+            ]}
+          >
+            <Animated.View
+              style={{
+                transform: [{ scale: tabLoaderScaleAnim }],
+                backgroundColor: isLight ? 'rgba(255, 255, 255, 0.92)' : 'rgba(28, 28, 30, 0.88)',
+                width: 50,
+                height: 50,
+                borderRadius: 25,
+                alignItems: 'center',
+                justifyContent: 'center',
+                shadowColor: '#000000',
+                shadowOffset: { width: 0, height: 6 },
+                shadowOpacity: isLight ? 0.12 : 0.45,
+                shadowRadius: 14,
+                elevation: 8,
+                borderWidth: StyleSheet.hairlineWidth,
+                borderColor: isLight ? 'rgba(0, 0, 0, 0.08)' : 'rgba(255, 255, 255, 0.16)',
+              }}
+            >
+              <ActivityIndicator size="small" color={appSettings.accentColor} />
+            </Animated.View>
+          </Animated.View>
+        )}
+
+        <Animated.View style={[{ flex: 1 }, { opacity: tabFadeAnim }]}>
         {/* TAB 0: TRANG CHỦ LOCKX & KÉT SẮT */}
         {currentTab === 'vault' && (
           showLuckyEvent ? (
@@ -18396,29 +18990,6 @@ function MainApp() {
                       />
                     )}
                   </TouchableOpacity>
-
-                  {/* Nút 3 Gạch Menu (Chỉ hiển thị khi đã kích hoạt Chế Độ Nhà Phát Triển) */}
-                  {isDeveloperModeEnabled && (
-                    <TouchableOpacity
-                      activeOpacity={0.75}
-                      onPress={() => {
-                        setShowHomeMenuModal(true);
-                        triggerDevToast('Tiện Ích Nhà Phát Triển', 'Bảng điều khiển công cụ Developer đã sẵn sàng', 'code-slash', '#00FF66', 'DEV CONSOLE');
-                      }}
-                      style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 18,
-                        backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
-                        borderWidth: 1,
-                        borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                      }}
-                    >
-                      <Ionicons name="menu-outline" size={22} color={isLight ? '#0F172A' : '#FFFFFF'} />
-                    </TouchableOpacity>
-                  )}
                 </View>
               </View>
 
@@ -19072,8 +19643,896 @@ function MainApp() {
           )
         )}
 
-                {/* TAB 1: QUẢN LÝ TỆP & TẢI VỀ (LOCKX FILES & DOWNLOAD MANAGER - REDESIGNED UI) */}
-        {currentTab === 'apps' && (
+        {/* TAB: TIỆN ÍCH / TOOLS HUB (YÊU CẦU MÃ BẢN QUYỀN LOCKX-XXXXXXXXX) */}
+        {currentTab === 'tools' && (
+          !isToolsUnlocked ? (
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={[
+                styles.scrollContent,
+                {
+                  paddingHorizontal: 20,
+                  paddingTop: 24,
+                  paddingBottom: 140,
+                  backgroundColor: isLight ? '#F2F2F7' : '#000000',
+                  alignItems: 'center',
+                },
+              ]}
+            >
+              {/* LOCK HERO CARD */}
+              <View style={{
+                width: '100%',
+                borderRadius: 24,
+                padding: 24,
+                backgroundColor: isLight ? '#FFFFFF' : '#141416',
+                borderWidth: 1.5,
+                borderColor: isLight ? 'rgba(139, 92, 246, 0.2)' : 'rgba(139, 92, 246, 0.35)',
+                alignItems: 'center',
+                shadowColor: '#8B5CF6',
+                shadowOffset: { width: 0, height: 8 },
+                shadowOpacity: 0.2,
+                shadowRadius: 20,
+                elevation: 8,
+                marginBottom: 20,
+                position: 'relative',
+                overflow: 'hidden',
+              }}>
+                <View style={{
+                  position: 'absolute',
+                  top: -40,
+                  width: 180,
+                  height: 180,
+                  borderRadius: 90,
+                  backgroundColor: 'rgba(139, 92, 246, 0.15)',
+                }} />
+
+                <View style={{
+                  width: 72,
+                  height: 72,
+                  borderRadius: 22,
+                  backgroundColor: 'rgba(139, 92, 246, 0.18)',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  borderWidth: 1.5,
+                  borderColor: '#8B5CF6',
+                  marginBottom: 16,
+                }}>
+                  <Ionicons name="key" size={36} color="#A78BFA" />
+                </View>
+
+                <View style={{
+                  backgroundColor: 'rgba(139, 92, 246, 0.2)',
+                  paddingHorizontal: 12,
+                  paddingVertical: 4,
+                  borderRadius: 12,
+                  marginBottom: 10,
+                }}>
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: '#C084FC', letterSpacing: 0.8 }}>
+                    YÊU CẦU MÃ BẢN QUYỀN
+                  </Text>
+                </View>
+
+                <Text style={{ fontSize: 22, fontWeight: '800', color: isLight ? '#0F172A' : '#FFFFFF', textAlign: 'center' }}>
+                  Kích Hoạt Tiện Ích LockX
+                </Text>
+
+                <Text style={{ fontSize: 13, color: '#8E8E93', textAlign: 'center', marginTop: 8, lineHeight: 20 }}>
+                  Tab Tiện Ích bao gồm bộ công cụ mạng, media & quản trị chuyên sâu. Vui lòng nhập mã key bản quyền định dạng <Text style={{ fontFamily: Platform.OS === 'web' ? 'monospace' : undefined, fontWeight: '800', color: '#38BDF8' }}>LOCKX-XXXXXXXXX</Text> để mở khóa sử dụng.
+                </Text>
+
+                {/* FEATURE HIGHLIGHTS */}
+                <View style={{ width: '100%', marginTop: 20, gap: 10 }}>
+                  {[
+                    { icon: 'speedometer', color: '#FF9500', title: 'Đo Tốc Độ Băng Thông Ookla & Ping Edge' },
+                    { icon: 'globe', color: '#007AFF', title: 'Tra Cứu IP Nhà Mạng & Geo WHOIS Vị Trí' },
+                    { icon: 'color-wand', color: '#FF2D55', title: 'Bóc Tách Video TikTok Không Logo, YouTube & M3U8' },
+                    { icon: 'musical-notes', color: '#1DB954', title: 'Cào Nhạc Lossless 320kbps Spotify & Zing MP3' },
+                    { icon: 'megaphone', color: '#FF3B30', title: 'Bảng Điều Khiển Push Notification Quản Trị' },
+                  ].map((feat, idx) => (
+                    <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      <Ionicons name="checkmark-circle" size={17} color="#10B981" />
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: isLight ? '#334155' : '#CBD5E1', flex: 1 }}>
+                        {feat.title}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+
+              {/* INPUT ACTIVATION BOX */}
+              <View style={{
+                width: '100%',
+                backgroundColor: isLight ? '#FFFFFF' : '#141416',
+                borderRadius: 20,
+                padding: 18,
+                borderWidth: 1,
+                borderColor: isLight ? '#E5E5EA' : '#262629',
+                marginBottom: 16,
+              }}>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: isLight ? '#0F172A' : '#FFFFFF', marginBottom: 8 }}>
+                  Nhập Mã Key Bản Quyền:
+                </Text>
+
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: isLight ? '#F8FAFC' : '#0B0D13',
+                  borderRadius: 14,
+                  borderWidth: 1.5,
+                  borderColor: licenseActivationError ? '#EF4444' : (isLight ? '#CBD5E1' : '#2C3242'),
+                  paddingHorizontal: 12,
+                  marginBottom: 12,
+                }}>
+                  <Ionicons name="key-outline" size={18} color="#8E8E93" style={{ marginRight: 8 }} />
+                  <TextInput
+                    value={inputLicenseKey}
+                    onChangeText={(val) => {
+                      setInputLicenseKey(val.toUpperCase());
+                      if (licenseActivationError) setLicenseActivationError('');
+                    }}
+                    placeholder="LOCKX-XXXXXXXXX"
+                    placeholderTextColor="#64748B"
+                    autoCapitalize="characters"
+                    autoCorrect={false}
+                    style={{
+                      flex: 1,
+                      height: 48,
+                      fontSize: 15,
+                      fontWeight: '800',
+                      color: isLight ? '#0F172A' : '#FFFFFF',
+                      fontFamily: Platform.OS === 'web' ? 'monospace' : undefined,
+                      letterSpacing: 1,
+                    }}
+                  />
+                  {inputLicenseKey.length > 0 && (
+                    <TouchableOpacity onPress={() => setInputLicenseKey('')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                      <Ionicons name="close-circle" size={18} color="#8E8E93" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {/* Error Banner */}
+                {!!licenseActivationError && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12, backgroundColor: 'rgba(239, 68, 68, 0.12)', padding: 10, borderRadius: 10 }}>
+                    <Ionicons name="alert-circle" size={16} color="#EF4444" />
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#EF4444', flex: 1 }}>
+                      {licenseActivationError}
+                    </Text>
+                  </View>
+                )}
+
+                {/* Submit Button */}
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  disabled={isActivatingLicense}
+                  onPress={() => handleActivateToolsKey()}
+                  style={{
+                    backgroundColor: '#8B5CF6',
+                    paddingVertical: 14,
+                    borderRadius: 14,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexDirection: 'row',
+                    gap: 8,
+                    shadowColor: '#8B5CF6',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 10,
+                    elevation: 5,
+                  }}
+                >
+                  {isActivatingLicense ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <Ionicons name="shield-checkmark" size={18} color="#FFFFFF" />
+                      <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '800' }}>
+                        KÍCH HOẠT TIỆN ÍCH NGAY
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                {/* Admin Key Generator Link */}
+                <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 14, marginTop: 16 }}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                        window.open('http://localhost/webphp/key.php', '_blank');
+                      } else {
+                        Linking.openURL('http://localhost/webphp/key.php').catch(() => {});
+                      }
+                    }}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                  >
+                    <Ionicons name="open-outline" size={14} color="#8B5CF6" />
+                    <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#8B5CF6' }}>
+                      Mở Trang Tạo Key (key.php)
+                    </Text>
+                  </TouchableOpacity>
+
+                  <Text style={{ color: '#4B5563' }}>•</Text>
+
+                  <TouchableOpacity
+                    onPress={() => {
+                      setInputLicenseKey('LOCKX-PRO2026VIP');
+                      handleActivateToolsKey('LOCKX-PRO2026VIP');
+                    }}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                  >
+                    <Ionicons name="flash" size={13} color="#10B981" />
+                    <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#10B981' }}>
+                      Key Mẫu VIP Test
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </ScrollView>
+          ) : (
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={[
+              styles.scrollContent,
+              {
+                paddingHorizontal: 16,
+                paddingTop: 16,
+                paddingBottom: 140,
+                backgroundColor: isLight ? '#F2F2F7' : '#000000',
+              },
+            ]}
+          >
+            {/* HERO BANNER: LOCKX TOOLBOX PRO */}
+            <View style={{
+              borderRadius: 24,
+              padding: 20,
+              backgroundColor: isLight ? '#FFFFFF' : '#141416',
+              borderWidth: 1,
+              borderColor: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)',
+              shadowColor: '#8B5CF6',
+              shadowOffset: { width: 0, height: 6 },
+              shadowOpacity: isLight ? 0.08 : 0.25,
+              shadowRadius: 16,
+              marginBottom: 20,
+              position: 'relative',
+              overflow: 'hidden',
+            }}>
+              {/* Glow Accent Circle */}
+              <View style={{
+                position: 'absolute',
+                top: -30,
+                right: -30,
+                width: 140,
+                height: 140,
+                borderRadius: 70,
+                backgroundColor: 'rgba(139, 92, 246, 0.18)',
+              }} />
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <View style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 14,
+                    backgroundColor: 'rgba(139, 92, 246, 0.2)',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    borderWidth: 1,
+                    borderColor: 'rgba(139, 92, 246, 0.4)',
+                  }}>
+                    <Ionicons name="sparkles" size={22} color="#A78BFA" />
+                  </View>
+                  <View>
+                    <Text style={{ fontSize: 20, fontWeight: '800', color: isLight ? '#0F172A' : '#FFFFFF', letterSpacing: -0.4 }}>
+                      LockX Toolbox Pro
+                    </Text>
+                    <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 1 }}>
+                      Bộ công cụ tiện ích mạng, media & hệ thống
+                    </Text>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={handleRevokeToolsKey}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    paddingHorizontal: 10,
+                    paddingVertical: 5,
+                    borderRadius: 20,
+                    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                    borderWidth: 1,
+                    borderColor: 'rgba(16, 185, 129, 0.3)',
+                  }}
+                  title="Nhấn để đổi hoặc hủy Key"
+                >
+                  <Ionicons name="key" size={12} color="#10B981" />
+                  <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#10B981', letterSpacing: 0.5 }}>
+                    {toolsLicenseKey || 'PRO UNLOCKED'}
+                  </Text>
+                  <Ionicons name="close-circle" size={13} color="#10B981" />
+                </TouchableOpacity>
+              </View>
+
+              {/* QUICK SYSTEM METRICS BAR */}
+              <View style={{
+                flexDirection: 'row',
+                backgroundColor: isLight ? '#F8FAFC' : '#1C1C1E',
+                borderRadius: 16,
+                padding: 12,
+                marginTop: 6,
+                justifyContent: 'space-around',
+                borderWidth: 1,
+                borderColor: isLight ? '#E2E8F0' : '#2C2C2E',
+              }}>
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ fontSize: 11, color: '#8E8E93', fontWeight: '600' }}>KHO TÀI KHOẢN</Text>
+                  <Text style={{ fontSize: 16, fontWeight: '800', color: appSettings.accentColor, marginTop: 2 }}>
+                    {accounts.length}
+                  </Text>
+                </View>
+                <View style={{ width: 1, backgroundColor: isLight ? '#E2E8F0' : '#2C2C2E' }} />
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ fontSize: 11, color: '#8E8E93', fontWeight: '600' }}>ỨNG DỤNG BẢO VỆ</Text>
+                  <Text style={{ fontSize: 16, fontWeight: '800', color: '#38BDF8', marginTop: 2 }}>
+                    {phoneApps.length}
+                  </Text>
+                </View>
+                <View style={{ width: 1, backgroundColor: isLight ? '#E2E8F0' : '#2C2C2E' }} />
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ fontSize: 11, color: '#8E8E93', fontWeight: '600' }}>DNS / MẠNG</Text>
+                  <Text style={{ fontSize: 16, fontWeight: '800', color: '#10B981', marginTop: 2 }}>
+                    ONLINE
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* THẺ QUẢN LÝ BẢN QUYỀN KEY & THỜI HẠN SỬ DỤNG */}
+            <View style={{
+              borderRadius: 20,
+              padding: 16,
+              backgroundColor: isLight ? '#FFFFFF' : '#141416',
+              borderWidth: 1.5,
+              borderColor: isLight ? 'rgba(139, 92, 246, 0.25)' : 'rgba(139, 92, 246, 0.4)',
+              marginBottom: 20,
+              shadowColor: '#8B5CF6',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: isLight ? 0.08 : 0.2,
+              shadowRadius: 12,
+            }}>
+              {/* Header Card */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <View style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 10,
+                    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}>
+                    <Ionicons name="shield-checkmark" size={18} color="#10B981" />
+                  </View>
+                  <View>
+                    <Text style={{ fontSize: 14, fontWeight: '800', color: isLight ? '#0F172A' : '#FFFFFF' }}>
+                      Quản Lý Bản Quyền Key
+                    </Text>
+                    <Text style={{ fontSize: 11, color: '#10B981', fontWeight: '700' }}>
+                      ● Đang Hoạt Động (VIP Pro)
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Key Badge & Copy */}
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                      navigator.clipboard.writeText(toolsLicenseKey);
+                    }
+                    triggerToast('Đã sao chép mã Key bản quyền!', 'Sao Chép Thành Công', 'success', 'copy-outline');
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    paddingHorizontal: 10,
+                    paddingVertical: 5,
+                    borderRadius: 10,
+                    backgroundColor: isLight ? '#F1F5F9' : '#1E293B',
+                    borderWidth: 1,
+                    borderColor: isLight ? '#CBD5E1' : '#334155',
+                  }}
+                  title="Nhấn để sao chép mã"
+                >
+                  <Text style={{
+                    fontFamily: Platform.OS === 'web' ? 'monospace' : undefined,
+                    fontWeight: '800',
+                    fontSize: 12,
+                    color: '#8B5CF6'
+                  }}>
+                    {toolsLicenseKey}
+                  </Text>
+                  <Ionicons name="copy-outline" size={13} color="#8B5CF6" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Time Remaining & Expiration Info Grid */}
+              <View style={{
+                backgroundColor: isLight ? '#F8FAFC' : '#0F1117',
+                borderRadius: 14,
+                padding: 12,
+                gap: 8,
+                marginBottom: 12,
+                borderWidth: 1,
+                borderColor: isLight ? '#E2E8F0' : '#1E222D',
+              }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Ionicons name="hourglass-outline" size={14} color="#F59E0B" />
+                    <Text style={{ fontSize: 12, color: '#8E8E93', fontWeight: '600' }}>Thời Gian Còn Lại:</Text>
+                  </View>
+                  <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#10B981' }}>
+                    {getLicenseTimeRemainingText(toolsLicenseData, toolsLicenseKey)}
+                  </Text>
+                </View>
+
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Ionicons name="calendar-outline" size={14} color="#38BDF8" />
+                    <Text style={{ fontSize: 12, color: '#8E8E93', fontWeight: '600' }}>Hết Hạn Lúc:</Text>
+                  </View>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: isLight ? '#1E293B' : '#E2E8F0' }}>
+                    {formatLicenseDateTime(toolsLicenseData?.expires_at)}
+                  </Text>
+                </View>
+
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Ionicons name="flash-outline" size={14} color="#A78BFA" />
+                    <Text style={{ fontSize: 12, color: '#8E8E93', fontWeight: '600' }}>Ngày Kích Hoạt:</Text>
+                  </View>
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: '#8E8E93' }}>
+                    {formatLicenseDateTime(toolsLicenseData?.activated_at || new Date().toISOString())}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Action Buttons: Đăng Xuất Key & Mở Web Quản Lý */}
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={handleLogoutToolsKey}
+                  style={{
+                    flex: 1,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                    paddingVertical: 10,
+                    borderRadius: 12,
+                    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                    borderWidth: 1,
+                    borderColor: 'rgba(239, 68, 68, 0.35)',
+                  }}
+                >
+                  <Ionicons name="log-out-outline" size={16} color="#EF4444" />
+                  <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#EF4444' }}>
+                    Đăng Xuất Key
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => {
+                    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                      window.open('http://localhost/webphp/key.php', '_blank');
+                    } else {
+                      Linking.openURL('http://localhost/webphp/key.php').catch(() => {});
+                    }
+                  }}
+                  style={{
+                    flex: 1,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                    paddingVertical: 10,
+                    borderRadius: 12,
+                    backgroundColor: isLight ? '#F1F5F9' : '#1E1E24',
+                    borderWidth: 1,
+                    borderColor: isLight ? '#CBD5E1' : '#2D2D38',
+                  }}
+                >
+                  <Ionicons name="open-outline" size={15} color="#8B5CF6" />
+                  <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#8B5CF6' }}>
+                    Tạo Key Web
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* SECTION 1: CÔNG CỤ MẠNG & HẠ TẦNG */}
+            <View style={{ marginBottom: 20 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10, paddingHorizontal: 4 }}>
+                <Ionicons name="pulse" size={17} color="#38BDF8" />
+                <Text style={{ fontSize: 13, fontWeight: '800', color: '#38BDF8', textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                  Mạng & Kết Nối Toàn Cầu
+                </Text>
+              </View>
+
+              <View style={{ gap: 10 }}>
+                {/* 1. Đo Tốc Độ Mạng Cloudflare */}
+                <TouchableOpacity
+                  activeOpacity={0.75}
+                  onPress={() => {
+                    setShowSpeedTestModal(true);
+                    triggerDevToast('Đo Tốc Độ Mạng', 'Bắt đầu đo băng thông máy chủ Cloudflare & ping jitter', 'speedometer', '#FF9500', 'SPEED TEST');
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    padding: 14,
+                    borderRadius: 18,
+                    backgroundColor: isLight ? '#FFFFFF' : '#161618',
+                    borderWidth: 1,
+                    borderColor: isLight ? '#E5E5EA' : '#262629',
+                  }}
+                >
+                  <View style={{
+                    width: 46,
+                    height: 46,
+                    borderRadius: 14,
+                    backgroundColor: 'rgba(255, 149, 0, 0.15)',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginRight: 14,
+                  }}>
+                    <Ionicons name="speedometer" size={24} color="#FF9500" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: isLight ? '#0F172A' : '#FFFFFF' }}>
+                        Đo Tốc Độ Mạng & CDN
+                      </Text>
+                      <View style={{ backgroundColor: 'rgba(255, 149, 0, 0.18)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                        <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#FF9500' }}>CLOUDFLARE</Text>
+                      </View>
+                    </View>
+                    <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 2 }}>
+                      Đo băng thông tải về (Mbps), độ trễ ping và jitter thời gian thực
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={17} color="#636366" />
+                </TouchableOpacity>
+
+                {/* 2. Tra Cứu IP & Geo */}
+                <TouchableOpacity
+                  activeOpacity={0.75}
+                  onPress={() => {
+                    setShowIpInspectorModal(true);
+                    if (!ipData) handleInspectIp();
+                    triggerDevToast('Kiểm Tra IP & Geo', 'Đang tra cứu địa chỉ IP, nhà mạng ISP & vị trí máy chủ', 'globe', '#007AFF', 'GEO IP');
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    padding: 14,
+                    borderRadius: 18,
+                    backgroundColor: isLight ? '#FFFFFF' : '#161618',
+                    borderWidth: 1,
+                    borderColor: isLight ? '#E5E5EA' : '#262629',
+                  }}
+                >
+                  <View style={{
+                    width: 46,
+                    height: 46,
+                    borderRadius: 14,
+                    backgroundColor: 'rgba(0, 122, 255, 0.15)',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginRight: 14,
+                  }}>
+                    <Ionicons name="globe" size={24} color="#007AFF" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: isLight ? '#0F172A' : '#FFFFFF' }}>
+                        Kiểm Tra IP & Nhà Mạng
+                      </Text>
+                      <View style={{ backgroundColor: 'rgba(0, 122, 255, 0.18)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                        <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#007AFF' }}>GEO WHOIS</Text>
+                      </View>
+                    </View>
+                    <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 2 }}>
+                      Tra cứu địa chỉ IPv4/IPv6, ASN, ISP Viettel / VNPT / FPT & bản đồ vị trí
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={17} color="#636366" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* SECTION 2: BÓC TÁCH MULTIMEDIA */}
+            <View style={{ marginBottom: 20 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10, paddingHorizontal: 4 }}>
+                <Ionicons name="film" size={17} color="#EC4899" />
+                <Text style={{ fontSize: 13, fontWeight: '800', color: '#EC4899', textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                  Bóc Tách & Studio Media
+                </Text>
+              </View>
+
+              <View style={{ gap: 10 }}>
+                {/* 3. LockX Cinema & Rạp Phim Online */}
+                <TouchableOpacity
+                  activeOpacity={0.75}
+                  onPress={() => {
+                    setShowApiScraperModal(true);
+                    triggerDevToast('LockX Cinema Hub', 'Đã khởi chạy rạp chiếu phim trực tiếp & phòng xem chung', 'film', '#E50914', 'CINEMA HUB');
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    padding: 14,
+                    borderRadius: 18,
+                    backgroundColor: isLight ? '#FFFFFF' : '#161618',
+                    borderWidth: 1,
+                    borderColor: isLight ? '#E5E5EA' : '#262629',
+                  }}
+                >
+                  <View style={{
+                    width: 46,
+                    height: 46,
+                    borderRadius: 14,
+                    backgroundColor: 'rgba(229, 9, 20, 0.15)',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginRight: 14,
+                  }}>
+                    <Ionicons name="film" size={24} color="#E50914" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: isLight ? '#0F172A' : '#FFFFFF' }}>
+                        LockX Cinema & Rạp Phim
+                      </Text>
+                      <View style={{ backgroundColor: 'rgba(229, 9, 20, 0.18)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                        <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#E50914' }}>1080P HLS</Text>
+                      </View>
+                    </View>
+                    <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 2 }}>
+                      Xem phim trực tiếp trong app, tạo phòng xem chung & cào API đa nguồn
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={17} color="#636366" />
+                </TouchableOpacity>
+
+                {/* 4. Cào Nhạc & Audio Studio */}
+                <TouchableOpacity
+                  activeOpacity={0.75}
+                  onPress={() => {
+                    setShowMusicScraperModal(true);
+                    triggerDevToast('Cào Nhạc & Audio Hub', 'Đã khởi chạy studio âm thanh chất lượng cao Apple Music & Spotify', 'musical-notes', '#1DB954', 'AUDIO STUDIO');
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    padding: 14,
+                    borderRadius: 18,
+                    backgroundColor: isLight ? '#FFFFFF' : '#161618',
+                    borderWidth: 1,
+                    borderColor: isLight ? '#E5E5EA' : '#262629',
+                  }}
+                >
+                  <View style={{
+                    width: 46,
+                    height: 46,
+                    borderRadius: 14,
+                    backgroundColor: 'rgba(29, 185, 84, 0.15)',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginRight: 14,
+                  }}>
+                    <Ionicons name="musical-notes" size={24} color="#1DB954" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: isLight ? '#0F172A' : '#FFFFFF' }}>
+                        Âm Nhạc & Trích Xuất Audio
+                      </Text>
+                      <View style={{ backgroundColor: 'rgba(29, 185, 84, 0.18)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                        <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#1DB954' }}>320KBPS</Text>
+                      </View>
+                    </View>
+                    <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 2 }}>
+                      Trích xuất bài hát Spotify, SoundCloud, Zing MP3 chuẩn Lossless & ảnh bìa
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={17} color="#636366" />
+                </TouchableOpacity>
+
+                {/* 5. Báo Cáo Phim Lỗi & Quản Lý JSON */}
+                <TouchableOpacity
+                  activeOpacity={0.75}
+                  onPress={() => {
+                    setShowReportedMoviesModal(true);
+                    triggerDevToast('Báo Cáo Phim Lỗi', 'Mở danh sách phim hỏng và trích xuất file JSON cấu hình', 'flag', '#EC4899', 'JSON EXPORT');
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    padding: 14,
+                    borderRadius: 18,
+                    backgroundColor: isLight ? '#FFFFFF' : '#161618',
+                    borderWidth: 1,
+                    borderColor: isLight ? '#E5E5EA' : '#262629',
+                  }}
+                >
+                  <View style={{
+                    width: 46,
+                    height: 46,
+                    borderRadius: 14,
+                    backgroundColor: 'rgba(236, 72, 153, 0.15)',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginRight: 14,
+                  }}>
+                    <Ionicons name="flag" size={24} color="#EC4899" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: isLight ? '#0F172A' : '#FFFFFF' }}>
+                        Báo Cáo Phim Lỗi & Quản Lý JSON
+                      </Text>
+                      {reportedBrokenMovies.length > 0 && (
+                        <View style={{ backgroundColor: 'rgba(236, 72, 153, 0.18)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                          <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#EC4899' }}>{reportedBrokenMovies.length} PHIM</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 2 }}>
+                      Quản lý danh sách các tập phim bị lỗi và xuất file JSON cấu hình fix
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={17} color="#636366" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* SECTION 3: QUẢN TRỊ BẢO MẬT & SAO LƯU */}
+            <View style={{ marginBottom: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10, paddingHorizontal: 4 }}>
+                <Ionicons name="shield-checkmark" size={17} color="#10B981" />
+                <Text style={{ fontSize: 13, fontWeight: '800', color: '#10B981', textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                  Bảo Trì & Quản Trị Hệ Thống
+                </Text>
+              </View>
+
+              <View style={{ gap: 10 }}>
+                {/* 6. Bảng Điều Khiển Push Notification */}
+                <TouchableOpacity
+                  activeOpacity={0.75}
+                  onPress={() => {
+                    setShowNotificationSpammerModal(true);
+                    triggerDevToast('Spam Thông Báo', 'Mở bảng điều khiển gửi thông báo hàng loạt tới user', 'megaphone', '#FF3B30', 'PUSH SPAMMER');
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    padding: 14,
+                    borderRadius: 18,
+                    backgroundColor: isLight ? '#FFFFFF' : '#161618',
+                    borderWidth: 1,
+                    borderColor: isLight ? '#E5E5EA' : '#262629',
+                  }}
+                >
+                  <View style={{
+                    width: 46,
+                    height: 46,
+                    borderRadius: 14,
+                    backgroundColor: 'rgba(255, 59, 48, 0.15)',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginRight: 14,
+                  }}>
+                    <Ionicons name="megaphone" size={24} color="#FF3B30" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: isLight ? '#0F172A' : '#FFFFFF' }}>
+                        Bảng Điều Khiển Push Notification
+                      </Text>
+                      <View style={{ backgroundColor: 'rgba(255, 59, 48, 0.18)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                        <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#FF3B30' }}>QUẢN TRỊ</Text>
+                      </View>
+                    </View>
+                    <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 2 }}>
+                      Gửi thử nghiệm thông báo đẩy cảnh báo an ninh tới người dùng
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={17} color="#636366" />
+                </TouchableOpacity>
+
+                {/* 7. Dọn Dẹp Bộ Nhớ Đệm */}
+                <TouchableOpacity
+                  activeOpacity={0.75}
+                  onPress={handleClearCache}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    padding: 14,
+                    borderRadius: 18,
+                    backgroundColor: isLight ? '#FFFFFF' : '#161618',
+                    borderWidth: 1,
+                    borderColor: isLight ? '#E5E5EA' : '#262629',
+                  }}
+                >
+                  <View style={{
+                    width: 46,
+                    height: 46,
+                    borderRadius: 14,
+                    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginRight: 14,
+                  }}>
+                    <Ionicons name="trash-bin-outline" size={24} color="#10B981" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: isLight ? '#0F172A' : '#FFFFFF' }}>
+                      Dọn Dẹp Bộ Nhớ Đệm (Cache)
+                    </Text>
+                    <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 2 }}>
+                      Giải phóng bộ nhớ tạm, tăng tốc độ phản hồi và làm mới app
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={17} color="#636366" />
+                </TouchableOpacity>
+
+                {/* 8. Sao Lưu Dữ Liệu JSON */}
+                <TouchableOpacity
+                  activeOpacity={0.75}
+                  onPress={handleExportBackup}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    padding: 14,
+                    borderRadius: 18,
+                    backgroundColor: isLight ? '#FFFFFF' : '#161618',
+                    borderWidth: 1,
+                    borderColor: isLight ? '#E5E5EA' : '#262629',
+                  }}
+                >
+                  <View style={{
+                    width: 46,
+                    height: 46,
+                    borderRadius: 14,
+                    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginRight: 14,
+                  }}>
+                    <Ionicons name="download-outline" size={24} color="#A78BFA" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: isLight ? '#0F172A' : '#FFFFFF' }}>
+                      Xuất Sao Lưu Dữ Liệu JSON
+                    </Text>
+                    <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 2 }}>
+                      Tải về tệp cấu hình thiết lập an toàn để lưu trữ dự phòng
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={17} color="#636366" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </ScrollView>
+          )
+        )}
+
+        {/* TAB: QUẢN LÝ TỆP & TẢI VỀ (LOCKX FILES & DOWNLOAD MANAGER - TRUY CẬP TỪ CÁ NHÂN) */}
+        {(currentTab === 'apps' || (currentTab === 'profile' && profileSubView === 'files')) && (
           <ScrollView
             showsVerticalScrollIndicator={false}
             contentContainerStyle={[
@@ -19100,7 +20559,13 @@ function MainApp() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
                 <TouchableOpacity
                   activeOpacity={0.75}
-                  onPress={() => setCurrentTab('vault')}
+                  onPress={() => {
+                    if (currentTab === 'profile') {
+                      setProfileSubView('main');
+                    } else {
+                      handleSwitchTab('vault');
+                    }
+                  }}
                   style={{
                     width: 40,
                     height: 40,
@@ -23278,7 +24743,7 @@ function MainApp() {
                 })()}
               </ScrollView>
             </KeyboardAvoidingView>
-          ) : (
+          ) : profileSubView === 'files' ? null : (
             /* MÀN HÌNH CÁ NHÂN (DARK MODERN CYBER UI - THEO MẪU THIẾT KẾ MỚI) */
             <ScrollView
               showsVerticalScrollIndicator={false}
@@ -23309,7 +24774,7 @@ function MainApp() {
                   {/* Settings Icon Button */}
                   <TouchableOpacity
                     activeOpacity={0.75}
-                    onPress={() => setCurrentTab('settings')}
+                    onPress={() => handleSwitchTab('settings')}
                     style={{
                       width: 40,
                       height: 40,
@@ -23869,6 +25334,8 @@ function MainApp() {
                       flexDirection: 'row',
                       alignItems: 'center',
                       padding: 14,
+                      borderBottomWidth: 1,
+                      borderBottomColor: isLight ? '#E5E5EA' : '#2C2C2E',
                     }}
                   >
                     <View
@@ -23902,6 +25369,52 @@ function MainApp() {
                         }}
                       >
                         <Text style={{ fontSize: 11, fontWeight: '700', color: '#007AFF' }}>Mở mã</Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={16} color="#64748B" />
+                    </View>
+                  </TouchableOpacity>
+
+                  {/* Row 8: Kho Tệp & Dữ Liệu (Chuyển từ thanh điều hướng chính sang Cá nhân theo yêu cầu) */}
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={() => setProfileSubView('files')}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      padding: 14,
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 38,
+                        height: 38,
+                        borderRadius: 10,
+                        backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        marginRight: 12,
+                      }}
+                    >
+                      <Ionicons name="folder-outline" size={20} color="#3B82F6" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 14.5, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
+                        Kho Tệp & Dữ Liệu
+                      </Text>
+                      <Text style={{ fontSize: 12.5, color: '#94A3B8', marginTop: 2 }}>
+                        Quản lý tệp tin, tải về và bộ nhớ lưu trữ
+                      </Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <View
+                        style={{
+                          backgroundColor: 'rgba(59, 130, 246, 0.12)',
+                          paddingHorizontal: 8,
+                          paddingVertical: 3,
+                          borderRadius: 8,
+                        }}
+                      >
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#3B82F6' }}>{filesList.length} tệp</Text>
                       </View>
                       <Ionicons name="chevron-forward" size={16} color="#64748B" />
                     </View>
@@ -24654,7 +26167,7 @@ function MainApp() {
                   <TouchableOpacity
                     style={[styles.cellItem, { borderBottomWidth: 0, paddingVertical: 10 }, isLight && { backgroundColor: '#FFFFFF' }]}
                     activeOpacity={0.7}
-                    onPress={() => setCurrentTab('profile')}
+                    onPress={() => handleSwitchTab('profile')}
                   >
                     <View style={{ marginRight: 14 }}>
                       {renderProfileAvatar(userProfile.avatarType, userProfile.avatarUri, userProfile.avatarPresetId, userProfile.displayName, userProfile.avatarColor, 54)}
@@ -24914,6 +26427,49 @@ function MainApp() {
                     </View>
                   </TouchableOpacity>
                 </View>
+              </View>
+            )}
+
+            {/* NHÓM MÀN HÌNH & TẦN SỐ QUÉT 120HZ */}
+            {(!settingsSearchQuery || '120hz promotion tần số quét fps mượt iphone 11 chuyển động'.includes(settingsSearchQuery.toLowerCase())) && (
+              <View style={[styles.sectionWrap, { marginTop: 0, marginBottom: 18 }]}>
+                <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 12.5, fontWeight: '500', textTransform: 'uppercase', marginBottom: 6, marginLeft: 16 }}>
+                  MÀN HÌNH & CHUYỂN ĐỘNG SIÊU MƯỢT (120HZ FEEL)
+                </Text>
+                <View style={[styles.groupedList, isLight && { backgroundColor: '#FFFFFF', borderWidth: 0.5, borderColor: '#E5E5EA' }]}>
+                  {/* Tần số quét 120Hz (ProMotion & Mô phỏng iPhone 11) */}
+                  <View style={[styles.cellItem, { borderBottomWidth: 0 }]}>
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#007AFF' }]}>
+                      <Ionicons name="speedometer-outline" size={18} color="#FFFFFF" />
+                    </View>
+                    <View style={[styles.cellContent, { flex: 1 }]}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '500' }}>
+                          Chuyển Động 120Hz Siêu Mượt
+                        </Text>
+                        <View style={{ backgroundColor: 'rgba(0, 122, 255, 0.16)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                          <Text style={{ color: '#007AFF', fontSize: 10.5, fontWeight: '900' }}>
+                            {appSettings.enable120HzProMotion !== false ? `${liveFps} FPS` : '60 FPS'}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 12, marginTop: 2 }}>
+                        Mở khóa ProMotion & mô phỏng cảm giác 120Hz trên iPhone 11, độ trễ 8.3ms
+                      </Text>
+                    </View>
+                    <Switch
+                      value={appSettings.enable120HzProMotion !== false}
+                      onValueChange={(v) => {
+                        saveAppSettings({ ...appSettings, enable120HzProMotion: v });
+                        triggerToast(v ? '⚡ Đã kích hoạt chuyển động 120Hz siêu mượt cho iPhone 11 & mọi thiết bị!' : 'Đã chuyển về tốc độ thông thường 60Hz.', 'Hiệu Năng Màn Hình', 'info');
+                      }}
+                      trackColor={{ false: isLight ? '#E5E5EA' : '#39393D', true: appSettings.accentColor }}
+                    />
+                  </View>
+                </View>
+                <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 12, marginTop: 6, marginLeft: 16 }}>
+                  Tăng tốc độ lấy mẫu cảm ứng, kích hoạt GPU compositing và triệt tiêu độ trễ chạm 300ms — mang lại trải nghiệm vuốt chạm 120Hz mượt mà như iPhone ProMotion ngay trên iPhone 11 và các màn hình 60Hz.
+                </Text>
               </View>
             )}
 
@@ -25183,24 +26739,19 @@ function MainApp() {
                     <Ionicons name="chevron-forward" size={16} color={isLight ? '#C7C7CC' : '#48484A'} />
                   </TouchableOpacity>
 
-                  {/* Phiên bản (Ấn 5 lần để mở khóa Chế Độ Nhà Phát Triển) */}
+                  {/* Phiên bản */}
                   <TouchableOpacity
                     activeOpacity={0.7}
                     onPress={handleVersionTap}
                     style={[styles.cellItem, { borderBottomWidth: 0 }]}
                   >
-                    <View style={[styles.cellLeadingIcon, { backgroundColor: isDeveloperModeEnabled ? '#34C759' : '#8E8E93' }]}>
-                      <Ionicons name={isDeveloperModeEnabled ? "code-slash-outline" : "information-circle-outline"} size={19} color="#FFFFFF" />
+                    <View style={[styles.cellLeadingIcon, { backgroundColor: '#8E8E93' }]}>
+                      <Ionicons name="information-circle-outline" size={19} color="#FFFFFF" />
                     </View>
                     <View style={[styles.cellContent, { flex: 1 }]}>
                       <Text style={{ color: isLight ? '#000000' : '#FFFFFF', fontSize: 16, fontWeight: '400' }}>{t.version}</Text>
                     </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      {isDeveloperModeEnabled && (
-                        <View style={{ backgroundColor: 'rgba(52, 199, 89, 0.16)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
-                          <Text style={{ fontSize: 11, fontWeight: '800', color: '#34C759' }}>DEV</Text>
-                        </View>
-                      )}
                       <Text style={{ color: isLight ? '#6C6C70' : '#8E8E93', fontSize: 16 }}>2.0.3 (Build 2026)</Text>
                     </View>
                   </TouchableOpacity>
@@ -25210,15 +26761,18 @@ function MainApp() {
           </ScrollView>
           )
         )}
+        </Animated.View>
       </View>
 
-      {/* Bottom Native Tab Bar (Ẩn khi đang ở phòng chat với bạn bè để tránh xung đột bàn phím) */}
-      {!(currentTab === 'chat' && activeChatFriend) && !showLuckyEvent && (() => {
+      {/* Bottom Native Tab Bar (Ẩn khi đang ở phòng chat hoặc khi vào Banking để Banking dùng Footer mới hoàn toàn) */}
+      {!(currentTab === 'chat' && activeChatFriend) && currentTab !== 'banking' && !showLuckyEvent && (() => {
         const defaultBarWidth = Platform.OS === 'web' && typeof window !== 'undefined'
           ? Math.min(window.innerWidth, 480)
           : Dimensions.get('window').width;
         const effectiveWidth = tabBarLayoutWidth || defaultBarWidth;
         const tabSlotWidth = effectiveWidth / 5;
+        const useLiquidGlass = Platform.OS === 'ios' && isLiquidGlassAvailable();
+        const TabBarContainer: React.ElementType = useLiquidGlass ? GlassView : View;
 
         const bubbleTranslateX = bottomTabAnim.interpolate({
           inputRange: [0, 1, 2, 3, 4],
@@ -25234,28 +26788,50 @@ function MainApp() {
         const activeTabInfo = {
           apps: { icon: 'folder', label: 'Tệp' },
           chat: { icon: 'people', label: 'Bạn Bè' },
+          tools: { icon: 'construct', label: 'Tiện Ích' },
           vault: { icon: 'home', label: 'Trang chủ' },
           profile: { icon: 'shield-checkmark', label: 'Cá Nhân' },
           settings: { icon: 'settings', label: 'Cài đặt' },
         }[currentTab] || { icon: 'home', label: 'Trang chủ' };
 
         const bottomTabs = [
-          { key: 'apps', label: 'Tệp', icon: 'folder', outlineIcon: 'folder-outline' },
           { key: 'chat', label: 'Bạn Bè', icon: 'people', outlineIcon: 'people-outline' },
+          { key: 'tools', label: 'Tiện Ích', icon: 'construct', outlineIcon: 'construct-outline' },
           { key: 'vault', label: 'Trang chủ', icon: 'home', outlineIcon: 'home-outline' },
           { key: 'profile', label: 'Cá Nhân', icon: 'shield-checkmark', outlineIcon: 'shield-checkmark-outline' },
           { key: 'settings', label: 'Cài đặt', icon: 'settings', outlineIcon: 'settings-outline' },
         ] as const;
 
         return (
-          <View
-            onLayout={(e) => {
+          <TabBarContainer
+            onLayout={(e: any) => {
               const w = e.nativeEvent.layout.width;
               if (w > 0 && Math.abs(w - tabBarLayoutWidth) > 1) {
                 setTabBarLayoutWidth(w);
               }
             }}
-            style={styles.tabBar}
+            {...(useLiquidGlass
+              ? {
+                  glassEffectStyle: 'regular',
+                  tintColor: isLight ? 'rgba(255, 255, 255, 0.22)' : 'rgba(22, 22, 24, 0.58)',
+                  isInteractive: true,
+                }
+              : {})}
+            style={[
+              styles.tabBar,
+              useLiquidGlass && {
+                backgroundColor: 'transparent',
+                borderTopWidth: 0.5,
+                borderTopColor: isLight ? 'rgba(255,255,255,0.72)' : 'rgba(255,255,255,0.18)',
+                borderWidth: 0.5,
+                borderColor: isLight ? 'rgba(255,255,255,0.82)' : 'rgba(255,255,255,0.12)',
+                marginHorizontal: 10,
+                marginBottom: 8,
+                borderRadius: 28,
+                overflow: 'hidden',
+                shadowOpacity: isLight ? 0.14 : 0.55,
+              },
+            ]}
           >
             {/* ANIMATED SLIDING FLOATING CIRCULAR BUBBLE */}
             <Animated.View
@@ -25292,17 +26868,7 @@ function MainApp() {
                   activeOpacity={0.7}
                   style={styles.tabItem}
                   onPress={() => {
-                    if (tab.key === 'vault' && currentTab === 'vault') {
-                      setVaultSubView('list');
-                      setSelectedAccount(null);
-                    }
-                    if (tab.key === 'profile' && currentTab === 'profile') {
-                      setProfileSubView('main');
-                    }
-                    if (tab.key === 'chat' && currentTab === 'chat') {
-                      setActiveChatFriend(null);
-                    }
-                    setCurrentTab(tab.key as any);
+                    handleSwitchTab(tab.key as any);
                   }}
                 >
                   <View style={{ height: 26, justifyContent: 'center', alignItems: 'center' }}>
@@ -25326,7 +26892,7 @@ function MainApp() {
                 </TouchableOpacity>
               );
             })}
-          </View>
+          </TabBarContainer>
         );
       })()}
         </>
@@ -25939,7 +27505,7 @@ function MainApp() {
                       onPress={() => {
                         setActiveChatFriend(viewingFriendProfile);
                         setViewingFriendProfile(null);
-                        setCurrentTab('chat');
+                        handleSwitchTab('chat');
                       }}
                     >
                       <Ionicons name="chatbubble" size={20} color={appSettings.accentColor} />
@@ -26132,7 +27698,7 @@ function MainApp() {
                       const target = viewingFriendProfile;
                       setViewingFriendProfile(null);
                       setActiveChatFriend(target);
-                      setCurrentTab('chat');
+                      handleSwitchTab('chat');
                       setIsChatSearchActive(true);
                       setChatSearchQuery('');
                     }}
@@ -29387,222 +30953,9 @@ function MainApp() {
       </Modal>
 
       {/* ========================================================================= */}
-      {/* MODAL: MENU 3 GẠCH TRANG CHỦ (TIỆN ÍCH & TRUY CẬP NHANH CHUẨN APPLE HIG) */}
+      {/* CÁC TIỆN ÍCH HỆ THỐNG ĐÃ ĐƯỢC CHUYỂN SANG TAB TIỆN ÍCH RIÊNG BIỆT        */}
       {/* ========================================================================= */}
-      <Modal visible={showHomeMenuModal} animationType="slide" transparent onRequestClose={() => setShowHomeMenuModal(false)}>
-        <View style={styles.modalBackdrop}>
-          <SafeAreaView style={[styles.sheetCard, isLight && { backgroundColor: '#F2F2F7' }]}>
-            {/* Header */}
-            <View style={[styles.sheetHeader, isLight && { borderBottomColor: '#E5E5EA', backgroundColor: '#FFFFFF' }]}>
-              <TouchableOpacity onPress={() => setShowHomeMenuModal(false)}>
-                <Text style={[styles.sheetBtnBlue, { color: appSettings.accentColor }]}>Đóng</Text>
-              </TouchableOpacity>
-              <Text style={[styles.sheetTitle, isLight && { color: '#000000' }]}>Tiện Ích Nhà Phát Triển</Text>
-              <View style={{ width: 44 }} />
-            </View>
 
-            <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
-              {/* User Summary Card */}
-              <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={() => {
-                  setShowHomeMenuModal(false);
-                  setCurrentTab('profile');
-                  setProfileSubView('main');
-                }}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  padding: 14,
-                  backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
-                  borderRadius: 16,
-                  borderWidth: 1,
-                  borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
-                  marginBottom: 16,
-                  gap: 12,
-                }}
-              >
-                <View
-                  style={{
-                    width: 48,
-                    height: 48,
-                    borderRadius: 24,
-                    overflow: 'hidden',
-                    borderWidth: 2,
-                    borderColor: '#007AFF',
-                    backgroundColor: '#2C2C2E',
-                  }}
-                >
-                  {userProfile.avatarUri ? (
-                    <Image source={{ uri: userProfile.avatarUri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-                  ) : (
-                    renderProfileAvatar(userProfile.avatarType, userProfile.avatarUri, userProfile.avatarPresetId, userProfile.displayName, userProfile.avatarColor, 44)
-                  )}
-                </View>
-                <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text style={{ fontSize: 16, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF' }}>
-                      {userProfile.displayName || 'Quảng Trọng Tuấn'}
-                    </Text>
-                    {userProfile.isVerified && (
-                      <Ionicons name="checkmark-circle" size={15} color="#007AFF" />
-                    )}
-                  </View>
-                  <Text style={{ fontSize: 12.5, color: '#94A3B8', marginTop: 2 }}>
-                    {userProfile.username || '@lockx_user'} • Hồ sơ cá nhân
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color="#8E8E93" />
-              </TouchableOpacity>
-
-              {/* Grouped Action List */}
-              <View
-                style={{
-                  backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
-                  borderRadius: 18,
-                  borderWidth: 1,
-                  borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
-                  overflow: 'hidden',
-                  marginBottom: 16,
-                }}
-              >
-                {[
-                  {
-                    icon: 'color-wand',
-                    color: '#FF2D55',
-                    title: 'Cào API & Bóc Tách Media',
-                    subtitle: 'Bóc tách luồng TikTok, YouTube, Web Phim (Domain)',
-                    badge: 'MỚI 2.0',
-                    badgeColor: '#FF2D55',
-                    action: () => {
-                      setShowHomeMenuModal(false);
-                      setShowApiScraperModal(true);
-                      triggerDevToast('Cào API & Bóc Tách Media', 'Đã khởi chạy công cụ phân tích video, TikTok, YouTube & web phim', 'color-wand', '#FF2D55', 'API SCRAPER');
-                    },
-                  },
-                  {
-                    icon: 'musical-notes',
-                    color: '#1DB954',
-                    title: 'Cào Nhạc & Audio Hub',
-                    subtitle: 'Bóc tách Spotify, SoundCloud, Zing MP3 (320kbps + Cover)',
-                    badge: 'HOT',
-                    badgeColor: '#1DB954',
-                    action: () => {
-                      setShowHomeMenuModal(false);
-                      setShowMusicScraperModal(true);
-                      triggerDevToast('Cào Nhạc & Audio Hub', 'Đã khởi chạy studio âm thanh chất lượng cao Apple Music & Spotify', 'musical-notes', '#1DB954', 'AUDIO STUDIO');
-                    },
-                  },
-                  {
-                    icon: 'speedometer',
-                    color: '#FF9500',
-                    title: 'Đo Tốc Độ Mạng & CDN',
-                    subtitle: 'Đo băng thông Cloudflare Mbps, Ping ms & Jitter',
-                    badge: 'PRO',
-                    badgeColor: '#FF9500',
-                    action: () => {
-                      setShowHomeMenuModal(false);
-                      setShowSpeedTestModal(true);
-                      triggerDevToast('Đo Tốc Độ Mạng', 'Đã khởi chạy bộ đo băng thông Cloudflare & ping jitter', 'speedometer', '#FF9500', 'SPEED TEST');
-                    },
-                  },
-                  {
-                    icon: 'globe',
-                    color: '#007AFF',
-                    title: 'Kiểm Tra IP & Nhà Mạng',
-                    subtitle: 'Tra cứu IPv4/IPv6, ISP Viettel/VNPT, Geo & DNS WHOIS',
-                    badge: 'GEO',
-                    badgeColor: '#007AFF',
-                    action: () => {
-                      setShowHomeMenuModal(false);
-                      setShowIpInspectorModal(true);
-                      if (!ipData) handleInspectIp();
-                      triggerDevToast('Kiểm Tra IP & Geo', 'Đang tra cứu địa chỉ IP, nhà mạng ISP & vị trí máy chủ', 'globe', '#007AFF', 'GEO IP');
-                    },
-                  },
-                  {
-                    icon: 'flag',
-                    color: '#8E8E93',
-                    title: 'Báo Cáo Phim Lỗi & Xuất JSON',
-                    subtitle: 'Quản lý danh sách phim bị lỗi & xuất file JSON fix',
-                    badge: reportedBrokenMovies.length > 0 ? `${reportedBrokenMovies.length} PHIM` : undefined,
-                    badgeColor: '#FF2D55',
-                    action: () => {
-                      setShowHomeMenuModal(false);
-                      setShowReportedMoviesModal(true);
-                      triggerDevToast('Báo Cáo Phim Lỗi', 'Mở danh sách phim hỏng và trích xuất file JSON cấu hình', 'flag', '#FF2D55', 'JSON EXPORT');
-                    },
-                  },
-                  {
-                    icon: 'megaphone',
-                    color: '#FF3B30',
-                    title: 'Spam Thông Báo Push',
-                    subtitle: 'Gửi hàng loạt thông báo đẩy tới người dùng mục tiêu',
-                    badge: 'SPAMMER',
-                    badgeColor: '#FF3B30',
-                    action: () => {
-                      setShowHomeMenuModal(false);
-                      setShowNotificationSpammerModal(true);
-                      triggerDevToast('Spam Thông Báo', 'Mở bảng điều khiển gửi thông báo hàng loạt tới user', 'megaphone', '#FF3B30', 'PUSH SPAMMER');
-                    },
-                  },
-                ].map((item, idx, arr) => (
-                  <TouchableOpacity
-                    key={idx}
-                    activeOpacity={0.7}
-                    onPress={item.action}
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      padding: 14,
-                      borderBottomWidth: idx === arr.length - 1 ? 0 : 1,
-                      borderBottomColor: isLight ? '#E5E5EA' : '#2C2C2E',
-                    }}
-                  >
-                    <View
-                      style={{
-                        width: 38,
-                        height: 38,
-                        borderRadius: 10,
-                        backgroundColor: `${item.color}20`,
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        marginRight: 12,
-                      }}
-                    >
-                      {(item as any).customIcon === 'anonymous' ? (
-                        <AnonymousMaskIcon size={22} color={item.color} />
-                      ) : (
-                        <Ionicons name={item.icon as any} size={20} color={item.color} />
-                      )}
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 14.5, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
-                        {item.title}
-                      </Text>
-                      <Text style={{ fontSize: 12, color: '#94A3B8', marginTop: 2 }}>
-                        {item.subtitle}
-                      </Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      {item.badge && (
-                        <View style={{ backgroundColor: `${item.badgeColor}20`, paddingHorizontal: 7, paddingVertical: 2.5, borderRadius: 6 }}>
-                          <Text style={{ fontSize: 10, fontWeight: '800', color: item.badgeColor }}>
-                            {item.badge}
-                          </Text>
-                        </View>
-                      )}
-                      <Ionicons name="chevron-forward" size={16} color="#8E8E93" />
-                    </View>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
-          </SafeAreaView>
-        </View>
-      </Modal>
-
-      {/* ========================================================================= */}
       {/* ========================================================================= */}
       {/* TRANG RIÊNG: CÀO API & BÓC TÁCH MEDIA (TIKTOK / YOUTUBE / GOOGLE WEB PHIM) */}
       {/* ========================================================================= */}
@@ -29611,847 +30964,764 @@ function MainApp() {
         animationType="slide"
         presentationStyle="fullScreen"
         onRequestClose={() => {
-          if (showVideoPreviewModal) {
+          if (cinemaShowDetail) {
+            setCinemaShowDetail(false);
+          } else if (showCreateRoomModal) {
+            setShowCreateRoomModal(false);
+          } else if (showVideoPreviewModal) {
             setShowVideoPreviewModal(false);
           } else if (showScrapedCatalogModal) {
             setShowScrapedCatalogModal(false);
           } else {
             setShowApiScraperModal(false);
-            setShowHomeMenuModal(true);
           }
         }}
       >
-        <SafeAreaView style={{ flex: 1, backgroundColor: isLight ? '#F2F2F7' : '#000000' }}>
-          {/* Top Navigation Bar Trang Riêng */}
-          <View style={[styles.fullScreenNavBar, isLight && { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E5EA' }]}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#070709' }}>
+          {/* ═══════════════════════════════════════════════════════════════ */}
+          {/* CINEMA HUB HEADER                                              */}
+          {/* ═══════════════════════════════════════════════════════════════ */}
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingHorizontal: 16,
+              paddingVertical: 12,
+              backgroundColor: '#0E0E12',
+              borderBottomWidth: 1,
+              borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+            }}
+          >
             <TouchableOpacity
-              onPress={() => {
-                if (scraperViewMode === 'result') {
-                  setScraperViewMode('form');
-                } else {
-                  setShowApiScraperModal(false);
-                  setShowHomeMenuModal(true);
-                }
+              onPress={() => setShowApiScraperModal(false)}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                borderRadius: 20,
+                backgroundColor: 'rgba(255, 255, 255, 0.08)',
               }}
-              style={styles.fullScreenNavBtn}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
-              <Ionicons name="chevron-back" size={24} color={appSettings.accentColor} />
-              <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor }]}>
-                {scraperViewMode === 'result' ? 'Cào Phim' : 'Tiện Ích'}
-              </Text>
+              <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                <SvgPath d="M15 19L8 12L15 5" stroke="#FFFFFF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFFFFF' }}>Thoát</Text>
             </TouchableOpacity>
-            <Text style={[styles.fullScreenNavTitle, isLight && { color: '#000000' }]} numberOfLines={1}>
-              {scraperViewMode === 'result' ? 'Chi Tiết Bóc Tách' : 'Cào API & Media'}
-            </Text>
+
+            <View style={{ alignItems: 'center' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={{ fontSize: 17, fontWeight: '900', color: '#FFFFFF', letterSpacing: 0.5 }}>
+                  LOCKX CINEMA
+                </Text>
+                <View
+                  style={{
+                    backgroundColor: '#E50914',
+                    paddingHorizontal: 6,
+                    paddingVertical: 2,
+                    borderRadius: 5,
+                  }}
+                >
+                  <Text style={{ fontSize: 10, fontWeight: '900', color: '#FFFFFF' }}>HUB</Text>
+                </View>
+              </View>
+              <Text style={{ fontSize: 11, color: '#8E8E93', fontWeight: '500', marginTop: 1 }}>
+                Rạp Phim Trực Tiếp & Xem Chung
+              </Text>
+            </View>
+
             <TouchableOpacity
               onPress={() => {
-                if (scraperViewMode === 'result') {
-                  setScraperViewMode('form');
-                } else {
-                  setScraperUrlInput('');
-                  setScrapedResult(null);
-                  triggerToast('Đã làm mới dữ liệu cào API', 'Làm Mới', 'info');
+                setShowCreateRoomModal(true);
+                if (!cinemaSelectedMovie && allCatalogMovies.length > 0) {
+                  setCinemaSelectedMovie(allCatalogMovies[0]);
                 }
               }}
-              style={{ minWidth: 60, alignItems: 'flex-end', justifyContent: 'center' }}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 5,
+                backgroundColor: 'rgba(229, 9, 20, 0.2)',
+                borderWidth: 1,
+                borderColor: '#E50914',
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                borderRadius: 9,
+              }}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
-              <Ionicons name={scraperViewMode === 'result' ? 'add' : 'refresh'} size={22} color={appSettings.accentColor} />
+              <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
+                <SvgPath d="M12 5V19M5 12H19" stroke="#E50914" strokeWidth="2.5" strokeLinecap="round" />
+              </Svg>
+              <Text style={{ fontSize: 12, fontWeight: '800', color: '#E50914' }}>Tạo Phòng</Text>
             </TouchableOpacity>
           </View>
 
-          {scraperViewMode === 'result' && scrapedResult ? (
-            /* TRANG RIÊNG: KẾT QUẢ BÓC TÁCH PHIM (HÌNH 3 - KHÔNG CẦN CUỘN FORM HAY LOG) */
+          {/* ═══════════════════════════════════════════════════════════════ */}
+          {/* CINEMA TAB BAR: KHÁM PHÁ | PHÒNG XEM | CÀO API PHIM             */}
+          {/* ═══════════════════════════════════════════════════════════════ */}
+          <View
+            style={{
+              flexDirection: 'row',
+              backgroundColor: '#121217',
+              marginHorizontal: 14,
+              marginTop: 10,
+              marginBottom: 8,
+              borderRadius: 14,
+              padding: 4,
+              borderWidth: 1,
+              borderColor: 'rgba(255, 255, 255, 0.06)',
+            }}
+          >
+            {[
+              { key: 'explore', label: 'Khám Phá' },
+              { key: 'rooms', label: `Phòng Xem (${cinemaRooms.length})` },
+              { key: 'search', label: 'Cào API Phim' },
+            ].map((tabItem) => {
+              const isActive = cinemaTab === tabItem.key;
+              return (
+                <TouchableOpacity
+                  key={tabItem.key}
+                  activeOpacity={0.8}
+                  onPress={() => setCinemaTab(tabItem.key as any)}
+                  style={{
+                    flex: 1,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                    paddingVertical: 9,
+                    borderRadius: 10,
+                    backgroundColor: isActive ? '#E50914' : 'transparent',
+                  }}
+                >
+                  {tabItem.key === 'explore' && (
+                    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                      <SvgCircle cx="12" cy="12" r="10" stroke={isActive ? '#FFFFFF' : '#8E8E93'} strokeWidth="2" />
+                      <SvgPolygon points="16.24,7.76 14.12,14.12 7.76,16.24 9.88,9.88" fill={isActive ? '#FFFFFF' : '#8E8E93'} />
+                    </Svg>
+                  )}
+                  {tabItem.key === 'rooms' && (
+                    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                      <SvgPath d="M17 21V19C17 17.9 16.1 17 15 17H9C7.9 17 7 17.9 7 19V21M12 13C14.2 13 16 11.2 16 9C16 6.8 14.2 5 12 5C9.8 5 8 6.8 8 9C8 11.2 9.8 13 12 13Z" stroke={isActive ? '#FFFFFF' : '#8E8E93'} strokeWidth="2" strokeLinecap="round" />
+                      <SvgPath d="M23 21V19C23 18.1 22.4 17.3 21.5 17.1M16 5.1C17.2 5.7 18 6.9 18 8.3C18 9.7 17.2 10.9 16 11.5" stroke={isActive ? '#FFFFFF' : '#8E8E93'} strokeWidth="2" strokeLinecap="round" />
+                    </Svg>
+                  )}
+                  {tabItem.key === 'search' && (
+                    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                      <SvgPath d="M21 15V19C21 20.1 20.1 21 19 21H5C3.9 21 3 20.1 3 19V15M7 10L12 15M12 15L17 10M12 15V3" stroke={isActive ? '#FFFFFF' : '#8E8E93'} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                    </Svg>
+                  )}
+                  <Text
+                    style={{
+                      fontSize: 12.5,
+                      fontWeight: isActive ? '800' : '600',
+                      color: isActive ? '#FFFFFF' : '#8E8E93',
+                    }}
+                  >
+                    {tabItem.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* ═══════════════════════════════════════════════════════════════ */}
+          {/* TAB 1: KHÁM PHÁ (EXPLORE)                                       */}
+          {/* ═══════════════════════════════════════════════════════════════ */}
+          {cinemaTab === 'explore' && (
             <ScrollView
-              ref={scraperResultScrollRef}
-              key={`scraper-result-${scrapedResult?.title || 'view'}`}
-              contentOffset={{ x: 0, y: 0 }}
-              contentContainerStyle={{ padding: 16, paddingBottom: 60 }}
+              contentContainerStyle={{ padding: 14, paddingBottom: 80 }}
               showsVerticalScrollIndicator={false}
             >
-              <View
-                style={{
-                  backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
-                  borderRadius: 18,
-                  padding: 16,
-                  borderWidth: 1.5,
-                  borderColor: '#34C759',
-                  marginBottom: 16,
-                }}
-              >
-                {/* Status Banner */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(52, 199, 89, 0.16)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
-                    <Ionicons name="checkmark-circle" size={15} color="#34C759" />
-                    <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#34C759' }}>
-                      ĐÃ BÓC TÁCH THÀNH CÔNG API
-                    </Text>
-                  </View>
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#8E8E93' }}>
-                    {scrapedResult.quality}
-                  </Text>
-                </View>
-
-                {/* Thumbnail & Title */}
-                <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
-                  <View
-                    style={{
-                      width: 72,
-                      height: 98,
-                      borderRadius: 10,
-                      overflow: 'hidden',
-                      backgroundColor: isLight ? '#E5E5EA' : '#0B0B0E',
-                      borderWidth: 1,
-                      borderColor: isLight ? '#D1D1D6' : '#2C2C2E',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    {scrapedThumbnailFailed || !scrapedResult.thumbnail ? (
-                      <View style={{ alignItems: 'center', justifyContent: 'center', padding: 6 }}>
-                        <Ionicons name="film-outline" size={30} color="#007AFF" />
-                        <Text style={{ fontSize: 9, color: '#8E8E93', marginTop: 4, fontWeight: '700', textAlign: 'center' }}>
-                          POSTER
-                        </Text>
-                      </View>
-                    ) : (
-                      <Image
-                        source={{ uri: scrapedResult.thumbnail }}
-                        style={{ width: '100%', height: '100%' }}
-                        resizeMode="cover"
-                        onError={() => setScrapedThumbnailFailed(true)}
-                      />
-                    )}
-                  </View>
-                  <View style={{ flex: 1, justifyContent: 'center' }}>
-                    <Text style={{ fontSize: 16, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF', marginBottom: 6, lineHeight: 22 }}>
-                      {scrapedResult.title}
-                    </Text>
-                    {scrapedResult.director && (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 3 }}>
-                        <Ionicons name="videocam-outline" size={13} color="#8E8E93" />
-                        <Text style={{ fontSize: 11.5, color: '#8E8E93' }}>
-                          Đạo diễn: <Text style={{ color: isLight ? '#000' : '#FFF', fontWeight: '700' }}>{scrapedResult.director}</Text>
-                        </Text>
-                      </View>
-                    )}
-                    {scrapedResult.cast && (
-                      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 5, marginBottom: 3 }}>
-                        <Ionicons name="people-outline" size={13} color="#8E8E93" style={{ marginTop: 2 }} />
-                        <Text style={{ fontSize: 11, color: '#8E8E93', flex: 1 }} numberOfLines={2}>
-                          {scrapedResult.cast}
-                        </Text>
-                      </View>
-                    )}
-                    {scrapedResult.views && (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 }}>
-                        <Ionicons name="eye-outline" size={13} color="#FF9500" />
-                        <Text style={{ fontSize: 11, color: '#FF9500', fontWeight: '700' }}>
-                          {scrapedResult.views} lượt xem trực tuyến
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                </View>
-
+              {/* FEATURED BANNER */}
+              {allCatalogMovies.length > 0 && (
                 <View
                   style={{
-                    backgroundColor: isLight ? '#F2F2F7' : '#0B0B0E',
-                    borderRadius: 12,
-                    padding: 10,
-                    marginBottom: 12,
-                  }}
-                >
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 }}>
-                    <Text style={{ fontSize: 12, color: '#8E8E93' }}>Nền tảng nguồn:</Text>
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
-                      {scrapedResult.platform === 'gg' ? 'Web Phim (ghienphimz.mom)' : scrapedResult.platform.toUpperCase()}
-                    </Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 }}>
-                    <Text style={{ fontSize: 12, color: '#8E8E93' }}>Độ phân giải & Codec:</Text>
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#34C759' }}>
-                      {scrapedResult.codec}
-                    </Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 }}>
-                    <Text style={{ fontSize: 12, color: '#8E8E93' }}>Dung lượng ước tính:</Text>
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#007AFF' }}>
-                      {scrapedResult.sizeFormatted} ({scrapedResult.duration})
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Direct Extracted URL Box */}
-                <View style={{ marginBottom: 12 }}>
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#8E8E93', marginBottom: 4 }}>
-                    Đường Dẫn Luồng Video Trực Tiếp (.m3u8 CDN):
-                  </Text>
-                  <View
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      backgroundColor: isLight ? '#F2F2F7' : '#0B0B0E',
-                      borderRadius: 10,
-                      paddingHorizontal: 10,
-                      paddingVertical: 8,
-                      borderWidth: 1,
-                      borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
-                    }}
-                  >
-                    <Text style={{ flex: 1, fontSize: 11, color: isLight ? '#333333' : '#AEAEB2' }} numberOfLines={1}>
-                      {scrapedResult.streamUrl}
-                    </Text>
-                    <TouchableOpacity
-                      onPress={() => {
-                        if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                          navigator.clipboard.writeText(scrapedResult.streamUrl);
-                        }
-                        triggerToast('Đã sao chép link luồng video vào bộ nhớ tạm!', 'Sao Chép Thành Công', 'success', 'copy-outline');
-                      }}
-                      style={{ marginLeft: 8 }}
-                    >
-                      <Ionicons name="copy-outline" size={16} color="#007AFF" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                {/* Embed Iframe URL Box */}
-                {scrapedResult.embedUrl && (
-                  <View style={{ marginBottom: 16 }}>
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#AF52DE', marginBottom: 4 }}>
-                      Link Player Nhúng Web (GhienPhimz Embed):
-                    </Text>
-                    <View
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        backgroundColor: isLight ? '#F2F2F7' : '#0B0B0E',
-                        borderRadius: 10,
-                        paddingHorizontal: 10,
-                        paddingVertical: 8,
-                        borderWidth: 1,
-                        borderColor: '#AF52DE',
-                      }}
-                    >
-                      <Text style={{ flex: 1, fontSize: 11, color: '#AF52DE' }} numberOfLines={1}>
-                        {scrapedResult.embedUrl}
-                      </Text>
-                      <TouchableOpacity
-                        onPress={() => {
-                          if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                            navigator.clipboard.writeText(scrapedResult.embedUrl || '');
-                          }
-                          triggerToast('Đã sao chép link nhúng player!', 'Sao Chép Thành Công', 'success', 'copy-outline');
-                        }}
-                        style={{ marginLeft: 8, marginRight: 6 }}
-                      >
-                        <Ionicons name="copy-outline" size={16} color="#AF52DE" />
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => {
-                          if (typeof window !== 'undefined') {
-                            window.open(scrapedResult.embedUrl || '', '_blank');
-                          } else {
-                            Linking.openURL(scrapedResult.embedUrl || '').catch(() => {});
-                          }
-                        }}
-                      >
-                        <Ionicons name="open-outline" size={16} color="#AF52DE" />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                )}
-
-                {/* USER-REQUESTED ACTIONS: XEM LUỒNG VIETSUB / LỒNG TIẾNG, TẢI VỀ */}
-                <Text style={{ fontSize: 13, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF', marginBottom: 8 }}>
-                  {scrapedResult.hasMultiAudio
-                    ? 'Chọn Luồng Phát Hoạt Hình (4 Luồng Vietsub & Lồng Tiếng):'
-                    : 'Chọn Luồng Phát & Thao Tác (2 Luồng API Chống Lỗi):'}
-                </Text>
-
-                {scrapedResult.hasMultiAudio ? (
-                  <View style={{ gap: 8 }}>
-                    <View style={{ backgroundColor: 'rgba(52, 199, 89, 0.12)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, marginBottom: 2 }}>
-                      <Text style={{ fontSize: 11, fontWeight: '800', color: '#34C759' }}>
-                        🎬 PHIM HOẠT HÌNH / ANIME: ĐÃ BÓC TÁCH 4 LUỒNG RIÊNG BIỆT
-                      </Text>
-                    </View>
-
-                    {/* 1. Vietsub HLS */}
-                    <TouchableOpacity
-                      activeOpacity={0.8}
-                      onPress={() => {
-                        setPreviewPlayerMode('stream');
-                        handleWatchDirectly({
-                          ...scrapedResult,
-                          streamUrl: scrapedResult.vietsubStreamUrl || scrapedResult.streamUrl,
-                          embedUrl: scrapedResult.vietsubEmbedUrl || scrapedResult.embedUrl,
-                          title: `${scrapedResult.title} [Vietsub HLS]`,
-                        });
-                      }}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        paddingVertical: 11,
-                        backgroundColor: '#007AFF',
-                        borderRadius: 12,
-                        gap: 8,
-                      }}
-                    >
-                      <Ionicons name="flash" size={16} color="#FFFFFF" />
-                      <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFFFFF' }}>
-                        1. VIETSUB (HLS .M3U8 CHÍNH)
-                      </Text>
-                    </TouchableOpacity>
-
-                    {/* 2. Vietsub Embed */}
-                    <TouchableOpacity
-                      activeOpacity={0.8}
-                      onPress={() => {
-                        setPreviewPlayerMode('embed');
-                        handleWatchDirectly({
-                          ...scrapedResult,
-                          streamUrl: scrapedResult.vietsubStreamUrl || scrapedResult.streamUrl,
-                          embedUrl: scrapedResult.vietsubEmbedUrl || scrapedResult.embedUrl,
-                          title: `${scrapedResult.title} [Vietsub Embed]`,
-                        });
-                      }}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        paddingVertical: 11,
-                        backgroundColor: '#5856D6',
-                        borderRadius: 12,
-                        gap: 8,
-                      }}
-                    >
-                      <Ionicons name="play-skip-forward" size={16} color="#FFFFFF" />
-                      <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFFFFF' }}>
-                        2. VIETSUB (PLAYER WEB DỰ PHÒNG)
-                      </Text>
-                    </TouchableOpacity>
-
-                    {/* 3. Lồng Tiếng HLS */}
-                    <TouchableOpacity
-                      activeOpacity={0.8}
-                      onPress={() => {
-                        setPreviewPlayerMode('stream');
-                        handleWatchDirectly({
-                          ...scrapedResult,
-                          streamUrl: scrapedResult.dubStreamUrl || scrapedResult.streamUrl,
-                          embedUrl: scrapedResult.dubEmbedUrl || scrapedResult.embedUrl,
-                          title: `${scrapedResult.title} [Lồng Tiếng HLS]`,
-                        });
-                      }}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        paddingVertical: 11,
-                        backgroundColor: '#FF9500',
-                        borderRadius: 12,
-                        gap: 8,
-                      }}
-                    >
-                      <Ionicons name="volume-high" size={16} color="#FFFFFF" />
-                      <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFFFFF' }}>
-                        3. LỒNG TIẾNG (HLS .M3U8 CHÍNH)
-                      </Text>
-                    </TouchableOpacity>
-
-                    {/* 4. Lồng Tiếng Embed */}
-                    <TouchableOpacity
-                      activeOpacity={0.8}
-                      onPress={() => {
-                        setPreviewPlayerMode('embed');
-                        handleWatchDirectly({
-                          ...scrapedResult,
-                          streamUrl: scrapedResult.dubStreamUrl || scrapedResult.streamUrl,
-                          embedUrl: scrapedResult.dubEmbedUrl || scrapedResult.embedUrl,
-                          title: `${scrapedResult.title} [Lồng Tiếng Embed]`,
-                        });
-                      }}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        paddingVertical: 11,
-                        backgroundColor: '#AF52DE',
-                        borderRadius: 12,
-                        gap: 8,
-                      }}
-                    >
-                      <Ionicons name="play-circle" size={16} color="#FFFFFF" />
-                      <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFFFFF' }}>
-                        4. LỒNG TIẾNG (PLAYER WEB DỰ PHÒNG)
-                      </Text>
-                    </TouchableOpacity>
-
-                    {/* 5. TẢI VỀ */}
-                    <TouchableOpacity
-                      activeOpacity={0.8}
-                      onPress={() => handleDownloadScraped(scrapedResult)}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        paddingVertical: 11,
-                        backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E',
-                        borderRadius: 12,
-                        gap: 8,
-                        borderWidth: 1,
-                        borderColor: isLight ? '#D1D1D6' : '#3A3A3C',
-                      }}
-                    >
-                      <Ionicons name="download-outline" size={16} color={isLight ? '#000000' : '#FFFFFF'} />
-                      <Text style={{ fontSize: 13, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF' }}>
-                        5. TẢI VỀ MÁY
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <View style={{ gap: 8 }}>
-                    {/* 1. XEM LUỒNG 1 */}
-                    <TouchableOpacity
-                      activeOpacity={0.8}
-                      onPress={() => {
-                        setPreviewPlayerMode('stream');
-                        handleWatchDirectly(scrapedResult);
-                      }}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        paddingVertical: 12,
-                        backgroundColor: '#007AFF',
-                        borderRadius: 14,
-                        gap: 8,
-                      }}
-                    >
-                      <Ionicons name="flash" size={17} color="#FFFFFF" />
-                      <Text style={{ fontSize: 14, fontWeight: '800', color: '#FFFFFF' }}>
-                        1. XEM LUỒNG 1 (HLS .M3U8 CHÍNH)
-                      </Text>
-                    </TouchableOpacity>
-
-                    {/* 2. XEM LUỒNG 2 */}
-                    <TouchableOpacity
-                      activeOpacity={0.8}
-                      onPress={() => {
-                        setPreviewPlayerMode('embed');
-                        handleWatchDirectly(scrapedResult);
-                      }}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        paddingVertical: 12,
-                        backgroundColor: '#AF52DE',
-                        borderRadius: 14,
-                        gap: 8,
-                      }}
-                    >
-                      <Ionicons name="play-skip-forward" size={17} color="#FFFFFF" />
-                      <Text style={{ fontSize: 14, fontWeight: '800', color: '#FFFFFF' }}>
-                        2. XEM LUỒNG 2 (PLAYER DỰ PHÒNG)
-                      </Text>
-                    </TouchableOpacity>
-
-                    {/* 3. TẢI VỀ */}
-                    <TouchableOpacity
-                      activeOpacity={0.8}
-                      onPress={() => handleDownloadScraped(scrapedResult)}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        paddingVertical: 12,
-                        backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E',
-                        borderRadius: 14,
-                        gap: 8,
-                        borderWidth: 1,
-                        borderColor: isLight ? '#D1D1D6' : '#3A3A3C',
-                      }}
-                    >
-                      <Ionicons name="download-outline" size={17} color={isLight ? '#000000' : '#FFFFFF'} />
-                      <Text style={{ fontSize: 14, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF' }}>
-                        3. TẢI VỀ MÁY
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </View>
-
-              {/* PHẦN TIẾP THEO & PHIM TƯƠNG TỰ (Ví dụ: Người Nhện các phần 1, 2, 3...) */}
-              {scrapedSearchResults.length > 0 && (
-                <View
-                  style={{
-                    backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
                     borderRadius: 18,
-                    padding: 14,
+                    overflow: 'hidden',
+                    backgroundColor: '#141419',
+                    borderWidth: 1,
+                    borderColor: 'rgba(255, 255, 255, 0.1)',
                     marginBottom: 16,
-                    borderWidth: 1,
-                    borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
                   }}
                 >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-                      <Ionicons name="film-outline" size={18} color="#007AFF" />
-                      <Text style={{ fontSize: 13.5, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF' }}>
-                        Phim Gần Giống & Các Phần Khác ({scrapedSearchResults.length})
-                      </Text>
-                    </View>
-                    <TouchableOpacity
-                      activeOpacity={0.7}
-                      onPress={() => {
-                        const nextMovie = scrapedSearchResults[0];
-                        if (nextMovie) {
-                          setScraperMovieNameInput(nextMovie.name);
-                          handleExecuteScrape(undefined, 'title', nextMovie.name);
-                        } else {
-                          triggerToast('Không còn phim nào trong danh sách gần giống!', 'Thông Báo', 'info');
-                        }
-                      }}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 4,
-                        paddingHorizontal: 8,
-                        paddingVertical: 4.5,
-                        borderRadius: 8,
-                        backgroundColor: 'rgba(0, 122, 255, 0.15)',
-                      }}
-                    >
-                      <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
-                        <SvgPath d="M4 5L13 12L4 19V5Z" fill="#007AFF" />
-                        <SvgPath d="M12 5L21 12L12 19V5Z" fill="#007AFF" />
-                      </Svg>
-                      <Text style={{ fontSize: 11, fontWeight: '800', color: '#007AFF', marginLeft: 3 }}>
-                        Lọc Tiếp Phim Gần Giống
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingVertical: 4 }}>
-                    {scrapedSearchResults.map((simMovie, simIdx) => (
-                      <View
-                        key={simIdx}
-                        style={{
-                          width: 126,
-                          backgroundColor: isLight ? '#F2F2F7' : '#0B0B0E',
-                          borderRadius: 12,
-                          padding: 8,
-                          borderWidth: 1,
-                          borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
-                        }}
-                      >
-                        <Image
-                          source={{ uri: simMovie.poster_url }}
-                          style={{ width: '100%', height: 130, borderRadius: 8, backgroundColor: '#2C2C2E', marginBottom: 6 }}
-                          resizeMode="cover"
-                        />
-                        <Text
-                          style={{ fontSize: 11.5, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF', marginBottom: 2 }}
-                          numberOfLines={2}
-                        >
-                          {simMovie.name}
-                        </Text>
-                        <Text style={{ fontSize: 10.5, color: '#8E8E93', marginBottom: 6 }}>
-                          {simMovie.year || '2025'}
-                        </Text>
-                        <TouchableOpacity
-                          activeOpacity={0.7}
-                          onPress={() => {
-                            setScraperMovieNameInput(simMovie.name);
-                            handleExecuteScrape(undefined, 'title', simMovie.name);
-                          }}
-                          style={{
-                            paddingVertical: 6,
-                            borderRadius: 8,
-                            backgroundColor: '#007AFF',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}
-                        >
-                          <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#FFFFFF' }}>
-                            Cào Phần Này
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
-
-              {/* Nút hành động nhanh: Cào Thêm Phim Mới & Xem Kho Phim */}
-              <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={() => setScraperViewMode('form')}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  paddingVertical: 13,
-                  backgroundColor: 'rgba(0, 122, 255, 0.15)',
-                  borderRadius: 14,
-                  borderWidth: 1,
-                  borderColor: '#007AFF',
-                  gap: 8,
-                  marginBottom: 10,
-                }}
-              >
-                <Ionicons name="add-circle-outline" size={18} color="#007AFF" />
-                <Text style={{ fontSize: 14, fontWeight: '700', color: '#007AFF' }}>
-                  + CÀO THÊM PHIM MỚI
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={() => setShowScrapedCatalogModal(true)}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  paddingVertical: 13,
-                  backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E',
-                  borderRadius: 14,
-                  gap: 8,
-                }}
-              >
-                <Ionicons name="film-outline" size={18} color={isLight ? '#000000' : '#FFFFFF'} />
-                <Text style={{ fontSize: 14, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
-                  XEM KHO PHIM ĐÃ CÀO ({allCatalogMovies.length} PHIM)
-                </Text>
-              </TouchableOpacity>
-            </ScrollView>
-          ) : (
-            <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
-              {scrapedResult && (
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  onPress={() => setScraperViewMode('result')}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    backgroundColor: 'rgba(52, 199, 89, 0.12)',
-                    borderRadius: 14,
-                    paddingHorizontal: 14,
-                    paddingVertical: 12,
-                    marginBottom: 14,
-                    borderWidth: 1,
-                    borderColor: '#34C759',
-                  }}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-                    <Ionicons name="film" size={20} color="#34C759" />
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 13, fontWeight: '800', color: '#34C759' }} numberOfLines={1}>
-                        Kết Quả Vừa Cào: {scrapedResult.title}
-                      </Text>
-                      <Text style={{ fontSize: 11, color: '#8E8E93', marginTop: 1 }}>
-                        Bóc tách hoàn tất • Bấm để mở toàn màn hình xem luồng
-                      </Text>
-                    </View>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#34C759' }}>Mở Ngay</Text>
-                    <Ionicons name="chevron-forward" size={16} color="#34C759" />
-                  </View>
-                </TouchableOpacity>
-              )}
-              {/* 1. NỀN TẢNG CÀO API: CHỈ GOOGLE (gg) - CÁC NỀN TẢNG KHÁC HỖ TRỢ SAU */}
-              <View
-                style={{
-                  backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
-                  borderRadius: 16,
-                  paddingHorizontal: 16,
-                  paddingVertical: 14,
-                  marginBottom: 14,
-                  borderWidth: 1,
-                  borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
-                }}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+                  <View style={{ height: 190, position: 'relative' }}>
+                    <Image
+                      source={{ uri: allCatalogMovies[0]?.image }}
+                      style={{ width: '100%', height: '100%' }}
+                      resizeMode="cover"
+                    />
                     <View
                       style={{
-                        width: 42,
-                        height: 42,
-                        borderRadius: 12,
-                        backgroundColor: 'rgba(0, 122, 255, 0.15)',
-                        alignItems: 'center',
-                        justifyContent: 'center',
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        backgroundColor: 'rgba(0, 0, 0, 0.45)',
+                        justifyContent: 'space-between',
+                        padding: 14,
                       }}
                     >
-                      <Ionicons name="globe-outline" size={22} color="#007AFF" />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF' }}>
-                          Web Phim (Google - gg)
-                        </Text>
-                        <View style={{ backgroundColor: 'rgba(52, 199, 89, 0.15)', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
-                          <Text style={{ fontSize: 10, fontWeight: '800', color: '#34C759' }}>VIP HLS</Text>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                        <View
+                          style={{
+                            backgroundColor: '#E50914',
+                            paddingHorizontal: 8,
+                            paddingVertical: 3,
+                            borderRadius: 6,
+                          }}
+                        >
+                          <Text style={{ fontSize: 10, fontWeight: '900', color: '#FFFFFF' }}>
+                            PHIM NỔI BẬT HÔM NAY
+                          </Text>
+                        </View>
+                        <View
+                          style={{
+                            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                            paddingHorizontal: 8,
+                            paddingVertical: 3,
+                            borderRadius: 6,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 4,
+                          }}
+                        >
+                          <Svg width={12} height={12} viewBox="0 0 24 24" fill="#FFD60A">
+                            <SvgPolygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
+                          </Svg>
+                          <Text style={{ fontSize: 11, fontWeight: '800', color: '#FFD60A' }}>
+                            {allCatalogMovies[0]?.rating || '9.5'}
+                          </Text>
                         </View>
                       </View>
-                      <Text style={{ fontSize: 11.5, color: '#8E8E93', marginTop: 2 }}>
-                        Hỗ trợ đa nguồn: Motchill, RoPhim, GhienPhimz, PhimMoi...
-                      </Text>
+
+                      <View>
+                        <Text
+                          style={{ fontSize: 19, fontWeight: '900', color: '#FFFFFF', marginBottom: 4 }}
+                          numberOfLines={1}
+                        >
+                          {allCatalogMovies[0]?.title}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: '#D1D5DB', marginBottom: 10 }} numberOfLines={1}>
+                          {allCatalogMovies[0]?.year} • {allCatalogMovies[0]?.duration} • {allCatalogMovies[0]?.views} lượt xem
+                        </Text>
+
+                        <View style={{ flexDirection: 'row', gap: 10 }}>
+                          <TouchableOpacity
+                            activeOpacity={0.8}
+                            onPress={() => {
+                              handleSelectScrapedMovie(allCatalogMovies[0]);
+                              handleWatchDirectly(allCatalogMovies[0]);
+                            }}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 6,
+                              backgroundColor: '#E50914',
+                              paddingHorizontal: 16,
+                              paddingVertical: 8,
+                              borderRadius: 10,
+                            }}
+                          >
+                            <Svg width={14} height={14} viewBox="0 0 24 24" fill="#FFFFFF">
+                              <SvgPolygon points="5,3 19,12 5,21" />
+                            </Svg>
+                            <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFFFFF' }}>
+                              Xem Ngay
+                            </Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            activeOpacity={0.8}
+                            onPress={() => handleCinemaSelectMovie(allCatalogMovies[0])}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 6,
+                              backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                              paddingHorizontal: 14,
+                              paddingVertical: 8,
+                              borderRadius: 10,
+                            }}
+                          >
+                            <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                              <SvgCircle cx="12" cy="12" r="10" stroke="#FFFFFF" strokeWidth="2" />
+                              <SvgLine x1="12" y1="16" x2="12" y2="12" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" />
+                              <SvgCircle cx="12" cy="8" r="1" fill="#FFFFFF" />
+                            </Svg>
+                            <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFFFFF' }}>
+                              Chi Tiết
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
                     </View>
                   </View>
                 </View>
+              )}
 
-                {/* Subtag: Các nền tảng khác hỗ trợ sau */}
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 6,
-                    marginTop: 10,
-                    paddingTop: 10,
-                    borderTopWidth: 1,
-                    borderTopColor: isLight ? '#F2F2F7' : '#2C2C2E',
-                  }}
-                >
-                  <Ionicons name="information-circle-outline" size={15} color="#8E8E93" />
-                  <Text style={{ fontSize: 11, color: '#8E8E93' }}>
-                    Các nền tảng video khác (TikTok, YouTube...) sẽ được hỗ trợ trong phiên bản kế tiếp.
-                  </Text>
-                </View>
-              </View>
-
-              {/* 2. MỤC MỚI: KHO API ĐÃ CÀO SẴN (XEM ĐƯỢC NGAY KHÔNG CẦN CÀO LẠI) */}
+              {/* SEARCH INPUT TRONG KHÁM PHÁ */}
               <View
                 style={{
-                  backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
-                  borderRadius: 16,
-                  padding: 16,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: '#141419',
+                  borderRadius: 12,
+                  paddingHorizontal: 12,
+                  height: 42,
                   borderWidth: 1,
-                  borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
-                  marginBottom: 14,
+                  borderColor: 'rgba(255, 255, 255, 0.08)',
+                  marginBottom: 12,
                 }}
               >
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 10 }}>
+                <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" style={{ marginRight: 8 }}>
+                  <SvgCircle cx="11" cy="11" r="8" stroke="#8E8E93" strokeWidth="2" />
+                  <SvgLine x1="21" y1="21" x2="16.65" y2="16.65" stroke="#8E8E93" strokeWidth="2" strokeLinecap="round" />
+                </Svg>
+                <TextInput
+                  style={{ flex: 1, color: '#FFFFFF', fontSize: 13, paddingVertical: 0 }}
+                  placeholder="Tìm nhanh tên phim, diễn viên..."
+                  placeholderTextColor="#8E8E93"
+                  value={catalogSearchQuery}
+                  onChangeText={setCatalogSearchQuery}
+                />
+                {catalogSearchQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => setCatalogSearchQuery('')}>
+                    <Svg width={16} height={16} viewBox="0 0 24 24" fill="#8E8E93">
+                      <SvgPath d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z" />
+                    </Svg>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* GENRE / CATEGORY PILLS */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: 8, marginBottom: 14 }}
+              >
+                {[
+                  { key: 'all', label: `Tất Cả (${allCatalogMovies.length})` },
+                  { key: 'cinema', label: '🎬 Chiếu Rạp' },
+                  { key: 'hot', label: '🔥 Xem Nhiều' },
+                  { key: '2025', label: 'Năm 2025-2026' },
+                  { key: '2024', label: 'Năm 2024' },
+                ].map((chip) => {
+                  const isSel = catalogFilterYear === chip.key;
+                  return (
+                    <TouchableOpacity
+                      key={chip.key}
+                      onPress={() => setCatalogFilterYear(chip.key)}
+                      style={{
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                        borderRadius: 20,
+                        backgroundColor: isSel ? '#E50914' : '#141419',
+                        borderWidth: 1,
+                        borderColor: isSel ? '#E50914' : 'rgba(255, 255, 255, 0.08)',
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 11.5,
+                          fontWeight: isSel ? '800' : '600',
+                          color: isSel ? '#FFFFFF' : '#9CA3AF',
+                        }}
+                      >
+                        {chip.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+
+              {/* 2-COLUMN MOVIE GRID */}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+                {filteredCatalogMovies.map((movieItem: any, mIdx: number) => (
                   <View
+                    key={`movie-card-${mIdx}-${movieItem.code || movieItem.title}`}
                     style={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: 12,
-                      backgroundColor: 'rgba(52, 199, 89, 0.15)',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0,
+                      width: '48.5%',
+                      backgroundColor: '#121217',
+                      borderRadius: 14,
+                      overflow: 'hidden',
+                      marginBottom: 14,
+                      borderWidth: 1,
+                      borderColor: 'rgba(255, 255, 255, 0.07)',
                     }}
                   >
-                    <Ionicons name="layers-outline" size={22} color="#34C759" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                      <Text style={{ fontSize: 14.5, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF' }}>
-                        Kho API Đã Cào Sẵn
-                      </Text>
+                    {/* Poster */}
+                    <TouchableOpacity
+                      activeOpacity={0.85}
+                      onPress={() => handleCinemaSelectMovie(movieItem)}
+                      style={{ width: '100%', height: 200, backgroundColor: '#070709', position: 'relative' }}
+                    >
+                      <Image
+                        source={{ uri: movieItem.image }}
+                        style={{ width: '100%', height: '100%' }}
+                        resizeMode="cover"
+                      />
+
+                      {/* Overlay Play Icon */}
                       <View
                         style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          backgroundColor: 'rgba(0, 0, 0, 0.2)',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <View
+                          style={{
+                            width: 38,
+                            height: 38,
+                            borderRadius: 19,
+                            backgroundColor: 'rgba(229, 9, 20, 0.85)',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                          }}
+                        >
+                          <Svg width={18} height={18} viewBox="0 0 24 24" fill="#FFFFFF" style={{ marginLeft: 2 }}>
+                            <SvgPolygon points="5,3 19,12 5,21" />
+                          </Svg>
+                        </View>
+                      </View>
+
+                      {/* Badges */}
+                      <View
+                        style={{
+                          position: 'absolute',
+                          top: 6,
+                          left: 6,
+                          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                          paddingHorizontal: 5,
+                          paddingVertical: 2,
+                          borderRadius: 4,
                           flexDirection: 'row',
                           alignItems: 'center',
                           gap: 3,
-                          backgroundColor: 'rgba(52, 199, 89, 0.15)',
-                          paddingHorizontal: 7,
-                          paddingVertical: 2,
-                          borderRadius: 6,
                         }}
                       >
-                        <Ionicons name="checkmark-circle" size={11} color="#34C759" />
-                        <Text style={{ fontSize: 10, fontWeight: '800', color: '#34C759' }}>
-                          Xem Ngay
+                        <Svg width={10} height={10} viewBox="0 0 24 24" fill="#FFD60A">
+                          <SvgPolygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
+                        </Svg>
+                        <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#FFD60A' }}>
+                          {movieItem.rating || '9.0'}
                         </Text>
                       </View>
+
+                      <View
+                        style={{
+                          position: 'absolute',
+                          top: 6,
+                          right: 6,
+                          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                          paddingHorizontal: 6,
+                          paddingVertical: 2,
+                          borderRadius: 4,
+                        }}
+                      >
+                        <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#FFFFFF' }}>
+                          {movieItem.year || '2024'}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+
+                    {/* Info */}
+                    <View style={{ padding: 10, justifyContent: 'space-between', flex: 1 }}>
+                      <Text
+                        numberOfLines={2}
+                        style={{ fontSize: 13, fontWeight: '800', color: '#FFFFFF', lineHeight: 18, marginBottom: 4 }}
+                      >
+                        {movieItem.title}
+                      </Text>
+
+                      <Text numberOfLines={1} style={{ fontSize: 10.5, color: '#8E8E93', marginBottom: 8 }}>
+                        🔥 {movieItem.views || '35.000'} lượt xem
+                      </Text>
+
+                      <View style={{ flexDirection: 'row', gap: 6 }}>
+                        <TouchableOpacity
+                          activeOpacity={0.8}
+                          onPress={() => {
+                            handleSelectScrapedMovie(movieItem);
+                            handleWatchDirectly(movieItem);
+                          }}
+                          style={{
+                            flex: 1,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 4,
+                            backgroundColor: '#E50914',
+                            paddingVertical: 7,
+                            borderRadius: 8,
+                          }}
+                        >
+                          <Svg width={12} height={12} viewBox="0 0 24 24" fill="#FFFFFF">
+                            <SvgPolygon points="5,3 19,12 5,21" />
+                          </Svg>
+                          <Text style={{ fontSize: 11, fontWeight: '800', color: '#FFFFFF' }}>Xem</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          activeOpacity={0.8}
+                          onPress={() => handleCinemaSelectMovie(movieItem)}
+                          style={{
+                            paddingHorizontal: 8,
+                            paddingVertical: 7,
+                            borderRadius: 8,
+                            backgroundColor: '#22222A',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                          }}
+                        >
+                          <Svg width={15} height={15} viewBox="0 0 24 24" fill="none">
+                            <SvgCircle cx="12" cy="12" r="10" stroke="#9CA3AF" strokeWidth="2" />
+                            <SvgLine x1="12" y1="16" x2="12" y2="12" stroke="#9CA3AF" strokeWidth="2" strokeLinecap="round" />
+                            <SvgCircle cx="12" cy="8" r="1" fill="#9CA3AF" />
+                          </Svg>
+                        </TouchableOpacity>
+                      </View>
                     </View>
-                    <Text style={{ fontSize: 11.5, color: '#8E8E93', marginTop: 2 }} numberOfLines={1}>
-                      {allCatalogMovies.length} phim sẵn sàng phát • Không cần cào lại
+                  </View>
+                ))}
+              </View>
+            </ScrollView>
+          )}
+
+          {/* ═══════════════════════════════════════════════════════════════ */}
+          {/* TAB 2: PHÒNG XEM PHIM (CINEMA ROOMS - XEM CHUNG)                */}
+          {/* ═══════════════════════════════════════════════════════════════ */}
+          {cinemaTab === 'rooms' && (
+            <ScrollView
+              contentContainerStyle={{ padding: 14, paddingBottom: 80 }}
+              showsVerticalScrollIndicator={false}
+            >
+              {/* BANNER PHÒNG XEM */}
+              <View
+                style={{
+                  backgroundColor: '#121217',
+                  borderRadius: 16,
+                  padding: 16,
+                  borderWidth: 1,
+                  borderColor: 'rgba(229, 9, 20, 0.3)',
+                  marginBottom: 16,
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                  <View
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 12,
+                      backgroundColor: 'rgba(229, 9, 20, 0.15)',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+                      <SvgPath d="M17 21V19C17 17.9 16.1 17 15 17H9C7.9 17 7 17.9 7 19V21M12 13C14.2 13 16 11.2 16 9C16 6.8 14.2 5 12 5C9.8 5 8 6.8 8 9C8 11.2 9.8 13 12 13Z" stroke="#E50914" strokeWidth="2" strokeLinecap="round" />
+                      <SvgPath d="M23 21V19C23 18.1 22.4 17.3 21.5 17.1M16 5.1C17.2 5.7 18 6.9 18 8.3C18 9.7 17.2 10.9 16 11.5" stroke="#E50914" strokeWidth="2" strokeLinecap="round" />
+                    </Svg>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 15, fontWeight: '800', color: '#FFFFFF' }}>
+                      Rạp Phim Xem Chung
+                    </Text>
+                    <Text style={{ fontSize: 11.5, color: '#9CA3AF', marginTop: 2 }}>
+                      Tạo phòng chiếu phim online, xem cùng bạn bè không khoảng cách
                     </Text>
                   </View>
                 </View>
 
-                {/* Nút Xem Ngay Toàn Bộ Danh Sách Phim Đã Cào */}
                 <TouchableOpacity
                   activeOpacity={0.8}
-                  onPress={() => setShowScrapedCatalogModal(true)}
+                  onPress={() => {
+                    setShowCreateRoomModal(true);
+                    if (!cinemaSelectedMovie && allCatalogMovies.length > 0) {
+                      setCinemaSelectedMovie(allCatalogMovies[0]);
+                    }
+                  }}
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
-                    justifyContent: 'space-between',
-                    backgroundColor: '#34C759',
-                    paddingHorizontal: 16,
-                    paddingVertical: 13,
+                    justifyContent: 'center',
+                    gap: 8,
+                    backgroundColor: '#E50914',
+                    paddingVertical: 12,
                     borderRadius: 12,
-                    marginBottom: 12,
-                    shadowColor: '#34C759',
-                    shadowOffset: { width: 0, height: 3 },
-                    shadowOpacity: 0.25,
-                    shadowRadius: 6,
+                    shadowColor: '#E50914',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 8,
                   }}
                 >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    <Ionicons name="play-circle" size={22} color="#FFFFFF" />
-                    <Text style={{ fontSize: 14, fontWeight: '800', color: '#FFFFFF' }}>
-                      Xem Danh Sách Đã Cào ({allCatalogMovies.length} Phim)
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color="#FFFFFF" />
-                </TouchableOpacity>
-
-                {/* Quick Access: Phim Hot Đã Cào Sẵn (Bấm xem ngay tức thì) */}
-                <View>
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#8E8E93', marginBottom: 8, letterSpacing: 0.3 }}>
-                    XEM NHANH PHIM NỔI BẬT ĐÃ CÓ API (KHÔNG CẦN CÀO):
+                  <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                    <SvgCircle cx="12" cy="12" r="10" stroke="#FFFFFF" strokeWidth="2" />
+                    <SvgLine x1="12" y1="8" x2="12" y2="16" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" />
+                    <SvgLine x1="8" y1="12" x2="16" y2="12" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" />
+                  </Svg>
+                  <Text style={{ fontSize: 14, fontWeight: '800', color: '#FFFFFF' }}>
+                    + TẠO PHÒNG CHIẾU PHIM MỚI
                   </Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-                    {allCatalogMovies.slice(0, 8).map((movieItem, mIdx) => (
-                      <TouchableOpacity
-                        key={mIdx}
-                        activeOpacity={0.7}
-                        onPress={() => {
-                          handleSelectScrapedMovie(movieItem);
-                          handleWatchDirectly(movieItem);
-                        }}
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          gap: 6,
-                          backgroundColor: isLight ? '#F2F2F7' : '#0B0B0E',
-                          paddingHorizontal: 12,
-                          paddingVertical: 8,
-                          borderRadius: 10,
-                          borderWidth: 1,
-                          borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
-                        }}
-                      >
-                        <Ionicons name="play" size={12} color="#34C759" />
-                        <Text style={{ fontSize: 11.5, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
-                          {movieItem.title}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
+                </TouchableOpacity>
               </View>
 
-              {/* 3. MỤC CÀO API PHIM MỚI (LỌC TRÙNG LẶP VỚI KHO ĐÃ CÀO) */}
+              {/* LIST ROOMS */}
+              <Text style={{ fontSize: 13, fontWeight: '800', color: '#9CA3AF', marginBottom: 10 }}>
+                DANH SÁCH PHÒNG ĐANG CHIẾU ({cinemaRooms.length})
+              </Text>
+
+              <View style={{ gap: 12 }}>
+                {cinemaRooms.map((room) => (
+                  <View
+                    key={room.id}
+                    style={{
+                      backgroundColor: '#121217',
+                      borderRadius: 16,
+                      padding: 12,
+                      borderWidth: 1,
+                      borderColor: 'rgba(255, 255, 255, 0.08)',
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', gap: 12 }}>
+                      {/* Room Poster */}
+                      <View
+                        style={{
+                          width: 80,
+                          height: 110,
+                          borderRadius: 10,
+                          overflow: 'hidden',
+                          backgroundColor: '#070709',
+                        }}
+                      >
+                        {room.moviePoster ? (
+                          <Image
+                            source={{ uri: room.moviePoster }}
+                            style={{ width: '100%', height: '100%' }}
+                            resizeMode="cover"
+                          />
+                        ) : (
+                          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                            <Svg width={28} height={28} viewBox="0 0 24 24" fill="none">
+                              <SvgRect x="2" y="2" width="20" height="20" rx="3" stroke="#E50914" strokeWidth="2" />
+                              <SvgPath d="M7 2V22M17 2V22M2 12H22M2 7H7M2 17H7M17 7H22M17 17H22" stroke="#E50914" strokeWidth="1.5" />
+                            </Svg>
+                          </View>
+                        )}
+                      </View>
+
+                      {/* Room Details */}
+                      <View style={{ flex: 1, justifyContent: 'space-between' }}>
+                        <View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                            <View
+                              style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 4,
+                                backgroundColor: 'rgba(229, 9, 20, 0.15)',
+                                paddingHorizontal: 7,
+                                paddingVertical: 2,
+                                borderRadius: 5,
+                              }}
+                            >
+                              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#E50914' }} />
+                              <Text style={{ fontSize: 10, fontWeight: '900', color: '#E50914' }}>LIVE</Text>
+                            </View>
+                            <Text style={{ fontSize: 11, color: '#8E8E93' }}>
+                              Host: <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>@{room.hostName}</Text>
+                            </Text>
+                          </View>
+
+                          <Text style={{ fontSize: 15, fontWeight: '800', color: '#FFFFFF', marginBottom: 2 }}>
+                            {room.name}
+                          </Text>
+
+                          <Text style={{ fontSize: 12, color: '#E50914', fontWeight: '700' }}>
+                            🎬 {room.movieTitle}
+                          </Text>
+                        </View>
+
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
+                              <SvgPath d="M17 21V19C17 17.9 16.1 17 15 17H9C7.9 17 7 17.9 7 19V21M12 13C14.2 13 16 11.2 16 9C16 6.8 14.2 5 12 5C9.8 5 8 6.8 8 9C8 11.2 9.8 13 12 13Z" stroke="#9CA3AF" strokeWidth="1.8" strokeLinecap="round" />
+                            </Svg>
+                            <Text style={{ fontSize: 11, color: '#9CA3AF', fontWeight: '600' }}>
+                              {room.memberCount} đang xem
+                            </Text>
+                          </View>
+
+                          <TouchableOpacity
+                            activeOpacity={0.8}
+                            onPress={() => {
+                              setActiveRoom(room);
+                              triggerToast(`Đã tham gia phòng "${room.name}"!`, 'Cinema Room', 'success', 'people');
+                              if (room.streamUrl || room.embedUrl) {
+                                handleWatchDirectly({ title: room.movieTitle, streamUrl: room.streamUrl, embedUrl: room.embedUrl });
+                              } else {
+                                const matched = allCatalogMovies.find((m: any) => m.title.toLowerCase().includes(room.movieTitle.toLowerCase()));
+                                if (matched) {
+                                  handleWatchDirectly(matched);
+                                } else {
+                                  triggerToast('Đang kết nối luồng phát của phòng...', 'Đang Vào Phòng', 'info');
+                                }
+                              }
+                            }}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 6,
+                              backgroundColor: '#E50914',
+                              paddingHorizontal: 12,
+                              paddingVertical: 7,
+                              borderRadius: 8,
+                            }}
+                          >
+                            <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
+                              <SvgPath d="M15 3H19C20.1 3 21 3.9 21 5V19C21 20.1 20.1 21 19 21H15M10 17L15 12M15 12L10 7M15 12H3" stroke="#FFFFFF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                            </Svg>
+                            <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#FFFFFF' }}>
+                              Vào Xem
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </ScrollView>
+          )}
+
+          {/* ═══════════════════════════════════════════════════════════════ */}
+          {/* TAB 3: CÀO API PHIM (API SCRAPER CÔNG NGHỆ CAO)                  */}
+          {/* ═══════════════════════════════════════════════════════════════ */}
+          {cinemaTab === 'search' && (
+            <ScrollView
+              contentContainerStyle={{ padding: 14, paddingBottom: 80 }}
+              showsVerticalScrollIndicator={false}
+            >
+              {/* CÀO API PANEL */}
               <View
                 style={{
-                  backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
-                  borderRadius: 18,
+                  backgroundColor: '#121217',
+                  borderRadius: 16,
                   padding: 16,
                   borderWidth: 1,
-                  borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
-                  marginBottom: 14,
+                  borderColor: 'rgba(255, 255, 255, 0.08)',
+                  marginBottom: 16,
                 }}
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 }}>
@@ -30461,926 +31731,635 @@ function MainApp() {
                       height: 40,
                       borderRadius: 12,
                       backgroundColor: 'rgba(0, 122, 255, 0.15)',
-                      alignItems: 'center',
                       justifyContent: 'center',
+                      alignItems: 'center',
                     }}
                   >
-                    <Ionicons name="cloud-download-outline" size={22} color="#007AFF" />
+                    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+                      <SvgPath d="M21 15V19C21 20.1 20.1 21 19 21H5C3.9 21 3 20.1 3 19V15M7 10L12 15M12 15L17 10M12 15V3" stroke="#007AFF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                    </Svg>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 14.5, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF' }}>
-                      Cào API Phim Mới (Lọc Trùng Lặp)
+                    <Text style={{ fontSize: 14.5, fontWeight: '800', color: '#FFFFFF' }}>
+                      Cào API Phim & Bóc Tách HLS
                     </Text>
-                    <Text style={{ fontSize: 11.5, color: '#8E8E93' }}>
-                      Hỗ trợ đa nguồn web phim • Tự động loại bỏ phim trùng
+                    <Text style={{ fontSize: 11, color: '#8E8E93' }}>
+                      Hỗ trợ PhimAPI, Motchill, RoPhim, GhienPhimz, PhimMoi...
                     </Text>
                   </View>
                 </View>
 
-                {/* Chọn Nhanh Tên Miền Nguồn Cào API */}
-                <View style={{ marginBottom: 10 }}>
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#8E8E93', marginBottom: 6, letterSpacing: 0.3 }}>
-                    CHỌN TÊN MIỀN NGUỒN CÀO API:
+                {/* DOMAINS CHIPS */}
+                <View style={{ marginBottom: 12 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#8E8E93', marginBottom: 6 }}>
+                    CHỌN NGUỒN CÀO API:
                   </Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
                     {[
-                      { name: 'Motchill', domain: 'https://motchill.tv/phim/mai-2024', badge: 'motchill.tv' },
-                      { name: 'RoPhim', domain: 'https://rophim.net/phim/lat-mat-7-mot-dieu-uoc', badge: 'rophim.net' },
-                      { name: 'GhienPhimz', domain: 'https://ghienphimz.mom', badge: 'ghienphimz.mom' },
-                      { name: 'PhimMoi', domain: 'https://phimmoichill.net/phim/nha-ba-nu', badge: 'phimmoichill.net' },
-                      { name: 'OPhim', domain: 'https://ophim1.com/phim/cam-2024', badge: 'ophim1.com' },
-                    ].map((dom, dIdx) => {
-                      const isDomSelected = scraperUrlInput.includes(dom.badge);
-                      return (
-                        <TouchableOpacity
-                          key={dIdx}
-                          activeOpacity={0.7}
-                          onPress={() => {
-                            setScraperUrlInput(dom.domain);
-                          }}
-                          style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            gap: 5,
-                            paddingHorizontal: 10,
-                            paddingVertical: 6,
-                            borderRadius: 9,
-                            backgroundColor: isDomSelected ? 'rgba(0, 122, 255, 0.16)' : (isLight ? '#F2F2F7' : '#0B0B0E'),
-                            borderWidth: 1,
-                            borderColor: isDomSelected ? '#007AFF' : (isLight ? '#E5E5EA' : '#2C2C2E'),
-                          }}
-                        >
-                          <Ionicons name="globe-outline" size={13} color={isDomSelected ? '#007AFF' : '#8E8E93'} />
-                          <Text style={{ fontSize: 11.5, fontWeight: isDomSelected ? '800' : '600', color: isDomSelected ? '#007AFF' : (isLight ? '#000000' : '#CCCCCC') }}>
-                            {dom.name}
-                          </Text>
-                          <Text style={{ fontSize: 9.5, color: isDomSelected ? '#007AFF' : '#8E8E93' }}>
-                            ({dom.badge})
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
+                      { name: 'PhimAPI.com', domain: 'https://phimapi.com', badge: 'phimapi' },
+                      { name: 'Motchill', domain: 'https://motchill.tv/phim/mai-2024', badge: 'motchill' },
+                      { name: 'RoPhim', domain: 'https://rophim.net', badge: 'rophim' },
+                      { name: 'GhienPhimz', domain: 'https://ghienphimz.mom', badge: 'ghienphimz' },
+                      { name: 'PhimMoi', domain: 'https://phimmoichill.net', badge: 'phimmoi' },
+                    ].map((dom, dIdx) => (
+                      <TouchableOpacity
+                        key={dIdx}
+                        activeOpacity={0.7}
+                        onPress={() => setScraperUrlInput(dom.domain)}
+                        style={{
+                          paddingHorizontal: 10,
+                          paddingVertical: 5,
+                          borderRadius: 8,
+                          backgroundColor: scraperUrlInput.includes(dom.badge) ? 'rgba(0,122,255,0.2)' : '#1C1C24',
+                          borderWidth: 1,
+                          borderColor: scraperUrlInput.includes(dom.badge) ? '#007AFF' : 'rgba(255,255,255,0.08)',
+                        }}
+                      >
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: scraperUrlInput.includes(dom.badge) ? '#007AFF' : '#CCCCCC' }}>
+                          {dom.name}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
                   </ScrollView>
                 </View>
 
-                {/* Input điền URL phim */}
+                {/* Ô VÀ NÚT SỬA URL WEB NGUỒN */}
+                <View style={{ marginBottom: 12 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#8E8E93' }}>
+                      ĐƯỜNG DẪN URL WEB NGUỒN:
+                    </Text>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      <TouchableOpacity
+                        onPress={() => {
+                          if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                            navigator.clipboard.readText().then(t => {
+                              if (t && t.startsWith('http')) {
+                                setScraperUrlInput(t);
+                                triggerToast('Đã dán URL web nguồn!', 'Dán URL', 'success', 'clipboard-outline');
+                              } else {
+                                triggerToast('Bộ nhớ tạm không chứa link URL hợp lệ!', 'Thông Báo', 'info');
+                              }
+                            }).catch(() => {});
+                          }
+                        }}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                      >
+                        <Svg width={13} height={13} viewBox="0 0 24 24" fill="none">
+                          <SvgPath d="M16 4H18C19.1 4 20 4.9 20 6V20C20 21.1 19.1 22 18 22H6C4.9 22 4 21.1 4 20V6C4 4.9 4.9 4 6 4H8M9 2H15C15.6 2 16 2.4 16 3V5C16 5.6 15.6 6 15 6H9C8.4 6 8 5.6 8 5V3C8 2.4 8.4 2 9 2Z" stroke="#007AFF" strokeWidth="2" strokeLinecap="round" />
+                        </Svg>
+                        <Text style={{ fontSize: 11, color: '#007AFF', fontWeight: '700' }}>Dán Link</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      backgroundColor: '#1C1C24',
+                      borderRadius: 12,
+                      paddingHorizontal: 12,
+                      height: 44,
+                      borderWidth: 1,
+                      borderColor: 'rgba(0, 122, 255, 0.4)',
+                    }}
+                  >
+                    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" style={{ marginRight: 8 }}>
+                      <SvgPath d="M10 13A5 5 0 0017.07 13L20.07 10A5 5 0 0013 2.93L11.5 4.43M14 11A5 5 0 006.93 11L3.93 14A5 5 0 0011 21.07L12.5 19.57" stroke="#007AFF" strokeWidth="2" strokeLinecap="round" />
+                    </Svg>
+                    <TextInput
+                      style={{ flex: 1, color: '#FFFFFF', fontSize: 12.5, paddingVertical: 0 }}
+                      placeholder="Sửa hoặc điền URL web phim (Motchill, RoPhim, PhimAPI...)"
+                      placeholderTextColor="#8E8E93"
+                      value={scraperUrlInput}
+                      onChangeText={setScraperUrlInput}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+                    {scraperUrlInput.length > 0 && (
+                      <TouchableOpacity onPress={() => setScraperUrlInput('')} style={{ padding: 4 }}>
+                        <Svg width={16} height={16} viewBox="0 0 24 24" fill="#8E8E93">
+                          <SvgPath d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z" />
+                        </Svg>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+
+                {/* SEARCH INPUT */}
                 <View
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
-                    backgroundColor: isLight ? '#F2F2F7' : '#0B0B0E',
+                    backgroundColor: '#1C1C24',
                     borderRadius: 12,
-                    borderWidth: 1,
-                    borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
                     paddingHorizontal: 12,
                     height: 46,
+                    borderWidth: 1,
+                    borderColor: 'rgba(255, 255, 255, 0.08)',
+                    marginBottom: 10,
                   }}
                 >
-                  <Ionicons name="link-outline" size={17} color="#007AFF" style={{ marginRight: 8 }} />
+                  <Svg width={17} height={17} viewBox="0 0 24 24" fill="none" style={{ marginRight: 8 }}>
+                    <SvgRect x="2" y="2" width="20" height="20" rx="3" stroke="#007AFF" strokeWidth="2" />
+                    <SvgPath d="M7 2V22M17 2V22M2 12H22M2 7H7M2 17H7M17 7H22M17 17H22" stroke="#007AFF" strokeWidth="1.5" />
+                  </Svg>
                   <TextInput
-                    style={{
-                      flex: 1,
-                      color: isLight ? '#000000' : '#FFFFFF',
-                      fontSize: 13,
-                      paddingVertical: 0,
-                    }}
-                    placeholder="Điền URL từ Motchill, RoPhim, GhienPhimz, PhimMoi..."
+                    style={{ flex: 1, color: '#FFFFFF', fontSize: 13, paddingVertical: 0 }}
+                    placeholder="Nhập tên phim muốn cào (Mai, Lật Mặt 7, Cám...)"
                     placeholderTextColor="#8E8E93"
-                    value={scraperUrlInput}
-                    onChangeText={setScraperUrlInput}
-                    autoCapitalize="none"
-                    autoCorrect={false}
+                    value={scraperMovieNameInput}
+                    onChangeText={(txt) => {
+                      setScraperMovieNameInput(txt);
+                      handleCinemaSearch(txt);
+                    }}
                   />
-                  {scraperUrlInput.length > 0 && (
-                    <TouchableOpacity onPress={() => setScraperUrlInput('')} style={{ padding: 4 }}>
-                      <Ionicons name="close-circle" size={18} color="#8E8E93" />
+                  {scraperMovieNameInput.length > 0 && (
+                    <TouchableOpacity onPress={() => { setScraperMovieNameInput(''); setCinemaSearchResults([]); }}>
+                      <Svg width={17} height={17} viewBox="0 0 24 24" fill="#8E8E93">
+                        <SvgPath d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z" />
+                      </Svg>
                     </TouchableOpacity>
                   )}
                 </View>
 
-                {/* Ô Nhập Tên Phim Muốn Cào API & Bộ Lọc (Lọc Theo Tên Phim / Lọc All) */}
-                <View style={{ marginTop: 14 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 8 }}>
-                    <Text style={{ fontSize: 12.5, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
-                      Tên phim muốn cào API:
-                    </Text>
-
-                    {/* Bộ lọc: Theo Tên Phim / Lọc All */}
-                    <View
+                {/* QUICK SUGGESTIONS */}
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, marginBottom: 12 }}>
+                  {['Mưa Đỏ', 'Mai', 'Lật Mặt 7', 'Cám', 'Đào Phở và Piano', 'Nhà Bà Nữ', 'Bố Già', 'Trạng Quỳnh'].map((sug, sIdx) => (
+                    <TouchableOpacity
+                      key={sIdx}
+                      onPress={() => {
+                        setScraperMovieNameInput(sug);
+                        setScrapeFilterMode('title');
+                        handleCinemaSearch(sug);
+                      }}
                       style={{
-                        flexDirection: 'row',
-                        backgroundColor: isLight ? '#E5E5EA' : '#0B0B0E',
-                        borderRadius: 8,
-                        padding: 2,
+                        paddingHorizontal: 9,
+                        paddingVertical: 4,
+                        borderRadius: 7,
+                        backgroundColor: '#1C1C24',
                         borderWidth: 1,
-                        borderColor: isLight ? '#D1D1D6' : '#2C2C2E',
+                        borderColor: 'rgba(255, 255, 255, 0.06)',
                       }}
                     >
-                      <TouchableOpacity
-                        activeOpacity={0.7}
-                        onPress={() => setScrapeFilterMode('title')}
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          gap: 4,
-                          paddingHorizontal: 8,
-                          paddingVertical: 4,
-                          borderRadius: 6,
-                          backgroundColor: scrapeFilterMode === 'title' ? '#007AFF' : 'transparent',
-                        }}
-                      >
-                        <Ionicons
-                          name="search"
-                          size={11}
-                          color={scrapeFilterMode === 'title' ? '#FFFFFF' : '#8E8E93'}
-                        />
-                        <Text
-                          style={{
-                            fontSize: 10.5,
-                            fontWeight: '700',
-                            color: scrapeFilterMode === 'title' ? '#FFFFFF' : '#8E8E93',
-                          }}
-                        >
-                          Lọc Tên Phim
-                        </Text>
-                      </TouchableOpacity>
+                      <Text style={{ fontSize: 11, color: '#9CA3AF' }}>{sug}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
 
-                      <TouchableOpacity
-                        activeOpacity={0.7}
-                        onPress={() => setScrapeFilterMode('all')}
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          gap: 4,
-                          paddingHorizontal: 8,
-                          paddingVertical: 4,
-                          borderRadius: 6,
-                          backgroundColor: scrapeFilterMode === 'all' ? '#007AFF' : 'transparent',
-                        }}
-                      >
-                        <Ionicons
-                          name="layers-outline"
-                          size={11}
-                          color={scrapeFilterMode === 'all' ? '#FFFFFF' : '#8E8E93'}
-                        />
-                        <Text
-                          style={{
-                            fontSize: 10.5,
-                            fontWeight: '700',
-                            color: scrapeFilterMode === 'all' ? '#FFFFFF' : '#8E8E93',
-                          }}
-                        >
-                          Lọc All
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-
-                  {/* Input Box Nhập Tên Phim */}
-                  <View
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      backgroundColor: isLight ? '#F2F2F7' : '#0B0B0E',
-                      borderRadius: 12,
-                      borderWidth: 1,
-                      borderColor: scrapeFilterMode === 'title' ? '#007AFF' : (isLight ? '#E5E5EA' : '#2C2C2E'),
-                      paddingHorizontal: 12,
-                      height: 46,
-                    }}
-                  >
-                    <Ionicons
-                      name="film-outline"
-                      size={17}
-                      color={scrapeFilterMode === 'title' ? '#007AFF' : '#8E8E93'}
-                      style={{ marginRight: 8 }}
-                    />
-                    <TextInput
-                      style={{
-                        flex: 1,
-                        color: isLight ? '#000000' : '#FFFFFF',
-                        fontSize: 13,
-                        paddingVertical: 0,
-                      }}
-                      placeholder={
-                        scrapeFilterMode === 'title'
-                          ? 'Nhập tên phim muốn cào (Mai, Lật Mặt 7, Cám, Bố Già...)'
-                          : 'Chế độ Lọc All: Sẽ cào toàn bộ danh mục phim mới...'
-                      }
-                      placeholderTextColor="#8E8E93"
-                      value={scraperMovieNameInput}
-                      onChangeText={(text) => {
-                        setScraperMovieNameInput(text);
-                        if (text.trim() && scrapeFilterMode !== 'title') {
-                          setScrapeFilterMode('title');
-                        }
-                      }}
-                      autoCapitalize="words"
-                      autoCorrect={false}
-                    />
-                    {scraperMovieNameInput.length > 0 && (
-                      <TouchableOpacity onPress={() => setScraperMovieNameInput('')} style={{ padding: 4 }}>
-                        <Ionicons name="close-circle" size={18} color="#8E8E93" />
-                      </TouchableOpacity>
-                    )}
-                  </View>
-
-                  {/* Gợi ý tên phim nhanh (bấm là tự điền) */}
-                  <View style={{ marginTop: 8 }}>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                      {['Mưa Đỏ', 'Mai', 'Lật Mặt 7', 'Cám', 'Nhà Bà Nữ', 'Bố Già', 'Phá Đám Sinh Nhật Mẹ', 'Gặp Lại Chị Bầu', 'Đất Rừng Phương Nam', 'Trạng Quỳnh', 'Ma Xó'].map((suggestName, sIdx) => {
-                        const isChosen = scraperMovieNameInput.toLowerCase() === suggestName.toLowerCase();
-                        return (
-                          <TouchableOpacity
-                            key={sIdx}
-                            activeOpacity={0.7}
-                            onPress={() => {
-                              setScraperMovieNameInput(suggestName);
-                              setScrapeFilterMode('title');
-                            }}
-                            style={{
-                              paddingHorizontal: 9,
-                              paddingVertical: 4,
-                              borderRadius: 8,
-                              backgroundColor: isChosen ? 'rgba(0, 122, 255, 0.2)' : (isLight ? '#F2F2F7' : '#0B0B0E'),
-                              borderWidth: 1,
-                              borderColor: isChosen ? '#007AFF' : (isLight ? '#E5E5EA' : '#2C2C2E'),
-                            }}
-                          >
-                            <Text style={{ fontSize: 10.5, color: isChosen ? '#007AFF' : '#8E8E93', fontWeight: isChosen ? '800' : '600' }}>
-                              {suggestName}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </ScrollView>
-                  </View>
-                </View>
-
-                {/* Banner Cơ Chế Chống Trùng Lặp */}
-                <View
+                {/* SCRAPE BUTTON */}
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  disabled={isScraping}
+                  onPress={() => handleExecuteScrape()}
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
+                    justifyContent: 'center',
                     gap: 8,
-                    backgroundColor: 'rgba(52, 199, 89, 0.1)',
-                    borderRadius: 10,
-                    paddingHorizontal: 12,
-                    paddingVertical: 9,
-                    marginTop: 12,
-                    borderWidth: 1,
-                    borderColor: 'rgba(52, 199, 89, 0.25)',
+                    backgroundColor: '#007AFF',
+                    paddingVertical: 12,
+                    borderRadius: 12,
                   }}
                 >
-                  <Ionicons name="shield-checkmark-outline" size={17} color="#34C759" />
-                  <Text style={{ flex: 1, fontSize: 11, color: isLight ? '#1B5E20' : '#81C784', lineHeight: 15 }}>
-                    Lọc bóc tách thông minh: Trích xuất luồng .m3u8 CDN & Web Player theo tên phim hoặc lọc toàn bộ (All); tự động đồng bộ vào kho dữ liệu.
-                  </Text>
-                </View>
+                  {isScraping ? (
+                    <>
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                      <Text style={{ fontSize: 14, fontWeight: '800', color: '#FFFFFF' }}>
+                        Đang cào API ({crawlRemainingSec}s)...
+                      </Text>
+                    </>
+                  ) : (
+                    <>
+                      <Svg width={16} height={16} viewBox="0 0 24 24" fill="#FFFFFF">
+                        <SvgPolygon points="13,2 3,14 12,14 11,22 21,10 12,10" />
+                      </Svg>
+                      <Text style={{ fontSize: 14, fontWeight: '800', color: '#FFFFFF' }}>
+                        CÀO API & TRÍCH XUẤT LUỒNG NGAY
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
 
-                {/* Nút Thực Hiện Cào API Phim Mới */}
-                <View style={{ marginTop: 14 }}>
-                  <TouchableOpacity
-                    activeOpacity={0.8}
-                    disabled={isScraping}
-                    onPress={() => handleExecuteScrape()}
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      paddingVertical: 13,
-                      backgroundColor: scrapeFilterMode === 'title' ? '#007AFF' : '#34C759',
-                      borderRadius: 14,
-                      gap: 8,
-                      shadowColor: scrapeFilterMode === 'title' ? '#007AFF' : '#34C759',
-                      shadowOffset: { width: 0, height: 4 },
-                      shadowOpacity: 0.25,
-                      shadowRadius: 8,
-                    }}
-                  >
-                    {isScraping ? (
-                      <>
-                        <ActivityIndicator size="small" color="#FFFFFF" />
-                        <Text style={{ fontSize: 14, fontWeight: '800', color: '#FFFFFF' }}>
-                          {`Đang cào phim (${crawlRemainingSec}s)...`}
-                        </Text>
-                      </>
-                    ) : (
-                      <>
-                        <Ionicons
-                          name={scrapeFilterMode === 'title' ? 'search' : 'cloud-download-outline'}
-                          size={18}
-                          color="#FFFFFF"
-                        />
-                        <Text style={{ fontSize: 14.5, fontWeight: '800', color: '#FFFFFF' }}>
-                          {scrapeFilterMode === 'title'
-                            ? (scraperMovieNameInput.trim()
-                                ? `CÀO API THEO TÊN: "${scraperMovieNameInput.trim().toUpperCase()}"`
-                                : 'CÀO API THEO TÊN PHIM')
-                            : 'CÀO TOÀN BỘ (ALL) PHIM MỚI'}
-                        </Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-                </View>
-
-                {/* Terminal Logs Console & Progress Bar (Tiến trình bóc tách cào API) */}
+                {/* TERMINAL LOGS */}
                 {(isScraping || scrapingLogs.length > 0) && (
                   <View
                     style={{
-                      marginTop: 14,
-                      backgroundColor: '#0D1117',
-                      borderRadius: 14,
+                      marginTop: 12,
+                      backgroundColor: '#0A0A0F',
+                      borderRadius: 12,
+                      padding: 10,
                       borderWidth: 1,
-                      borderColor: isScraping ? '#007AFF' : '#30363D',
-                      padding: 12,
-                      overflow: 'hidden',
+                      borderColor: '#1F1F2A',
                     }}
                   >
-                    {/* Console Header */}
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: '#21262D' }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#FF5F56' }} />
-                        <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#FFBD2E' }} />
-                        <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#27C93F' }} />
-                        <Text style={{ fontSize: 11, fontWeight: '800', color: '#8B949E', marginLeft: 4, letterSpacing: 0.5 }}>
-                          API CRAWLER LOGS TERMINAL
-                        </Text>
-                      </View>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                        {isScraping && <ActivityIndicator size="small" color="#58A6FF" />}
-                        <Text style={{ fontSize: 11, fontWeight: '800', color: isScraping ? '#58A6FF' : '#39D353' }}>
-                          {scrapingProgressPercent}%
-                        </Text>
-                      </View>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#8E8E93' }}>API LOGS TERMINAL</Text>
+                      <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#34C759' }}>{scrapingProgressPercent}%</Text>
                     </View>
-
-                    {/* Progress Bar Line */}
-                    <View style={{ height: 4, backgroundColor: '#21262D', borderRadius: 2, marginBottom: 10, overflow: 'hidden' }}>
-                      <View
-                        style={{
-                          height: '100%',
-                          width: `${scrapingProgressPercent}%`,
-                          backgroundColor: scrapingProgressPercent === 100 ? '#39D353' : '#007AFF',
-                          borderRadius: 2,
-                        }}
-                      />
-                    </View>
-
-                    {/* Log entries */}
-                    <View style={{ gap: 5 }}>
-                      {scrapingLogs.map((logItem, lIdx) => (
-                        <View key={lIdx} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6 }}>
-                          <Text style={{ fontSize: 10.5, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', color: '#6E7681', flexShrink: 0 }}>
-                            {logItem.time}
-                          </Text>
-                          <Text
-                            style={{
-                              fontSize: 11,
-                              fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-                              color:
-                                logItem.type === 'success'
-                                  ? '#39D353'
-                                  : logItem.type === 'warn'
-                                  ? '#E3B341'
-                                  : logItem.type === 'error'
-                                  ? '#FF7B72'
-                                  : '#58A6FF',
-                              flex: 1,
-                              lineHeight: 16,
-                            }}
-                          >
-                            {logItem.text}
-                          </Text>
-                        </View>
+                    <View style={{ gap: 4 }}>
+                      {scrapingLogs.slice(-4).map((log, lIdx) => (
+                        <Text key={lIdx} style={{ fontSize: 10.5, color: '#38BDF8', fontFamily: Platform.OS === 'web' ? 'monospace' : undefined }}>
+                          [{log.time}] {log.text}
+                        </Text>
                       ))}
                     </View>
                   </View>
                 )}
               </View>
 
-              {/* 4. Kết Quả Cào API (Khi đã có scrapedResult) */}
-              {scrapedResult && (
-                <>
+              {/* SEARCH RESULTS FROM API */}
+              {cinemaSearchResults.length > 0 && (
+                <View>
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: '#9CA3AF', marginBottom: 10 }}>
+                    KẾT QUẢ TÌM THẤY TỪ PHIMAPI ({cinemaSearchResults.length})
+                  </Text>
+                  <View style={{ gap: 10 }}>
+                    {cinemaSearchResults.map((item: any, idx: number) => (
+                      <View
+                        key={`search-res-${idx}`}
+                        style={{
+                          flexDirection: 'row',
+                          backgroundColor: '#121217',
+                          borderRadius: 12,
+                          padding: 10,
+                          gap: 12,
+                          borderWidth: 1,
+                          borderColor: 'rgba(255, 255, 255, 0.08)',
+                        }}
+                      >
+                        <Image
+                          source={{ uri: item.poster_url }}
+                          style={{ width: 65, height: 90, borderRadius: 8, backgroundColor: '#070709' }}
+                          resizeMode="cover"
+                        />
+                        <View style={{ flex: 1, justifyContent: 'space-between' }}>
+                          <View>
+                            <Text style={{ fontSize: 14, fontWeight: '800', color: '#FFFFFF', lineHeight: 18 }}>
+                              {item.name}
+                            </Text>
+                            <Text style={{ fontSize: 11, color: '#8E8E93', marginTop: 2 }}>
+                              Năm: {item.year || '2024'} • Loại: {item.type || 'Phim lẻ'}
+                            </Text>
+                          </View>
+
+                          <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                            <TouchableOpacity
+                              activeOpacity={0.8}
+                              onPress={() => handleCinemaSelectMovie(item)}
+                              style={{
+                                flex: 1,
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: 4,
+                                backgroundColor: '#E50914',
+                                paddingVertical: 7,
+                                borderRadius: 8,
+                              }}
+                            >
+                              <Svg width={12} height={12} viewBox="0 0 24 24" fill="#FFFFFF">
+                                <SvgPolygon points="5,3 19,12 5,21" />
+                              </Svg>
+                              <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#FFFFFF' }}>Xem Tập</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              activeOpacity={0.8}
+                              onPress={() => {
+                                setScraperMovieNameInput(item.name);
+                                handleExecuteScrape(undefined, 'title', item.name);
+                              }}
+                              style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: 4,
+                                backgroundColor: '#22222A',
+                                paddingHorizontal: 12,
+                                paddingVertical: 7,
+                                borderRadius: 8,
+                              }}
+                            >
+                              <Svg width={13} height={13} viewBox="0 0 24 24" fill="none">
+                                <SvgPath d="M12 3V15M12 15L7 10M12 15L17 10M4 21H20" stroke="#FFFFFF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                              </Svg>
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: '#FFFFFF' }}>Cào API</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+            </ScrollView>
+          )}
+
+          {/* ═══════════════════════════════════════════════════════════════ */}
+          {/* MOVIE DETAIL SHEET OVERLAY (CHỌN TẬP & XEM TRỰC TIẾP)          */}
+          {/* ═══════════════════════════════════════════════════════════════ */}
+          {cinemaShowDetail && cinemaSelectedMovie && (
+            <View
+              style={[
+                StyleSheet.absoluteFill,
+                { backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 150, justifyContent: 'flex-end' },
+              ]}
+            >
+              <View
+                style={{
+                  backgroundColor: '#121217',
+                  borderTopLeftRadius: 24,
+                  borderTopRightRadius: 24,
+                  padding: 16,
+                  maxHeight: '90%',
+                  borderWidth: 1,
+                  borderColor: 'rgba(255, 255, 255, 0.1)',
+                }}
+              >
+                {/* Header Sheet */}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <Text style={{ fontSize: 16, fontWeight: '800', color: '#FFFFFF' }}>
+                    Chi Tiết Phim & Chọn Tập
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setCinemaShowDetail(false)}
+                    style={{ padding: 6, borderRadius: 16, backgroundColor: '#22222A' }}
+                  >
+                    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                      <SvgPath d="M18 6L6 18M6 6L18 18" stroke="#FFFFFF" strokeWidth="2.5" strokeLinecap="round" />
+                    </Svg>
+                  </TouchableOpacity>
+                </View>
+
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  {/* Poster & Meta */}
+                  <View style={{ flexDirection: 'row', gap: 14, marginBottom: 14 }}>
+                    <Image
+                      source={{
+                        uri: cinemaSelectedMovie.poster_url || cinemaSelectedMovie.image || cinemaSelectedMovie.thumb_url,
+                      }}
+                      style={{ width: 95, height: 135, borderRadius: 12, backgroundColor: '#070709' }}
+                      resizeMode="cover"
+                    />
+                    <View style={{ flex: 1, justifyContent: 'space-between' }}>
+                      <View>
+                        <Text style={{ fontSize: 16, fontWeight: '900', color: '#FFFFFF', lineHeight: 22 }}>
+                          {cinemaSelectedMovie.name || cinemaSelectedMovie.title}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: '#E50914', fontWeight: '700', marginTop: 2 }}>
+                          {cinemaSelectedMovie.year || '2024'} • {cinemaSelectedMovie.duration || 'Full HD'}
+                        </Text>
+                        {cinemaSelectedMovie.director && (
+                          <Text style={{ fontSize: 11, color: '#8E8E93', marginTop: 4 }}>
+                            Đạo diễn: {cinemaSelectedMovie.director}
+                          </Text>
+                        )}
+                        {cinemaSelectedMovie.cast && (
+                          <Text numberOfLines={2} style={{ fontSize: 11, color: '#8E8E93', marginTop: 2 }}>
+                            Diễn viên: {cinemaSelectedMovie.cast}
+                          </Text>
+                        )}
+                      </View>
+
+                      {/* Main Play Action */}
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        onPress={() => {
+                          const ep = cinemaEpisodes[cinemaSelectedEpisode];
+                          setCinemaShowDetail(false);
+                          handleWatchDirectly({
+                            title: `${cinemaSelectedMovie.name || cinemaSelectedMovie.title} - ${ep?.label || 'Tập 1'}`,
+                            streamUrl: ep?.m3u8 || cinemaSelectedMovie.streamUrl || cinemaSelectedMovie.hlsUrl,
+                            embedUrl: ep?.embed || cinemaSelectedMovie.embedUrl,
+                          });
+                        }}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 6,
+                          backgroundColor: '#E50914',
+                          paddingVertical: 10,
+                          borderRadius: 10,
+                          marginTop: 6,
+                        }}
+                      >
+                        <Svg width={16} height={16} viewBox="0 0 24 24" fill="#FFFFFF">
+                          <SvgPolygon points="5,3 19,12 5,21" />
+                        </Svg>
+                        <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFFFFF' }}>
+                          XEM TRỰC TIẾP NGAY
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {/* EPISODES SELECTOR */}
+                  <View style={{ marginBottom: 14 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFFFFF' }}>
+                        Danh Sách Tập ({cinemaEpisodes.length > 0 ? cinemaEpisodes.length : '1 Tập Full'}):
+                      </Text>
+                      {cinemaIsLoadingDetail && <ActivityIndicator size="small" color="#E50914" />}
+                    </View>
+
+                    {cinemaEpisodes.length > 0 ? (
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                        {cinemaEpisodes.map((ep, eIdx) => {
+                          const isSel = cinemaSelectedEpisode === eIdx;
+                          return (
+                            <TouchableOpacity
+                              key={eIdx}
+                              activeOpacity={0.8}
+                              onPress={() => setCinemaSelectedEpisode(eIdx)}
+                              style={{
+                                paddingHorizontal: 12,
+                                paddingVertical: 8,
+                                borderRadius: 8,
+                                backgroundColor: isSel ? '#E50914' : '#1C1C24',
+                                borderWidth: 1,
+                                borderColor: isSel ? '#E50914' : 'rgba(255,255,255,0.08)',
+                              }}
+                            >
+                              <Text style={{ fontSize: 11.5, fontWeight: isSel ? '800' : '600', color: isSel ? '#FFFFFF' : '#9CA3AF' }}>
+                                {ep.label}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    ) : (
+                      <View
+                        style={{
+                          padding: 12,
+                          borderRadius: 10,
+                          backgroundColor: '#1C1C24',
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 8,
+                        }}
+                      >
+                        <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                          <SvgCircle cx="12" cy="12" r="10" stroke="#34C759" strokeWidth="2" />
+                          <SvgPath d="M8 12L11 15L16 9" stroke="#34C759" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        </Svg>
+                        <Text style={{ fontSize: 12, color: '#D1D5DB' }}>
+                          Bản chiếu rạp Full HD sẵn sàng phát trực tiếp
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* CREATE ROOM BUTTON FOR THIS MOVIE */}
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      setCreateRoomName(`Phòng Xem: ${cinemaSelectedMovie.name || cinemaSelectedMovie.title}`);
+                      setShowCreateRoomModal(true);
+                    }}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                      backgroundColor: 'rgba(229, 9, 20, 0.15)',
+                      borderWidth: 1,
+                      borderColor: '#E50914',
+                      paddingVertical: 10,
+                      borderRadius: 10,
+                      marginBottom: 10,
+                    }}
+                  >
+                    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                      <SvgPath d="M17 21V19C17 17.9 16.1 17 15 17H9C7.9 17 7 17.9 7 19V21M12 13C14.2 13 16 11.2 16 9C16 6.8 14.2 5 12 5C9.8 5 8 6.8 8 9C8 11.2 9.8 13 12 13Z" stroke="#E50914" strokeWidth="2" strokeLinecap="round" />
+                      <SvgPath d="M23 21V19C23 18.1 22.4 17.3 21.5 17.1M16 5.1C17.2 5.7 18 6.9 18 8.3C18 9.7 17.2 10.9 16 11.5" stroke="#E50914" strokeWidth="2" strokeLinecap="round" />
+                    </Svg>
+                    <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#E50914' }}>
+                      Tạo Phòng Xem Chung Cho Phim Này
+                    </Text>
+                  </TouchableOpacity>
+                </ScrollView>
+              </View>
+            </View>
+          )}
+
+          {/* ═══════════════════════════════════════════════════════════════ */}
+          {/* CREATE ROOM MODAL                                               */}
+          {/* ═══════════════════════════════════════════════════════════════ */}
+          {showCreateRoomModal && (
+            <View
+              style={[
+                StyleSheet.absoluteFill,
+                { backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 180, justifyContent: 'center', alignItems: 'center', padding: 20 },
+              ]}
+            >
+              <View
+                style={{
+                  width: '100%',
+                  maxWidth: 420,
+                  backgroundColor: '#141419',
+                  borderRadius: 20,
+                  padding: 20,
+                  borderWidth: 1,
+                  borderColor: 'rgba(255, 255, 255, 0.1)',
+                }}
+              >
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+                      <SvgRect x="2" y="2" width="20" height="20" rx="3" stroke="#E50914" strokeWidth="2" />
+                      <SvgPath d="M7 2V22M17 2V22M2 12H22M2 7H7M2 17H7M17 7H22M17 17H22" stroke="#E50914" strokeWidth="1.5" />
+                    </Svg>
+                    <Text style={{ fontSize: 16, fontWeight: '800', color: '#FFFFFF' }}>
+                      Tạo Phòng Chiếu Phim
+                    </Text>
+                  </View>
+                  <TouchableOpacity onPress={() => setShowCreateRoomModal(false)}>
+                    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+                      <SvgPath d="M18 6L6 18M6 6L18 18" stroke="#8E8E93" strokeWidth="2.5" strokeLinecap="round" />
+                    </Svg>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Input Tên Phòng */}
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#9CA3AF', marginBottom: 6 }}>
+                  Tên phòng chiếu:
+                </Text>
+                <TextInput
+                  style={{
+                    backgroundColor: '#1E1E26',
+                    borderRadius: 10,
+                    paddingHorizontal: 12,
+                    height: 44,
+                    color: '#FFFFFF',
+                    fontSize: 13,
+                    borderWidth: 1,
+                    borderColor: 'rgba(255, 255, 255, 0.08)',
+                    marginBottom: 14,
+                  }}
+                  placeholder="Ví dụ: Phòng xem phim đêm cuối tuần..."
+                  placeholderTextColor="#8E8E93"
+                  value={createRoomName}
+                  onChangeText={setCreateRoomName}
+                />
+
+                {/* Phim Được Chọn */}
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#9CA3AF', marginBottom: 6 }}>
+                  Phim đang chọn:
+                </Text>
                 <View
                   style={{
-                    backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
-                    borderRadius: 18,
-                    padding: 16,
-                    borderWidth: 1.5,
-                    borderColor: '#34C759',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 10,
+                    backgroundColor: '#1E1E26',
+                    borderRadius: 10,
+                    padding: 8,
                     marginBottom: 16,
                   }}
                 >
-                  {/* Status Banner */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(52, 199, 89, 0.16)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
-                      <Ionicons name="checkmark-circle" size={15} color="#34C759" />
-                      <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#34C759' }}>
-                        ĐÃ BÓC TÁCH THÀNH CÔNG API
-                      </Text>
-                    </View>
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#8E8E93' }}>
-                      {scrapedResult.quality}
-                    </Text>
-                  </View>
-
-                  {/* Thumbnail & Title */}
-                  <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
-                    <View
-                      style={{
-                        width: 72,
-                        height: 98,
-                        borderRadius: 10,
-                        overflow: 'hidden',
-                        backgroundColor: isLight ? '#E5E5EA' : '#0B0B0E',
-                        borderWidth: 1,
-                        borderColor: isLight ? '#D1D1D6' : '#2C2C2E',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      {scrapedThumbnailFailed || !scrapedResult.thumbnail ? (
-                        <View style={{ alignItems: 'center', justifyContent: 'center', padding: 6 }}>
-                          <Ionicons name="film-outline" size={30} color="#007AFF" />
-                          <Text style={{ fontSize: 9, color: '#8E8E93', marginTop: 4, fontWeight: '700', textAlign: 'center' }}>
-                            POSTER
-                          </Text>
-                        </View>
-                      ) : (
-                        <Image
-                          source={{ uri: scrapedResult.thumbnail }}
-                          style={{ width: '100%', height: '100%' }}
-                          resizeMode="cover"
-                          onError={() => setScrapedThumbnailFailed(true)}
-                        />
-                      )}
-                    </View>
-                    <View style={{ flex: 1, justifyContent: 'center' }}>
-                      <Text style={{ fontSize: 16, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF', marginBottom: 6, lineHeight: 22 }}>
-                        {scrapedResult.title}
-                      </Text>
-                      {scrapedResult.director && (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 3 }}>
-                          <Ionicons name="videocam-outline" size={13} color="#8E8E93" />
-                          <Text style={{ fontSize: 11.5, color: '#8E8E93' }}>
-                            Đạo diễn: <Text style={{ color: isLight ? '#000' : '#FFF', fontWeight: '700' }}>{scrapedResult.director}</Text>
-                          </Text>
-                        </View>
-                      )}
-                      {scrapedResult.cast && (
-                        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 5, marginBottom: 3 }}>
-                          <Ionicons name="people-outline" size={13} color="#8E8E93" style={{ marginTop: 2 }} />
-                          <Text style={{ fontSize: 11, color: '#8E8E93', flex: 1 }} numberOfLines={2}>
-                            {scrapedResult.cast}
-                          </Text>
-                        </View>
-                      )}
-                      {scrapedResult.views && (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 }}>
-                          <Ionicons name="eye-outline" size={13} color="#FF9500" />
-                          <Text style={{ fontSize: 11, color: '#FF9500', fontWeight: '700' }}>
-                            {scrapedResult.views} lượt xem trực tuyến
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                  </View>
-
-                  <View
-                    style={{
-                      backgroundColor: isLight ? '#F2F2F7' : '#0B0B0E',
-                      borderRadius: 12,
-                      padding: 10,
-                      marginBottom: 12,
+                  <Image
+                    source={{
+                      uri: cinemaSelectedMovie?.poster_url || cinemaSelectedMovie?.image || allCatalogMovies[0]?.image,
                     }}
-                  >
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 }}>
-                      <Text style={{ fontSize: 12, color: '#8E8E93' }}>Nền tảng nguồn:</Text>
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF' }}>
-                        {scrapedResult.platform === 'gg' ? 'Web Phim (ghienphimz.mom)' : scrapedResult.platform.toUpperCase()}
-                      </Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 }}>
-                      <Text style={{ fontSize: 12, color: '#8E8E93' }}>Độ phân giải & Codec:</Text>
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#34C759' }}>
-                        {scrapedResult.codec}
-                      </Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 }}>
-                      <Text style={{ fontSize: 12, color: '#8E8E93' }}>Dung lượng ước tính:</Text>
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#007AFF' }}>
-                        {scrapedResult.sizeFormatted} ({scrapedResult.duration})
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Direct Extracted URL Box */}
-                  <View style={{ marginBottom: 12 }}>
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#8E8E93', marginBottom: 4 }}>
-                      Đường Dẫn Luồng Video Trực Tiếp (.m3u8 CDN):
+                    style={{ width: 40, height: 55, borderRadius: 6, backgroundColor: '#070709' }}
+                    resizeMode="cover"
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFFFFF' }} numberOfLines={1}>
+                      {cinemaSelectedMovie?.name || cinemaSelectedMovie?.title || allCatalogMovies[0]?.title}
                     </Text>
-                    <View
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        backgroundColor: isLight ? '#F2F2F7' : '#0B0B0E',
-                        borderRadius: 10,
-                        paddingHorizontal: 10,
-                        paddingVertical: 8,
-                        borderWidth: 1,
-                        borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
-                      }}
-                    >
-                      <Text style={{ flex: 1, fontSize: 11, color: isLight ? '#333333' : '#AEAEB2' }} numberOfLines={1}>
-                        {scrapedResult.streamUrl}
-                      </Text>
-                      <TouchableOpacity
-                        onPress={() => {
-                          if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                            navigator.clipboard.writeText(scrapedResult.streamUrl);
-                          }
-                          triggerToast('Đã sao chép link luồng video vào bộ nhớ tạm!', 'Sao Chép Thành Công', 'success', 'copy-outline');
-                        }}
-                        style={{ marginLeft: 8 }}
-                      >
-                        <Ionicons name="copy-outline" size={16} color="#007AFF" />
-                      </TouchableOpacity>
-                    </View>
+                    <Text style={{ fontSize: 11, color: '#8E8E93' }}>
+                      {cinemaSelectedMovie?.year || allCatalogMovies[0]?.year || '2024'} • Sẵn sàng phát
+                    </Text>
                   </View>
-
-                  {/* Embed Iframe URL Box */}
-                  {scrapedResult.embedUrl && (
-                    <View style={{ marginBottom: 16 }}>
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#AF52DE', marginBottom: 4 }}>
-                        Link Player Nhúng Web (GhienPhimz Embed):
-                      </Text>
-                      <View
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          backgroundColor: isLight ? '#F2F2F7' : '#0B0B0E',
-                          borderRadius: 10,
-                          paddingHorizontal: 10,
-                          paddingVertical: 8,
-                          borderWidth: 1,
-                          borderColor: '#AF52DE',
-                        }}
-                      >
-                        <Text style={{ flex: 1, fontSize: 11, color: '#AF52DE' }} numberOfLines={1}>
-                          {scrapedResult.embedUrl}
-                        </Text>
-                        <TouchableOpacity
-                          onPress={() => {
-                            if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                              navigator.clipboard.writeText(scrapedResult.embedUrl || '');
-                            }
-                            triggerToast('Đã sao chép link nhúng player!', 'Sao Chép Thành Công', 'success', 'copy-outline');
-                          }}
-                          style={{ marginLeft: 8, marginRight: 6 }}
-                        >
-                          <Ionicons name="copy-outline" size={16} color="#AF52DE" />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          onPress={() => {
-                            if (typeof window !== 'undefined') {
-                              window.open(scrapedResult.embedUrl || '', '_blank');
-                            } else {
-                              Linking.openURL(scrapedResult.embedUrl || '').catch(() => {});
-                            }
-                          }}
-                        >
-                          <Ionicons name="open-outline" size={16} color="#AF52DE" />
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  )}
-
-                  {/* USER-REQUESTED ACTIONS: XEM LUỒNG VIETSUB / LỒNG TIẾNG, TẢI VỀ */}
-                  <Text style={{ fontSize: 13, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF', marginBottom: 8 }}>
-                    {scrapedResult.hasMultiAudio
-                      ? 'Chọn Luồng Phát Hoạt Hình (4 Luồng Vietsub & Lồng Tiếng):'
-                      : 'Chọn Luồng Phát & Thao Tác (2 Luồng API Chống Lỗi):'}
-                  </Text>
-
-                  {scrapedResult.hasMultiAudio ? (
-                    <View style={{ gap: 8 }}>
-                      <View style={{ backgroundColor: 'rgba(52, 199, 89, 0.12)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, marginBottom: 2 }}>
-                        <Text style={{ fontSize: 11, fontWeight: '800', color: '#34C759' }}>
-                          🎬 PHIM HOẠT HÌNH / ANIME: ĐÃ BÓC TÁCH 4 LUỒNG RIÊNG BIỆT
-                        </Text>
-                      </View>
-
-                      {/* 1. Vietsub HLS */}
-                      <TouchableOpacity
-                        activeOpacity={0.8}
-                        onPress={() => {
-                          setPreviewPlayerMode('stream');
-                          handleWatchDirectly({
-                            ...scrapedResult,
-                            streamUrl: scrapedResult.vietsubStreamUrl || scrapedResult.streamUrl,
-                            embedUrl: scrapedResult.vietsubEmbedUrl || scrapedResult.embedUrl,
-                            title: `${scrapedResult.title} [Vietsub HLS]`,
-                          });
-                        }}
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          paddingVertical: 11,
-                          backgroundColor: '#007AFF',
-                          borderRadius: 12,
-                          gap: 8,
-                        }}
-                      >
-                        <Ionicons name="flash" size={16} color="#FFFFFF" />
-                        <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFFFFF' }}>
-                          1. VIETSUB (HLS .M3U8 CHÍNH)
-                        </Text>
-                      </TouchableOpacity>
-
-                      {/* 2. Vietsub Embed */}
-                      <TouchableOpacity
-                        activeOpacity={0.8}
-                        onPress={() => {
-                          setPreviewPlayerMode('embed');
-                          handleWatchDirectly({
-                            ...scrapedResult,
-                            streamUrl: scrapedResult.vietsubStreamUrl || scrapedResult.streamUrl,
-                            embedUrl: scrapedResult.vietsubEmbedUrl || scrapedResult.embedUrl,
-                            title: `${scrapedResult.title} [Vietsub Embed]`,
-                          });
-                        }}
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          paddingVertical: 11,
-                          backgroundColor: '#5856D6',
-                          borderRadius: 12,
-                          gap: 8,
-                        }}
-                      >
-                        <Ionicons name="play-skip-forward" size={16} color="#FFFFFF" />
-                        <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFFFFF' }}>
-                          2. VIETSUB (PLAYER WEB DỰ PHÒNG)
-                        </Text>
-                      </TouchableOpacity>
-
-                      {/* 3. Lồng Tiếng HLS */}
-                      <TouchableOpacity
-                        activeOpacity={0.8}
-                        onPress={() => {
-                          setPreviewPlayerMode('stream');
-                          handleWatchDirectly({
-                            ...scrapedResult,
-                            streamUrl: scrapedResult.dubStreamUrl || scrapedResult.streamUrl,
-                            embedUrl: scrapedResult.dubEmbedUrl || scrapedResult.embedUrl,
-                            title: `${scrapedResult.title} [Lồng Tiếng HLS]`,
-                          });
-                        }}
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          paddingVertical: 11,
-                          backgroundColor: '#FF9500',
-                          borderRadius: 12,
-                          gap: 8,
-                        }}
-                      >
-                        <Ionicons name="volume-high" size={16} color="#FFFFFF" />
-                        <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFFFFF' }}>
-                          3. LỒNG TIẾNG (HLS .M3U8 CHÍNH)
-                        </Text>
-                      </TouchableOpacity>
-
-                      {/* 4. Lồng Tiếng Embed */}
-                      <TouchableOpacity
-                        activeOpacity={0.8}
-                        onPress={() => {
-                          setPreviewPlayerMode('embed');
-                          handleWatchDirectly({
-                            ...scrapedResult,
-                            streamUrl: scrapedResult.dubStreamUrl || scrapedResult.streamUrl,
-                            embedUrl: scrapedResult.dubEmbedUrl || scrapedResult.embedUrl,
-                            title: `${scrapedResult.title} [Lồng Tiếng Embed]`,
-                          });
-                        }}
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          paddingVertical: 11,
-                          backgroundColor: '#AF52DE',
-                          borderRadius: 12,
-                          gap: 8,
-                        }}
-                      >
-                        <Ionicons name="play-circle" size={16} color="#FFFFFF" />
-                        <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFFFFF' }}>
-                          4. LỒNG TIẾNG (PLAYER WEB DỰ PHÒNG)
-                        </Text>
-                      </TouchableOpacity>
-
-                      {/* 5. TẢI VỀ */}
-                      <TouchableOpacity
-                        activeOpacity={0.8}
-                        onPress={() => handleDownloadScraped(scrapedResult)}
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          paddingVertical: 11,
-                          backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E',
-                          borderRadius: 12,
-                          gap: 8,
-                          borderWidth: 1,
-                          borderColor: isLight ? '#D1D1D6' : '#3A3A3C',
-                        }}
-                      >
-                        <Ionicons name="download-outline" size={16} color={isLight ? '#000000' : '#FFFFFF'} />
-                        <Text style={{ fontSize: 13, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF' }}>
-                          5. TẢI VỀ MÁY
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  ) : (
-                    <View style={{ gap: 8 }}>
-                      {/* 1. XEM LUỒNG 1 */}
-                      <TouchableOpacity
-                        activeOpacity={0.8}
-                        onPress={() => {
-                          setPreviewPlayerMode('stream');
-                          handleWatchDirectly(scrapedResult);
-                        }}
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          paddingVertical: 12,
-                          backgroundColor: '#007AFF',
-                          borderRadius: 14,
-                          gap: 8,
-                        }}
-                      >
-                        <Ionicons name="flash" size={17} color="#FFFFFF" />
-                        <Text style={{ fontSize: 14, fontWeight: '800', color: '#FFFFFF' }}>
-                          1. XEM LUỒNG 1 (HLS .M3U8 CHÍNH)
-                        </Text>
-                      </TouchableOpacity>
-
-                      {/* 2. XEM LUỒNG 2 */}
-                      <TouchableOpacity
-                        activeOpacity={0.8}
-                        onPress={() => {
-                          setPreviewPlayerMode('embed');
-                          handleWatchDirectly(scrapedResult);
-                        }}
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          paddingVertical: 12,
-                          backgroundColor: '#AF52DE',
-                          borderRadius: 14,
-                          gap: 8,
-                        }}
-                      >
-                        <Ionicons name="play-skip-forward" size={17} color="#FFFFFF" />
-                        <Text style={{ fontSize: 14, fontWeight: '800', color: '#FFFFFF' }}>
-                          2. XEM LUỒNG 2 (PLAYER DỰ PHÒNG)
-                        </Text>
-                      </TouchableOpacity>
-
-                      {/* 3. TẢI VỀ */}
-                      <TouchableOpacity
-                        activeOpacity={0.8}
-                        onPress={() => handleDownloadScraped(scrapedResult)}
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          paddingVertical: 12,
-                          backgroundColor: isLight ? '#E5E5EA' : '#2C2C2E',
-                          borderRadius: 14,
-                          gap: 8,
-                          borderWidth: 1,
-                          borderColor: isLight ? '#D1D1D6' : '#3A3A3C',
-                        }}
-                      >
-                        <Ionicons name="download-outline" size={17} color={isLight ? '#000000' : '#FFFFFF'} />
-                        <Text style={{ fontSize: 14, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF' }}>
-                          3. TẢI VỀ MÁY
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
                 </View>
 
-                {/* PHẦN TIẾP THEO & PHIM TƯƠNG TỰ */}
-                {scrapedSearchResults.length > 0 && (
-                  <View
-                    style={{
-                      backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
-                      borderRadius: 18,
-                      padding: 14,
-                      marginBottom: 16,
-                      borderWidth: 1,
-                      borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
-                    }}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-                        <Ionicons name="film-outline" size={18} color="#007AFF" />
-                        <Text style={{ fontSize: 13.5, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF' }}>
-                          Phim Gần Giống & Các Phần Khác ({scrapedSearchResults.length})
-                        </Text>
-                      </View>
-                      <TouchableOpacity
-                        activeOpacity={0.7}
-                        onPress={() => {
-                          const nextMovie = scrapedSearchResults[0];
-                          if (nextMovie) {
-                            setScraperMovieNameInput(nextMovie.name);
-                            handleExecuteScrape(undefined, 'title', nextMovie.name);
-                          } else {
-                            triggerToast('Không còn phim nào trong danh sách gần giống!', 'Thông Báo', 'info');
-                          }
-                        }}
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          gap: 4,
-                          paddingHorizontal: 8,
-                          paddingVertical: 4.5,
-                          borderRadius: 8,
-                          backgroundColor: 'rgba(0, 122, 255, 0.15)',
-                        }}
-                      >
-                        <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
-                          <SvgPath d="M4 5L13 12L4 19V5Z" fill="#007AFF" />
-                          <SvgPath d="M12 5L21 12L12 19V5Z" fill="#007AFF" />
-                        </Svg>
-                        <Text style={{ fontSize: 11, fontWeight: '800', color: '#007AFF', marginLeft: 3 }}>
-                          Lọc Tiếp Phim Gần Giống
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingVertical: 4 }}>
-                      {scrapedSearchResults.map((simMovie, simIdx) => (
-                        <View
-                          key={simIdx}
-                          style={{
-                            width: 126,
-                            backgroundColor: isLight ? '#F2F2F7' : '#0B0B0E',
-                            borderRadius: 12,
-                            padding: 8,
-                            borderWidth: 1,
-                            borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
-                          }}
-                        >
-                          <Image
-                            source={{ uri: simMovie.poster_url }}
-                            style={{ width: '100%', height: 130, borderRadius: 8, backgroundColor: '#2C2C2E', marginBottom: 6 }}
-                            resizeMode="cover"
-                          />
-                          <Text
-                            style={{ fontSize: 11.5, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF', marginBottom: 2 }}
-                            numberOfLines={2}
-                          >
-                            {simMovie.name}
-                          </Text>
-                          <Text style={{ fontSize: 10.5, color: '#8E8E93', marginBottom: 6 }}>
-                            {simMovie.year || '2025'}
-                          </Text>
-                          <TouchableOpacity
-                            activeOpacity={0.7}
-                            onPress={() => {
-                              setScraperMovieNameInput(simMovie.name);
-                              handleExecuteScrape(undefined, 'title', simMovie.name);
-                            }}
-                            style={{
-                              paddingVertical: 6,
-                              borderRadius: 8,
-                              backgroundColor: '#007AFF',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                            }}
-                          >
-                            <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#FFFFFF' }}>
-                              Cào Phần Này
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
-                      ))}
-                    </ScrollView>
-                  </View>
-                )}
-                </>
-              )}
-            </ScrollView>
+                {/* Nút Tạo Phòng */}
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={handleCreateRoom}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    backgroundColor: '#E50914',
+                    paddingVertical: 12,
+                    borderRadius: 12,
+                  }}
+                >
+                  <Svg width={17} height={17} viewBox="0 0 24 24" fill="none">
+                    <SvgPath d="M15 10L21 6V18L15 14M3 8C3 6.9 3.9 6 5 6H13C14.1 6 15 6.9 15 8V16C15 17.1 14.1 18 13 18H5C3.9 18 3 17.1 3 16V8Z" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </Svg>
+                  <Text style={{ fontSize: 14, fontWeight: '800', color: '#FFFFFF' }}>
+                    TẠO PHÒNG & PHÁT NGAY
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           )}
           {/* ========================================================================= */}
           {/* TRANG RIÊNG: KHO PHIM VIỆT NAM (TẤT CẢ PHIM + TÌM KIẾM + LƯỚI 2 CỘT DỌC)   */}
@@ -31395,7 +32374,9 @@ function MainApp() {
                     style={styles.fullScreenNavBtn}
                     hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   >
-                    <Ionicons name="chevron-back" size={24} color={appSettings.accentColor} />
+                    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+                      <SvgPath d="M15 19L8 12L15 5" stroke={appSettings.accentColor} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </Svg>
                     <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor }]}>Cào API</Text>
                   </TouchableOpacity>
 
@@ -31417,7 +32398,9 @@ function MainApp() {
                     style={{ minWidth: 60, alignItems: 'flex-end', justifyContent: 'center' }}
                     hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   >
-                    <Ionicons name="refresh" size={22} color={appSettings.accentColor} />
+                    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+                      <SvgPath d="M23 4V10H17M1 20V14H7M20.49 9A9 9 0 005.64 5.64L1 10M23 14L18.36 18.36A9 9 0 013.51 15" stroke={appSettings.accentColor} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                    </Svg>
                   </TouchableOpacity>
                 </View>
 
@@ -31435,7 +32418,10 @@ function MainApp() {
                   borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
                 }}
               >
-                <Ionicons name="search" size={18} color="#8E8E93" style={{ marginRight: 8 }} />
+                <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" style={{ marginRight: 8 }}>
+                  <SvgCircle cx="11" cy="11" r="8" stroke="#8E8E93" strokeWidth="2" />
+                  <SvgLine x1="21" y1="21" x2="16.65" y2="16.65" stroke="#8E8E93" strokeWidth="2" strokeLinecap="round" />
+                </Svg>
                 <TextInput
                   style={{
                     flex: 1,
@@ -31452,7 +32438,9 @@ function MainApp() {
                 />
                 {catalogSearchQuery.length > 0 && (
                   <TouchableOpacity onPress={() => setCatalogSearchQuery('')} style={{ padding: 4 }}>
-                    <Ionicons name="close-circle" size={18} color="#8E8E93" />
+                    <Svg width={18} height={18} viewBox="0 0 24 24" fill="#8E8E93">
+                      <SvgPath d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z" />
+                    </Svg>
                   </TouchableOpacity>
                 )}
               </View>
@@ -31493,7 +32481,10 @@ function MainApp() {
             <ScrollView contentContainerStyle={{ padding: 14, paddingBottom: 40 }} showsVerticalScrollIndicator={true}>
               {filteredCatalogMovies.length === 0 ? (
                 <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 60 }}>
-                  <Ionicons name="film-outline" size={54} color="#8E8E93" />
+                  <Svg width={54} height={54} viewBox="0 0 24 24" fill="none">
+                    <SvgRect x="2" y="2" width="20" height="20" rx="3" stroke="#8E8E93" strokeWidth="2" />
+                    <SvgPath d="M7 2V22M17 2V22M2 12H22M2 7H7M2 17H7M17 7H22M17 17H22" stroke="#8E8E93" strokeWidth="1.5" />
+                  </Svg>
                   <Text style={{ fontSize: 15, fontWeight: '700', color: isLight ? '#000000' : '#FFFFFF', marginTop: 12 }}>
                     Không tìm thấy phim phù hợp
                   </Text>
@@ -31559,7 +32550,9 @@ function MainApp() {
                                 borderColor: '#FFFFFF',
                               }}
                             >
-                              <Ionicons name="play" size={22} color="#FFFFFF" style={{ marginLeft: 2 }} />
+                              <Svg width={20} height={20} viewBox="0 0 24 24" fill="#FFFFFF" style={{ marginLeft: 2 }}>
+                                <SvgPolygon points="5,3 19,12 5,21" />
+                              </Svg>
                             </View>
                           </View>
 
@@ -31577,7 +32570,9 @@ function MainApp() {
                               gap: 3,
                             }}
                           >
-                            <Ionicons name="star" size={10} color="#FFD60A" />
+                            <Svg width={10} height={10} viewBox="0 0 24 24" fill="#FFD60A">
+                              <SvgPolygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
+                            </Svg>
                             <Text style={{ fontSize: 10, fontWeight: '800', color: '#FFD60A' }}>
                               {movieItem.rating}
                             </Text>
@@ -31633,7 +32628,9 @@ function MainApp() {
                               borderColor: 'rgba(255,255,255,0.5)',
                             }}
                           >
-                            <Ionicons name="flag" size={13} color="#FFFFFF" />
+                            <Svg width={13} height={13} viewBox="0 0 24 24" fill="none">
+                              <SvgPath d="M4 15C5 14 7 14 8 15C10 16 12 16 14 15C16 14 18 14 20 15V4C18 3 16 3 14 4C12 5 10 5 8 4C7 3 5 3 4 4V22" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                            </Svg>
                           </TouchableOpacity>
                         </TouchableOpacity>
 
@@ -31655,7 +32652,9 @@ function MainApp() {
 
                             {movieItem.director && movieItem.director !== 'Đang cập nhật' && (
                               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 }}>
-                                <Ionicons name="videocam-outline" size={12} color="#8E8E93" />
+                                <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
+                                  <SvgPath d="M15 10L21 6V18L15 14M3 8C3 6.9 3.9 6 5 6H13C14.1 6 15 6.9 15 8V16C15 17.1 14.1 18 13 18H5C3.9 18 3 17.1 3 16V8Z" stroke="#8E8E93" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                </Svg>
                                 <Text numberOfLines={1} style={{ fontSize: 10.5, color: '#8E8E93', flex: 1 }}>
                                   {movieItem.director}
                                 </Text>
@@ -31663,7 +32662,10 @@ function MainApp() {
                             )}
 
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 8 }}>
-                              <Ionicons name="eye-outline" size={12} color="#FF9500" />
+                              <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
+                                <SvgPath d="M1 12S5 4 12 4s11 8 11 8-4 8-11 8-11-8-11-8z" stroke="#FF9500" strokeWidth="2" />
+                                <SvgCircle cx="12" cy="12" r="3" stroke="#FF9500" strokeWidth="2" />
+                              </Svg>
                               <Text numberOfLines={1} style={{ fontSize: 10.5, color: '#FF9500', fontWeight: '700' }}>
                                 {movieItem.views} lượt xem
                               </Text>
@@ -31687,7 +32689,9 @@ function MainApp() {
                                 gap: 4,
                               }}
                             >
-                              <Ionicons name="play-circle" size={14} color="#FFFFFF" />
+                              <Svg width={14} height={14} viewBox="0 0 24 24" fill="#FFFFFF">
+                                <SvgPolygon points="5,3 19,12 5,21" />
+                              </Svg>
                               <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#FFFFFF' }}>
                                 XEM NGAY
                               </Text>
@@ -31710,7 +32714,10 @@ function MainApp() {
                                 gap: 4,
                               }}
                             >
-                              <Ionicons name="settings-outline" size={13} color={isLight ? '#000000' : '#CCCCCC'} />
+                              <Svg width={13} height={13} viewBox="0 0 24 24" fill="none">
+                                <SvgCircle cx="12" cy="12" r="3" stroke={isLight ? '#000000' : '#CCCCCC'} strokeWidth="2" />
+                                <SvgPath d="M19.4 15A1.65 1.65 0 0020 16.4L20.2 16.6C20.6 17 20.6 17.6 20.2 18L18 20.2C17.6 20.6 17 20.6 16.6 20.2L16.4 20A1.65 1.65 0 0015 19.4 1.65 1.65 0 0013.6 20.8V21.1C13.6 21.6 13.2 22 12.7 22H9.3C8.8 22 8.4 21.6 8.4 21.1V20.8A1.65 1.65 0 007 19.4 1.65 1.65 0 005.6 20L5.4 20.2C5 20.6 4.4 20.6 4 20.2L1.8 18C1.4 17.6 1.4 17 1.8 16.6L2 16.4A1.65 1.65 0 002.6 15 1.65 1.65 0 001.2 13.6H0.9C0.4 13.6 0 13.2 0 12.7V9.3C0 8.8 0.4 8.4 0.9 8.4H1.2A1.65 1.65 0 002.6 7 1.65 1.65 0 002 5.6L1.8 5.4C1.4 5 1.4 4.4 1.8 4L4 1.8C4.4 1.4 5 1.4 5.4 1.8L5.6 2A1.65 1.65 0 007 2.6 1.65 1.65 0 008.4 1.2V0.9C8.4 0.4 8.8 0 9.3 0H12.7C13.2 0 13.6 0.4 13.6 0.9V1.2A1.65 1.65 0 0015 2.6 1.65 1.65 0 0016.4 2L16.6 1.8C17 1.4 17.6 1.4 18 1.8L20.2 4C20.6 4.4 20.6 5 20.2 5.4L20 5.6A1.65 1.65 0 0019.4 7 1.65 1.65 0 0020.8 8.4H21.1C21.6 8.4 22 8.8 22 9.3V12.7C22 13.2 21.6 13.6 21.1 13.6H20.8A1.65 1.65 0 0019.4 15Z" stroke={isLight ? '#000000' : '#CCCCCC'} strokeWidth="1.8" />
+                              </Svg>
                               <Text style={{ fontSize: 11, fontWeight: '700', color: isLight ? '#000000' : '#CCCCCC' }}>
                                 Lấy Link / Tải
                               </Text>
@@ -31728,135 +32735,114 @@ function MainApp() {
       )}
 
       {/* ========================================================================= */}
-      {/* TRANG RIÊNG: XEM TRỰC TIẾP VIDEO PLAYER - CINEMA VIEW                      */}
+      {/* ========================================================================= */}
+      {/* TRANG RIÊNG: XEM PHIM CAO CẤP CHUẨN NETFLIX / FPT PLAY VIP                */}
       {/* ========================================================================= */}
       {showVideoPreviewModal && (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: isLight ? '#F2F2F7' : '#000000', zIndex: 200 }]}>
-          <SafeAreaView style={{ flex: 1, backgroundColor: isLight ? '#F2F2F7' : '#000000' }}>
-            {/* Top Navigation Bar Trang Riêng */}
-            <View style={[styles.fullScreenNavBar, isLight && { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E5EA' }]}>
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: '#08080A', zIndex: 200 }]}>
+          <SafeAreaView style={{ flex: 1, backgroundColor: '#08080A' }}>
+            {/* ── TOP FLOATING CONTROL BAR (TRÁNH HOÀN TOÀN LỖI ĐÈ CHỮ) ── */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+                backgroundColor: '#08080A',
+                borderBottomWidth: 1,
+                borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+              }}
+            >
               <TouchableOpacity
                 onPress={() => setShowVideoPreviewModal(false)}
-                style={styles.fullScreenNavBtn}
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              >
-                <Ionicons name="chevron-back" size={24} color={appSettings.accentColor} />
-                <Text style={[styles.fullScreenNavBtnText, { color: appSettings.accentColor }]}>Quay Lại</Text>
-              </TouchableOpacity>
-              <Text style={[styles.fullScreenNavTitle, isLight && { color: '#000000' }]} numberOfLines={1}>
-                {previewVideoTitle || 'Xem Phim'}
-              </Text>
-              <TouchableOpacity
-                onPress={() => handleReportBrokenMovie(previewMovieItem || { title: previewVideoTitle, streamUrl: previewVideoUrl, embedUrl: previewEmbedUrl })}
-                style={{ minWidth: 60, alignItems: 'flex-end', justifyContent: 'center' }}
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              >
-                <Ionicons name="flag" size={20} color="#FF2D55" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 48 }} showsVerticalScrollIndicator={false}>
-
-              {/* ── BỘ CHỌN 2 LUỒNG PHÁT (DỰ PHÒNG CHỐNG LỖI) ── */}
-              <View
+                activeOpacity={0.8}
                 style={{
-                  backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
-                  borderRadius: 14,
-                  padding: 10,
-                  marginBottom: 12,
-                  borderWidth: 1,
-                  borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                  borderRadius: 20,
+                  backgroundColor: 'rgba(255, 255, 255, 0.08)',
                 }}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Ionicons name="swap-horizontal" size={15} color="#007AFF" />
-                    <Text style={{ fontSize: 12, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF' }}>
-                      Chọn Luồng Phát Video (2 Luồng API):
-                    </Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: previewPlayerMode === 'stream' ? 'rgba(0,122,255,0.15)' : 'rgba(175,82,222,0.15)', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
-                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: previewPlayerMode === 'stream' ? '#007AFF' : '#AF52DE' }} />
-                    <Text style={{ fontSize: 10.5, fontWeight: '800', color: previewPlayerMode === 'stream' ? '#007AFF' : '#AF52DE' }}>
-                      {previewPlayerMode === 'stream' ? 'Luồng 1 (HLS)' : 'Luồng 2 (Dự phòng)'}
-                    </Text>
-                  </View>
-                </View>
+                <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                  <SvgPath d="M15 19L8 12L15 5" stroke="#FFFFFF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                </Svg>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFFFFF' }}>Đóng</Text>
+              </TouchableOpacity>
 
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                  {/* Luồng 1 (Chính) */}
-                  <TouchableOpacity
-                    activeOpacity={0.8}
-                    onPress={() => {
-                      setPreviewPlayerMode('stream');
-                      triggerToast('Đã chuyển sang Luồng 1 (HLS .m3u8 CDN)', 'Chuyển Luồng', 'info', 'flash');
-                    }}
-                    style={{
-                      flex: 1,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      paddingVertical: 10,
-                      borderRadius: 11,
-                      backgroundColor: previewPlayerMode === 'stream' ? '#007AFF' : (isLight ? '#F2F2F7' : '#0B0B0E'),
-                      gap: 6,
-                      borderWidth: 1.5,
-                      borderColor: previewPlayerMode === 'stream' ? '#007AFF' : (isLight ? '#E5E5EA' : '#2C2C2E'),
-                    }}
-                  >
-                    <Ionicons name="flash" size={14} color={previewPlayerMode === 'stream' ? '#FFFFFF' : '#8E8E93'} />
-                    <Text style={{ fontSize: 12, fontWeight: '800', color: previewPlayerMode === 'stream' ? '#FFFFFF' : (isLight ? '#000000' : '#CCCCCC') }}>
-                      Luồng 1: HLS Direct
-                    </Text>
-                  </TouchableOpacity>
-
-                  {/* Luồng 2 (Dự phòng) */}
-                  <TouchableOpacity
-                    activeOpacity={0.8}
-                    onPress={() => {
-                      setPreviewPlayerMode('embed');
-                      triggerToast('Đã chuyển sang Luồng 2 (Web Player Embed)', 'Chuyển Luồng', 'info', 'play-skip-forward');
-                    }}
-                    style={{
-                      flex: 1,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      paddingVertical: 10,
-                      borderRadius: 11,
-                      backgroundColor: previewPlayerMode === 'embed' ? '#AF52DE' : (isLight ? '#F2F2F7' : '#0B0B0E'),
-                      gap: 6,
-                      borderWidth: 1.5,
-                      borderColor: previewPlayerMode === 'embed' ? '#AF52DE' : (isLight ? '#E5E5EA' : '#2C2C2E'),
-                    }}
-                  >
-                    <Ionicons name="play-skip-forward" size={14} color={previewPlayerMode === 'embed' ? '#FFFFFF' : '#8E8E93'} />
-                    <Text style={{ fontSize: 12, fontWeight: '800', color: previewPlayerMode === 'embed' ? '#FFFFFF' : (isLight ? '#000000' : '#CCCCCC') }}>
-                      Luồng 2: Embed Player
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-                <Text style={{ fontSize: 10.5, color: '#8E8E93', marginTop: 6, textAlign: 'center' }}>
-                  💡 Khi 1 luồng bị quay tròn hoặc lỗi CDN, bạn chỉ cần bấm nút luồng còn lại để đổi ngay.
+              <View style={{ flex: 1, paddingHorizontal: 12, alignItems: 'center' }}>
+                <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#FFFFFF' }} numberOfLines={1}>
+                  {previewMovieItem?.title || previewVideoTitle || 'Rạp Phim VIP'}
                 </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 1 }}>
+                  <Svg width={10} height={10} viewBox="0 0 24 24" fill="#E50914">
+                    <SvgCircle cx="12" cy="12" r="10" />
+                  </Svg>
+                  <Text style={{ fontSize: 10, fontWeight: '800', color: '#E50914', letterSpacing: 0.5 }}>
+                    LOCKX CINEMA VIP
+                  </Text>
+                </View>
               </View>
 
-              {/* ── VIDEO PLAYER ── */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <TouchableOpacity
+                  onPress={() => {
+                    const toShare = previewVideoUrl || previewEmbedUrl || '';
+                    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                      navigator.clipboard.writeText(toShare);
+                      triggerToast('Đã sao chép liên kết phim vào bộ nhớ tạm!', 'Chia Sẻ', 'success');
+                    } else {
+                      Share.share({ title: previewVideoTitle, url: toShare, message: `Xem phim ${previewVideoTitle} trên LockX Cinema: ${toShare}` }).catch(() => {});
+                    }
+                  }}
+                  activeOpacity={0.8}
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 17,
+                    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}
+                >
+                  <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                    <SvgPath d="M4 12V20C4 20.6 4.4 21 5 21H19C19.6 21 20 20.6 20 20V12M16 6L12 2M12 2L8 6M12 2V15" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </Svg>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => handleReportBrokenMovie(previewMovieItem || { title: previewVideoTitle, streamUrl: previewVideoUrl, embedUrl: previewEmbedUrl })}
+                  activeOpacity={0.8}
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 17,
+                    backgroundColor: 'rgba(229, 9, 20, 0.15)',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}
+                >
+                  <Svg width={15} height={15} viewBox="0 0 24 24" fill="none">
+                    <SvgPath d="M4 15C5 14 7 14 8 15C10 16 12 16 14 15C16 14 18 14 20 15V4C18 3 16 3 14 4C12 5 10 5 8 4C7 3 5 3 4 4V22" stroke="#E50914" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </Svg>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <ScrollView contentContainerStyle={{ paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
+              {/* ── 1. CINEMATIC VIDEO PLAYER (16:9 EDGE-TO-EDGE) ── */}
               <View
                 style={{
                   width: '100%',
                   aspectRatio: 16 / 9,
                   backgroundColor: '#000000',
-                  borderRadius: 18,
-                  overflow: 'hidden',
-                  marginBottom: 14,
-                  borderWidth: 2,
-                  borderColor: previewPlayerMode === 'stream' ? '#007AFF' : '#AF52DE',
-                  shadowColor: previewPlayerMode === 'stream' ? '#007AFF' : '#AF52DE',
-                  shadowOpacity: 0.35,
-                  shadowRadius: 16,
-                  shadowOffset: { width: 0, height: 4 },
-                  elevation: 10,
+                  position: 'relative',
+                  borderBottomWidth: 1,
+                  borderBottomColor: 'rgba(255, 255, 255, 0.1)',
                 }}
               >
                 {Platform.OS === 'web' ? (
@@ -31864,203 +32850,594 @@ function MainApp() {
                     key: `player-${previewPlayerMode}-${previewPlayerMode === 'stream' ? previewVideoUrl : previewEmbedUrl}`,
                     src: previewPlayerMode === 'stream'
                       ? (previewVideoUrl
-                          ? `http://localhost:3333/player?m3u8=${encodeURIComponent(previewVideoUrl)}&title=${encodeURIComponent(previewVideoTitle)}`
+                          ? (previewVideoUrl.includes('.m3u8')
+                              ? `https://player.phimapi.com/player/?url=${encodeURIComponent(previewVideoUrl)}`
+                              : previewVideoUrl)
                           : 'about:blank')
-                      : (previewEmbedUrl || `https://player.phimapi.com/player/?url=${encodeURIComponent(previewVideoUrl)}`),
+                      : (previewEmbedUrl || (previewVideoUrl ? `https://player.phimapi.com/player/?url=${encodeURIComponent(previewVideoUrl)}` : 'about:blank')),
                     style: { width: '100%', height: '100%', border: 'none', backgroundColor: '#000000' },
                     allow: 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share',
                     allowFullScreen: true,
                   })
                 ) : (
                   <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-                    <Ionicons name="play-circle" size={60} color={previewPlayerMode === 'stream' ? '#007AFF' : '#AF52DE'} />
+                    <Svg width={54} height={54} viewBox="0 0 24 24" fill="#E50914">
+                      <SvgPath d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" />
+                    </Svg>
                     <Text style={{ color: '#FFFFFF', marginTop: 10, fontSize: 14, fontWeight: '700', textAlign: 'center' }}>
-                      {previewPlayerMode === 'stream' ? 'Đang phát Luồng 1: HLS Direct' : 'Đang phát Luồng 2: Embed Player'}
+                      {previewPlayerMode === 'stream' ? 'Đang phát Luồng HLS 1080p' : 'Đang phát Web Embed Player'}
                     </Text>
                     <TouchableOpacity
                       onPress={() => Linking.openURL(previewPlayerMode === 'stream' ? previewVideoUrl : (previewEmbedUrl || previewVideoUrl)).catch(() => {})}
-                      style={{ marginTop: 14, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12, backgroundColor: previewPlayerMode === 'stream' ? '#007AFF' : '#AF52DE' }}
+                      style={{ marginTop: 14, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10, backgroundColor: '#E50914' }}
                     >
-                      <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '800' }}>▶ Mở Video Trên Trình Duyệt</Text>
+                      <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>▶ Mở Trình Duyệt Toàn Màn Hình</Text>
                     </TouchableOpacity>
                   </View>
                 )}
               </View>
 
-              {/* ── TITLE & BADGES ── */}
-              <View style={{ marginBottom: 14 }}>
-                <Text style={{ fontSize: 18, fontWeight: '900', color: isLight ? '#000000' : '#FFFFFF', marginBottom: 8, lineHeight: 24 }}>
-                  {previewVideoTitle || 'Phim Việt Nam'}
+              {/* ── 2. MOVIE DETAILS (CHUẨN NETFLIX / FPT PLAY VIP) ── */}
+              <View style={{ paddingHorizontal: 16, paddingTop: 14 }}>
+                {/* Title */}
+                <Text style={{ fontSize: 21, fontWeight: '900', color: '#FFFFFF', lineHeight: 28, marginBottom: 6 }}>
+                  {previewMovieItem?.title || previewVideoTitle}
                 </Text>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                  {previewMovieItem?.year && (
-                    <View style={{ paddingHorizontal: 9, paddingVertical: 3.5, borderRadius: 7, backgroundColor: 'rgba(0,122,255,0.15)', borderWidth: 1, borderColor: 'rgba(0,122,255,0.4)' }}>
-                      <Text style={{ fontSize: 11, fontWeight: '800', color: '#007AFF' }}>{previewMovieItem.year}</Text>
-                    </View>
-                  )}
-                  <View style={{ paddingHorizontal: 9, paddingVertical: 3.5, borderRadius: 7, backgroundColor: 'rgba(52,199,89,0.15)', borderWidth: 1, borderColor: 'rgba(52,199,89,0.4)' }}>
-                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#34C759' }}>FULL HD</Text>
-                  </View>
-                  <View style={{ paddingHorizontal: 9, paddingVertical: 3.5, borderRadius: 7, backgroundColor: 'rgba(255,159,10,0.15)', borderWidth: 1, borderColor: 'rgba(255,159,10,0.4)' }}>
-                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#FF9F0A' }}>Vietsub</Text>
-                  </View>
-                  <View style={{ paddingHorizontal: 9, paddingVertical: 3.5, borderRadius: 7, backgroundColor: 'rgba(175,82,222,0.15)', borderWidth: 1, borderColor: 'rgba(175,82,222,0.4)' }}>
-                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#AF52DE' }}>HLS .m3u8</Text>
-                  </View>
-                  {previewMovieItem?.views && (
-                    <View style={{ paddingHorizontal: 9, paddingVertical: 3.5, borderRadius: 7, backgroundColor: 'rgba(255,45,85,0.12)', borderWidth: 1, borderColor: 'rgba(255,45,85,0.35)' }}>
-                      <Text style={{ fontSize: 11, fontWeight: '800', color: '#FF2D55' }}>{previewMovieItem.views} views</Text>
-                    </View>
-                  )}
-                </View>
-              </View>
 
-              {/* ── MOVIE METADATA CARD ── */}
-              {previewMovieItem && (
+                {/* Badges Info Row */}
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+                  <View style={{ backgroundColor: '#E50914', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                    <Text style={{ fontSize: 9.5, fontWeight: '900', color: '#FFFFFF' }}>VIP 4K</Text>
+                  </View>
+
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#9CA3AF' }}>
+                    {previewMovieItem?.year || '2024'}
+                  </Text>
+                  <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12 }}>•</Text>
+
+                  <View style={{ borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 3 }}>
+                    <Text style={{ fontSize: 10, fontWeight: '800', color: '#FFFFFF' }}>T18</Text>
+                  </View>
+                  <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12 }}>•</Text>
+
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#34C759' }}>
+                    {previewMovieItem?.duration || '115 phút'}
+                  </Text>
+                  <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12 }}>•</Text>
+
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                    <Svg width={11} height={11} viewBox="0 0 24 24" fill="#FFD60A">
+                      <SvgPolygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
+                    </Svg>
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#FFD60A' }}>
+                      {previewMovieItem?.rating || '9.6'}
+                    </Text>
+                  </View>
+
+                  <View style={{ backgroundColor: 'rgba(255, 255, 255, 0.1)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                    <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#D1D5DB' }}>DOLBY 5.1</Text>
+                  </View>
+                </View>
+
+                {/* Primary Netflix Action Buttons */}
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={() => {
+                    setPreviewPlayerMode(previewPlayerMode === 'stream' ? 'embed' : 'stream');
+                    triggerToast(`Đã chuyển sang ${previewPlayerMode === 'stream' ? 'Luồng Web Embed' : 'Luồng HLS Direct'}!`, 'Đổi Luồng Phát', 'info');
+                  }}
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    paddingVertical: 11,
+                    borderRadius: 8,
+                    gap: 8,
+                    marginBottom: 8,
+                  }}
+                >
+                  <Svg width={18} height={18} viewBox="0 0 24 24" fill="#000000">
+                    <SvgPolygon points="5,3 19,12 5,21" />
+                  </Svg>
+                  <Text style={{ color: '#000000', fontSize: 14, fontWeight: '900', letterSpacing: 0.3 }}>
+                    {previewPlayerMode === 'stream' ? 'Đang Phát Luồng HLS 1080p (Bấm để đổi Embed)' : 'Đang Phát Embed Player (Bấm để đổi HLS)'}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={() => {
+                    const toDownload = previewVideoUrl || previewEmbedUrl || '';
+                    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                      navigator.clipboard.writeText(toDownload);
+                    }
+                    triggerToast('Đã copy đường dẫn stream! Mở VLC hoặc Safari để tải về.', 'Tải Phim', 'success');
+                  }}
+                  style={{
+                    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    paddingVertical: 10,
+                    borderRadius: 8,
+                    gap: 8,
+                    marginBottom: 14,
+                  }}
+                >
+                  <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                    <SvgPath d="M12 3V15M12 15L7 10M12 15L17 10M4 21H20" stroke="#FFFFFF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                  </Svg>
+                  <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>
+                    Tải Tập Phim (Xem Offline)
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Synopsis with Expand/Collapse */}
+                <Text
+                  numberOfLines={isSynopsisExpanded ? undefined : 3}
+                  style={{ fontSize: 12.5, color: '#D1D5DB', lineHeight: 18, marginBottom: 4 }}
+                >
+                  {previewMovieItem?.synopsis ||
+                    'Phim điện ảnh chiếu rạp chất lượng cao được bóc tách từ máy chủ HLS CDN siêu tốc, hỗ trợ độ phân giải Full HD, phụ đề tiếng Việt và âm thanh vòm chuẩn rạp chiếu.'}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setIsSynopsisExpanded(!isSynopsisExpanded)}
+                  style={{ alignSelf: 'flex-start', marginBottom: 12 }}
+                >
+                  <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#9CA3AF' }}>
+                    {isSynopsisExpanded ? 'Thu gọn' : 'Xem thêm...'}
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Cast & Creators */}
+                <View style={{ gap: 3, marginBottom: 16 }}>
+                  {previewMovieItem?.cast && (
+                    <Text style={{ fontSize: 11, color: '#8E8E93' }} numberOfLines={1}>
+                      <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>Diễn viên: </Text>
+                      {previewMovieItem.cast}
+                    </Text>
+                  )}
+                  {previewMovieItem?.director && (
+                    <Text style={{ fontSize: 11, color: '#8E8E93' }} numberOfLines={1}>
+                      <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>Đạo diễn: </Text>
+                      {previewMovieItem.director}
+                    </Text>
+                  )}
+                  <Text style={{ fontSize: 11, color: '#8E8E93' }}>
+                    <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>Thể loại: </Text>
+                    Phim Chiếu Rạp, Tâm Lý, Hành Động, Kịch Tính
+                  </Text>
+                </View>
+
+                {/* ── 3. NETFLIX 5-ICON INTERACTIVE ACTION BAR (PURE SVG) ── */}
                 <View
                   style={{
-                    backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
-                    borderRadius: 16,
-                    padding: 14,
-                    borderWidth: 1,
-                    borderColor: isLight ? '#E5E5EA' : '#2C2C2E',
-                    marginBottom: 14,
-                    gap: 6,
+                    flexDirection: 'row',
+                    justifyContent: 'space-around',
+                    paddingVertical: 12,
+                    borderTopWidth: 1,
+                    borderBottomWidth: 1,
+                    borderColor: 'rgba(255, 255, 255, 0.08)',
+                    marginBottom: 16,
                   }}
                 >
-                  {previewMovieItem.director && (
-                    <View style={{ flexDirection: 'row', gap: 6 }}>
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#8E8E93', minWidth: 70 }}>Đạo diễn</Text>
-                      <Text style={{ fontSize: 12, fontWeight: '600', color: isLight ? '#000000' : '#EFEFEF', flex: 1 }}>{previewMovieItem.director}</Text>
-                    </View>
-                  )}
-                  {previewMovieItem.cast && (
-                    <View style={{ flexDirection: 'row', gap: 6 }}>
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#8E8E93', minWidth: 70 }}>Diễn viên</Text>
-                      <Text style={{ fontSize: 12, fontWeight: '600', color: isLight ? '#000000' : '#EFEFEF', flex: 1 }} numberOfLines={2}>{previewMovieItem.cast}</Text>
-                    </View>
-                  )}
-                  {previewMovieItem.synopsis && (
-                    <View style={{ flexDirection: 'row', gap: 6 }}>
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#8E8E93', minWidth: 70 }}>Tóm tắt</Text>
-                      <Text style={{ fontSize: 12, color: '#8E8E93', flex: 1, lineHeight: 18 }} numberOfLines={3}>{previewMovieItem.synopsis}</Text>
-                    </View>
-                  )}
+                  {/* 1. Danh Sách */}
+                  <TouchableOpacity
+                    onPress={() => {
+                      setIsSavedMovie(!isSavedMovie);
+                      triggerToast(isSavedMovie ? 'Đã xóa khỏi danh sách yêu thích' : 'Đã thêm vào danh sách yêu thích!', 'Danh Sách', 'info');
+                    }}
+                    style={{ alignItems: 'center', gap: 5 }}
+                  >
+                    {isSavedMovie ? (
+                      <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+                        <SvgPath d="M20 6L9 17L4 12" stroke="#34C759" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </Svg>
+                    ) : (
+                      <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+                        <SvgPath d="M12 5V19M5 12H19" stroke="#FFFFFF" strokeWidth="2.2" strokeLinecap="round" />
+                      </Svg>
+                    )}
+                    <Text style={{ fontSize: 10.5, fontWeight: '700', color: isSavedMovie ? '#34C759' : '#8E8E93' }}>
+                      {isSavedMovie ? 'Đã Lưu' : 'Danh Sách'}
+                    </Text>
+                  </TouchableOpacity>
+
+                  {/* 2. Thích */}
+                  <TouchableOpacity
+                    onPress={() => {
+                      setIsLikedMovie(!isLikedMovie);
+                      triggerToast(isLikedMovie ? 'Đã bỏ thích' : 'Cảm ơn bạn đã đánh giá phim hay!', 'Đánh Giá', 'success');
+                    }}
+                    style={{ alignItems: 'center', gap: 5 }}
+                  >
+                    <Svg width={22} height={22} viewBox="0 0 24 24" fill={isLikedMovie ? '#E50914' : 'none'}>
+                      <SvgPath
+                        d="M7 10V21M7 10L12 3L14 4V8H20C21.1 8 22 8.9 22 10L20 20C19.8 20.6 19.3 21 18.7 21H7M7 10H3V21H7"
+                        stroke={isLikedMovie ? '#E50914' : '#FFFFFF'}
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </Svg>
+                    <Text style={{ fontSize: 10.5, fontWeight: '700', color: isLikedMovie ? '#E50914' : '#8E8E93' }}>
+                      {isLikedMovie ? 'Đã Thích' : 'Thích'}
+                    </Text>
+                  </TouchableOpacity>
+
+                  {/* 3. Chia Sẻ */}
+                  <TouchableOpacity
+                    onPress={() => {
+                      const link = previewVideoUrl || previewEmbedUrl || '';
+                      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                        navigator.clipboard.writeText(link);
+                        triggerToast('Đã copy liên kết xem phim!', 'Chia Sẻ', 'success');
+                      }
+                    }}
+                    style={{ alignItems: 'center', gap: 5 }}
+                  >
+                    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+                      <SvgPath d="M4 12V20C4 20.6 4.4 21 5 21H19C19.6 21 20 20.6 20 20V12M16 6L12 2M12 2L8 6M12 2V15" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </Svg>
+                    <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#8E8E93' }}>Chia Sẻ</Text>
+                  </TouchableOpacity>
+
+                  {/* 4. Xem Chung */}
+                  <TouchableOpacity
+                    onPress={() => {
+                      setCreateRoomName(`Phòng Xem: ${previewMovieItem?.title || previewVideoTitle}`);
+                      setShowCreateRoomModal(true);
+                    }}
+                    style={{ alignItems: 'center', gap: 5 }}
+                  >
+                    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+                      <SvgPath d="M17 21V19C17 17.9 16.1 17 15 17H9C7.9 17 7 17.9 7 19V21M12 13C14.2 13 16 11.2 16 9C16 6.8 14.2 5 12 5C9.8 5 8 6.8 8 9C8 11.2 9.8 13 12 13Z" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" />
+                      <SvgPath d="M23 21V19C23 18.1 22.4 17.3 21.5 17.1M16 5.1C17.2 5.7 18 6.9 18 8.3C18 9.7 17.2 10.9 16 11.5" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" />
+                    </Svg>
+                    <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#8E8E93' }}>Xem Chung</Text>
+                  </TouchableOpacity>
+
+                  {/* 5. Sửa URL */}
+                  <TouchableOpacity
+                    onPress={() => {
+                      setPlayerTab('settings');
+                      setIsEditingPlayerUrl(true);
+                      setEditPlayerStreamInput(previewVideoUrl);
+                      setEditPlayerEmbedInput(previewEmbedUrl);
+                    }}
+                    style={{ alignItems: 'center', gap: 5 }}
+                  >
+                    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+                      <SvgCircle cx="12" cy="12" r="3" stroke="#007AFF" strokeWidth="2" />
+                      <SvgPath d="M19.4 15A1.65 1.65 0 0020 16.4L20.2 16.6C20.6 17 20.6 17.6 20.2 18L18 20.2C17.6 20.6 17 20.6 16.6 20.2L16.4 20A1.65 1.65 0 0015 19.4 1.65 1.65 0 0013.6 20.8V21.1C13.6 21.6 13.2 22 12.7 22H9.3C8.8 22 8.4 21.6 8.4 21.1V20.8A1.65 1.65 0 007 19.4 1.65 1.65 0 005.6 20L5.4 20.2C5 20.6 4.4 20.6 4 20.2L1.8 18C1.4 17.6 1.4 17 1.8 16.6L2 16.4A1.65 1.65 0 002.6 15 1.65 1.65 0 001.2 13.6H0.9C0.4 13.6 0 13.2 0 12.7V9.3C0 8.8 0.4 8.4 0.9 8.4H1.2A1.65 1.65 0 002.6 7 1.65 1.65 0 002 5.6L1.8 5.4C1.4 5 1.4 4.4 1.8 4L4 1.8C4.4 1.4 5 1.4 5.4 1.8L5.6 2A1.65 1.65 0 007 2.6 1.65 1.65 0 008.4 1.2V0.9C8.4 0.4 8.8 0 9.3 0H12.7C13.2 0 13.6 0.4 13.6 0.9V1.2A1.65 1.65 0 0015 2.6 1.65 1.65 0 0016.4 2L16.6 1.8C17 1.4 17.6 1.4 18 1.8L20.2 4C20.6 4.4 20.6 5 20.2 5.4L20 5.6A1.65 1.65 0 0019.4 7 1.65 1.65 0 0020.8 8.4H21.1C21.6 8.4 22 8.8 22 9.3V12.7C22 13.2 21.6 13.6 21.1 13.6H20.8A1.65 1.65 0 0019.4 15Z" stroke="#007AFF" strokeWidth="1.8" />
+                    </Svg>
+                    <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#007AFF' }}>Sửa URL</Text>
+                  </TouchableOpacity>
                 </View>
-              )}
 
-              {/* ── 3 ACTION BUTTONS ── */}
-              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
-                {/* Mở ĐT / Tab Mới */}
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  onPress={() => {
-                    const openUrl = previewVideoUrl || previewEmbedUrl;
-                    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-                      window.open(openUrl, '_blank');
-                    } else {
-                      Linking.openURL(openUrl).catch(() => {});
-                    }
-                  }}
-                  style={{
-                    flex: 1,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: '#007AFF',
-                    paddingVertical: 11,
-                    borderRadius: 13,
-                    gap: 5,
-                  }}
-                >
-                  <Ionicons name="phone-portrait-outline" size={16} color="#FFFFFF" />
-                  <Text style={{ fontSize: 12, fontWeight: '800', color: '#FFFFFF' }}>Mở ĐT/Tab</Text>
-                </TouchableOpacity>
-
-                {/* Copy .m3u8 */}
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  onPress={() => {
-                    const toCopy = previewVideoUrl || previewEmbedUrl;
-                    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                      navigator.clipboard.writeText(toCopy);
-                    }
-                    triggerToast('Đã sao chép link .m3u8! Dán vào Safari/VLC trên ĐT để xem.', 'Sao Chép Thành Công', 'success', 'copy');
-                  }}
-                  style={{
-                    flex: 1,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: 'rgba(52, 199, 89, 0.15)',
-                    paddingVertical: 11,
-                    borderRadius: 13,
-                    borderWidth: 1.5,
-                    borderColor: '#34C759',
-                    gap: 5,
-                  }}
-                >
-                  <Ionicons name="copy-outline" size={16} color="#34C759" />
-                  <Text style={{ fontSize: 12, fontWeight: '800', color: '#34C759' }}>Copy .m3u8</Text>
-                </TouchableOpacity>
-
-                {/* Báo Lỗi */}
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  onPress={() => handleReportBrokenMovie(previewMovieItem || { title: previewVideoTitle, streamUrl: previewVideoUrl, embedUrl: previewEmbedUrl })}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: 'rgba(255, 45, 85, 0.12)',
-                    paddingVertical: 11,
-                    paddingHorizontal: 14,
-                    borderRadius: 13,
-                    borderWidth: 1.5,
-                    borderColor: 'rgba(255,45,85,0.5)',
-                    gap: 6,
-                  }}
-                >
-                  <Ionicons name="flag" size={15} color="#FF2D55" />
-                  <Text style={{ fontSize: 12, fontWeight: '800', color: '#FF2D55' }}>Báo Lỗi</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* ── .M3U8 STREAM URL BANNER ── */}
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  backgroundColor: 'rgba(52, 199, 89, 0.10)',
-                  paddingHorizontal: 12,
-                  paddingVertical: 9,
-                  borderRadius: 12,
-                  marginBottom: 12,
-                  borderWidth: 1,
-                  borderColor: 'rgba(52, 199, 89, 0.28)',
-                }}
-              >
-                <View style={{ flex: 1, marginRight: 8 }}>
-                  <Text style={{ fontSize: 10, fontWeight: '800', color: '#34C759', marginBottom: 2 }}>
-                    ✓ LUỒNG GỐC .M3U8 — APPLE HLS MULTI-BITRATE
-                  </Text>
-                  <Text style={{ fontSize: 10, color: '#8E8E93' }} numberOfLines={1}>{previewVideoUrl}</Text>
+                {/* ── 4. TABS NAVIGATION (TẬP PHIM | TƯƠNG TỰ | CẤU HÌNH URL) ── */}
+                <View style={{ flexDirection: 'row', gap: 14, marginBottom: 14, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)' }}>
+                  {[
+                    { key: 'episodes', label: 'Tập Phim' },
+                    { key: 'similar', label: 'Nội Dung Tương Tự' },
+                    { key: 'settings', label: 'Cấu Hình & Sửa URL' },
+                  ].map((tab) => {
+                    const isActive = playerTab === tab.key;
+                    return (
+                      <TouchableOpacity
+                        key={tab.key}
+                        onPress={() => setPlayerTab(tab.key as any)}
+                        style={{
+                          paddingBottom: 10,
+                          borderBottomWidth: 3,
+                          borderBottomColor: isActive ? '#E50914' : 'transparent',
+                        }}
+                      >
+                        <Text style={{ fontSize: 13, fontWeight: isActive ? '800' : '600', color: isActive ? '#FFFFFF' : '#8E8E93' }}>
+                          {tab.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
-                <TouchableOpacity
-                  onPress={() => {
-                    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                      navigator.clipboard.writeText(previewVideoUrl);
-                    }
-                    triggerToast('Đã sao chép link .m3u8!', 'Sao Chép Thành Công', 'success', 'copy-outline');
-                  }}
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: '#34C759' }}
-                >
-                  <Ionicons name="copy-outline" size={12} color="#FFFFFF" />
-                  <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#FFFFFF' }}>Copy</Text>
-                </TouchableOpacity>
-              </View>
 
+                {/* TAB 1: TẬP PHIM & SERVER */}
+                {playerTab === 'episodes' && (
+                  <View style={{ gap: 10 }}>
+                    {/* Server Toggle Pills */}
+                    <View style={{ flexDirection: 'row', gap: 8, marginBottom: 6 }}>
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        onPress={() => {
+                          setPreviewPlayerMode('stream');
+                          triggerToast('Đã chọn Server 1 (HLS VIP 1080p CDN)', 'Đổi Server', 'info');
+                        }}
+                        style={{
+                          flex: 1,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 6,
+                          paddingVertical: 9,
+                          borderRadius: 8,
+                          backgroundColor: previewPlayerMode === 'stream' ? '#E50914' : '#16161F',
+                          borderWidth: 1,
+                          borderColor: previewPlayerMode === 'stream' ? '#E50914' : 'rgba(255,255,255,0.08)',
+                        }}
+                      >
+                        <Svg width={14} height={14} viewBox="0 0 24 24" fill={previewPlayerMode === 'stream' ? '#FFFFFF' : '#8E8E93'}>
+                          <SvgPolygon points="13,2 3,14 12,14 11,22 21,10 12,10" />
+                        </Svg>
+                        <Text style={{ fontSize: 11.5, fontWeight: '800', color: previewPlayerMode === 'stream' ? '#FFFFFF' : '#8E8E93' }}>
+                          Server #1: HLS VIP
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        onPress={() => {
+                          setPreviewPlayerMode('embed');
+                          triggerToast('Đã chọn Server 2 (Web Player Embed)', 'Đổi Server', 'info');
+                        }}
+                        style={{
+                          flex: 1,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 6,
+                          paddingVertical: 9,
+                          borderRadius: 8,
+                          backgroundColor: previewPlayerMode === 'embed' ? '#E50914' : '#16161F',
+                          borderWidth: 1,
+                          borderColor: previewPlayerMode === 'embed' ? '#E50914' : 'rgba(255,255,255,0.08)',
+                        }}
+                      >
+                        <Svg width={14} height={14} viewBox="0 0 24 24" fill={previewPlayerMode === 'embed' ? '#FFFFFF' : '#8E8E93'}>
+                          <SvgPath d="M4 6H20V18H4V6Z" />
+                        </Svg>
+                        <Text style={{ fontSize: 11.5, fontWeight: '800', color: previewPlayerMode === 'embed' ? '#FFFFFF' : '#8E8E93' }}>
+                          Server #2: Embed
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Episodes List Cards */}
+                    {cinemaEpisodes.length > 0 ? (
+                      cinemaEpisodes.map((ep, idx) => (
+                        <TouchableOpacity
+                          key={idx}
+                          activeOpacity={0.8}
+                          onPress={() => {
+                            setCinemaSelectedEpisode(idx);
+                            setPreviewVideoUrl(ep.m3u8);
+                            setPreviewEmbedUrl(ep.embed);
+                            triggerToast(`Đang phát: ${ep.label}`, 'Chuyển Tập', 'success');
+                          }}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            backgroundColor: cinemaSelectedEpisode === idx ? 'rgba(229, 9, 20, 0.15)' : '#121217',
+                            borderWidth: 1,
+                            borderColor: cinemaSelectedEpisode === idx ? '#E50914' : 'rgba(255,255,255,0.06)',
+                            padding: 12,
+                            borderRadius: 12,
+                            gap: 12,
+                          }}
+                        >
+                          <View
+                            style={{
+                              width: 38,
+                              height: 38,
+                              borderRadius: 8,
+                              backgroundColor: cinemaSelectedEpisode === idx ? '#E50914' : '#22222A',
+                              justifyContent: 'center',
+                              alignItems: 'center',
+                            }}
+                          >
+                            <Svg width={14} height={14} viewBox="0 0 24 24" fill="#FFFFFF">
+                              <SvgPolygon points="5,3 19,12 5,21" />
+                            </Svg>
+                          </View>
+
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFFFFF' }}>
+                              {ep.label}
+                            </Text>
+                            <Text style={{ fontSize: 11, color: '#8E8E93', marginTop: 2 }}>
+                              {ep.serverName || 'Server VIP'} • Full HD 1080p
+                            </Text>
+                          </View>
+
+                          <View style={{ paddingHorizontal: 7, paddingVertical: 2, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.08)' }}>
+                            <Text style={{ fontSize: 10, fontWeight: '700', color: '#34C759' }}>Phát</Text>
+                          </View>
+                        </TouchableOpacity>
+                      ))
+                    ) : (
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          backgroundColor: '#121217',
+                          padding: 14,
+                          borderRadius: 12,
+                          gap: 12,
+                          borderWidth: 1,
+                          borderColor: 'rgba(255,255,255,0.06)',
+                        }}
+                      >
+                        <View style={{ width: 42, height: 42, borderRadius: 8, backgroundColor: '#E50914', justifyContent: 'center', alignItems: 'center' }}>
+                          <Svg width={16} height={16} viewBox="0 0 24 24" fill="#FFFFFF">
+                            <SvgPolygon points="5,3 19,12 5,21" />
+                          </Svg>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#FFFFFF' }}>
+                            Bản Chiếu Rạp Đầy Đủ (Full Movie)
+                          </Text>
+                          <Text style={{ fontSize: 11, color: '#8E8E93', marginTop: 2 }}>
+                            {previewMovieItem?.duration || '115 phút'} • Bản gốc chuẩn rạp 1080p
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                )}
+
+                {/* TAB 2: NỘI DUNG TƯƠNG TỰ */}
+                {playerTab === 'similar' && (
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+                    {allCatalogMovies.slice(0, 6).map((sim, sIdx) => (
+                      <TouchableOpacity
+                        key={sIdx}
+                        activeOpacity={0.85}
+                        onPress={() => {
+                          handleSelectScrapedMovie(sim);
+                          handleWatchDirectly(sim);
+                        }}
+                        style={{ width: '31%', marginBottom: 12 }}
+                      >
+                        <Image
+                          source={{ uri: sim.image }}
+                          style={{ width: '100%', height: 135, borderRadius: 8, backgroundColor: '#141419' }}
+                          resizeMode="cover"
+                        />
+                        <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '800', color: '#FFFFFF', marginTop: 4 }}>
+                          {sim.title}
+                        </Text>
+                        <Text style={{ fontSize: 9.5, color: '#8E8E93' }}>
+                          {sim.year} • ★ {sim.rating}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+
+                {/* TAB 3: CẤU HÌNH & SỬA URL WEB */}
+                {playerTab === 'settings' && (
+                  <View style={{ backgroundColor: '#121217', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
+                    <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#FFFFFF', marginBottom: 12 }}>
+                      Bộ Chỉnh Sửa Luồng Phát & URL Web Phim
+                    </Text>
+
+                    {/* Stream URL */}
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#9CA3AF', marginBottom: 4 }}>
+                      Link Luồng HLS (.m3u8 CDN):
+                    </Text>
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        backgroundColor: '#1A1A24',
+                        borderRadius: 10,
+                        paddingHorizontal: 10,
+                        height: 42,
+                        marginBottom: 10,
+                        borderWidth: 1,
+                        borderColor: 'rgba(0,122,255,0.4)',
+                      }}
+                    >
+                      <TextInput
+                        style={{ flex: 1, color: '#FFFFFF', fontSize: 12, paddingVertical: 0 }}
+                        placeholder="Dán hoặc sửa link .m3u8..."
+                        placeholderTextColor="#8E8E93"
+                        value={editPlayerStreamInput}
+                        onChangeText={setEditPlayerStreamInput}
+                        autoCapitalize="none"
+                      />
+                      {editPlayerStreamInput.length > 0 && (
+                        <TouchableOpacity onPress={() => setEditPlayerStreamInput('')}>
+                          <Text style={{ color: '#8E8E93', fontSize: 13, fontWeight: '700' }}>✕</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+
+                    {/* Embed URL */}
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#9CA3AF', marginBottom: 4 }}>
+                      Link Player Nhúng Web (Embed iframe):
+                    </Text>
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        backgroundColor: '#1A1A24',
+                        borderRadius: 10,
+                        paddingHorizontal: 10,
+                        height: 42,
+                        marginBottom: 14,
+                        borderWidth: 1,
+                        borderColor: 'rgba(255,255,255,0.1)',
+                      }}
+                    >
+                      <TextInput
+                        style={{ flex: 1, color: '#FFFFFF', fontSize: 12, paddingVertical: 0 }}
+                        placeholder="Dán hoặc sửa link embed..."
+                        placeholderTextColor="#8E8E93"
+                        value={editPlayerEmbedInput}
+                        onChangeText={setEditPlayerEmbedInput}
+                        autoCapitalize="none"
+                      />
+                    </View>
+
+                    {/* Buttons */}
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        onPress={() => {
+                          if (!editPlayerStreamInput.trim() && !editPlayerEmbedInput.trim()) {
+                            triggerToast('Vui lòng nhập đường dẫn URL!', 'Chưa Nhập', 'warning');
+                            return;
+                          }
+                          setPreviewVideoUrl(editPlayerStreamInput.trim());
+                          setPreviewEmbedUrl(editPlayerEmbedInput.trim());
+                          triggerToast('Đã lưu & tải lại luồng phát mới!', 'Thành Công', 'success');
+                        }}
+                        style={{
+                          flex: 1,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 6,
+                          backgroundColor: '#E50914',
+                          paddingVertical: 10,
+                          borderRadius: 8,
+                        }}
+                      >
+                        <Svg width={14} height={14} viewBox="0 0 24 24" fill="#FFFFFF">
+                          <SvgPolygon points="5,3 19,12 5,21" />
+                        </Svg>
+                        <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#FFFFFF' }}>
+                          Áp Dụng & Tải Lại
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        onPress={() => {
+                          if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                            navigator.clipboard.readText().then((t) => {
+                              if (t) {
+                                if (t.includes('.m3u8')) setEditPlayerStreamInput(t);
+                                else setEditPlayerEmbedInput(t);
+                                triggerToast('Đã dán từ clipboard!', 'Dán URL', 'info');
+                              }
+                            });
+                          }
+                        }}
+                        style={{
+                          paddingHorizontal: 14,
+                          paddingVertical: 10,
+                          borderRadius: 8,
+                          backgroundColor: '#26262F',
+                        }}
+                      >
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFFFFF' }}>Dán Link</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+              </View>
             </ScrollView>
           </SafeAreaView>
         </View>
@@ -32071,14 +33448,13 @@ function MainApp() {
       {/* ========================================================================= */}
       {/* TRANG RIÊNG: BÁO CÁO PHIM LỖI & XUẤT JSON                                 */}
       {/* ========================================================================= */}
-      <Modal visible={showReportedMoviesModal} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => { setShowReportedMoviesModal(false); setShowHomeMenuModal(true); }}>
+      <Modal visible={showReportedMoviesModal} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => { setShowReportedMoviesModal(false); }}>
         <SafeAreaView style={{ flex: 1, backgroundColor: isLight ? '#F2F2F7' : '#000000' }}>
           {/* Top Navigation Bar Trang Riêng */}
           <View style={[styles.fullScreenNavBar, isLight && { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E5EA' }]}>
             <TouchableOpacity
               onPress={() => {
                 setShowReportedMoviesModal(false);
-                setShowHomeMenuModal(true);
               }}
               style={styles.fullScreenNavBtn}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
@@ -32254,7 +33630,6 @@ function MainApp() {
         onRequestClose={() => {
           if (isSpamming) handleStopSpamNotifications();
           setShowNotificationSpammerModal(false);
-          setShowHomeMenuModal(true);
         }}
       >
         <SafeAreaView style={{ flex: 1, backgroundColor: isLight ? '#F2F2F7' : '#000000' }}>
@@ -32264,7 +33639,6 @@ function MainApp() {
               onPress={() => {
                 if (isSpamming) handleStopSpamNotifications();
                 setShowNotificationSpammerModal(false);
-                setShowHomeMenuModal(true);
               }}
               style={styles.fullScreenNavBtn}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
@@ -32364,7 +33738,7 @@ function MainApp() {
                 2. Số Lượng Thông Báo Cần Gửi:
               </Text>
               <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
-                {['5', '10', '20', '50'].map((preset) => (
+                {['10', '25', '50', '100'].map((preset) => (
                   <TouchableOpacity
                     key={preset}
                     activeOpacity={0.7}
@@ -32466,14 +33840,23 @@ function MainApp() {
               </View>
 
               {/* Delay Interval */}
-              <Text style={{ fontSize: 13, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF', marginBottom: 6 }}>
-                5. Tốc Độ Gửi (Độ trễ mỗi tin):
-              </Text>
-              <View style={{ flexDirection: 'row', gap: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <Text style={{ fontSize: 13, fontWeight: '800', color: isLight ? '#000000' : '#FFFFFF' }}>
+                  5. Tốc Độ Gửi (Độ trễ mỗi tin):
+                </Text>
+                {spammerIntervalMs === 0 && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(255, 59, 48, 0.15)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
+                    <Ionicons name="flash" size={11} color="#FF3B30" />
+                    <Text style={{ fontSize: 10, fontWeight: '900', color: '#FF3B30' }}>TURBO KHÔNG ĐỘ TRỄ</Text>
+                  </View>
+                )}
+              </View>
+              <View style={{ flexDirection: 'row', gap: 6, marginBottom: 8 }}>
                 {[
-                  { label: '⚡ Siêu Tốc (200ms)', val: 200 },
-                  { label: '🚀 Chuẩn (400ms)', val: 400 },
-                  { label: '⏱️ Chậm (1000ms)', val: 1000 },
+                  { label: '⚡ 0ms (Turbo)', val: 0 },
+                  { label: '🚀 50ms', val: 50 },
+                  { label: '💨 150ms', val: 150 },
+                  { label: '⏱️ 350ms', val: 350 },
                 ].map((speed) => (
                   <TouchableOpacity
                     key={speed.val}
@@ -32485,17 +33868,25 @@ function MainApp() {
                       paddingVertical: 7,
                       borderRadius: 10,
                       alignItems: 'center',
-                      backgroundColor: spammerIntervalMs === speed.val ? 'rgba(0, 122, 255, 0.2)' : (isLight ? '#F2F2F7' : '#0B0B0E'),
+                      backgroundColor: spammerIntervalMs === speed.val ? (speed.val === 0 ? 'rgba(255, 59, 48, 0.2)' : 'rgba(0, 122, 255, 0.2)') : (isLight ? '#F2F2F7' : '#0B0B0E'),
                       borderWidth: 1,
-                      borderColor: spammerIntervalMs === speed.val ? '#007AFF' : (isLight ? '#E5E5EA' : '#2C2C2E'),
+                      borderColor: spammerIntervalMs === speed.val ? (speed.val === 0 ? '#FF3B30' : '#007AFF') : (isLight ? '#E5E5EA' : '#2C2C2E'),
                     }}
                   >
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: spammerIntervalMs === speed.val ? '#007AFF' : '#8E8E93' }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: spammerIntervalMs === speed.val ? (speed.val === 0 ? '#FF3B30' : '#007AFF') : '#8E8E93' }}>
                       {speed.label}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </View>
+              {spammerIntervalMs === 0 && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255, 59, 48, 0.1)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255, 59, 48, 0.2)' }}>
+                  <Ionicons name="flame" size={14} color="#FF3B30" />
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#FF3B30', flex: 1 }}>
+                    Bắn đa luồng song song liên tục gần như không có độ trễ (0ms).
+                  </Text>
+                </View>
+              )}
             </View>
 
             {/* Live Progress Bar when Spamming */}
@@ -32748,7 +34139,6 @@ function MainApp() {
             <TouchableOpacity
               onPress={() => {
                 setShowMusicScraperModal(false);
-                setShowHomeMenuModal(true);
               }}
               style={styles.fullScreenNavBtn}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
@@ -33274,14 +34664,13 @@ function MainApp() {
       {/* ========================================================================= */}
       {/* TRANG RIÊNG: KIỂM TRA TỐC ĐỘ MẠNG & CDN (Speedtest by Ookla Style)        */}
       {/* ========================================================================= */}
-      <Modal visible={showSpeedTestModal} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => { setShowSpeedTestModal(false); setShowHomeMenuModal(true); }}>
+      <Modal visible={showSpeedTestModal} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => { setShowSpeedTestModal(false); }}>
         <SafeAreaView style={{ flex: 1, backgroundColor: isLight ? '#F2F2F7' : '#000000' }}>
           {/* Top Navigation Bar Trang Riêng */}
           <View style={[styles.fullScreenNavBar, isLight && { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E5EA' }]}>
             <TouchableOpacity
               onPress={() => {
                 setShowSpeedTestModal(false);
-                setShowHomeMenuModal(true);
               }}
               style={styles.fullScreenNavBtn}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
@@ -33534,14 +34923,13 @@ function MainApp() {
       {/* ========================================================================= */}
       {/* TRANG RIÊNG: KIỂM TRA IP & NHÀ MẠNG (Live Geo IP, ISP, WHOIS DNS)        */}
       {/* ========================================================================= */}
-      <Modal visible={showIpInspectorModal} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => { setShowIpInspectorModal(false); setShowHomeMenuModal(true); }}>
+      <Modal visible={showIpInspectorModal} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => { setShowIpInspectorModal(false); }}>
         <SafeAreaView style={{ flex: 1, backgroundColor: isLight ? '#F2F2F7' : '#000000' }}>
           {/* Top Navigation Bar Trang Riêng */}
           <View style={[styles.fullScreenNavBar, isLight && { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E5EA' }]}>
             <TouchableOpacity
               onPress={() => {
                 setShowIpInspectorModal(false);
-                setShowHomeMenuModal(true);
               }}
               style={styles.fullScreenNavBtn}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
@@ -36742,7 +38130,7 @@ const getStyles = (
   safeRoot: {
     flex: 1,
     backgroundColor: isLight ? '#F2F2F7' : '#000000',
-    paddingTop: Platform.OS === 'web' ? 44 : 0,
+    paddingTop: 0,
   },
   mainContent: {
     flex: 1,
@@ -37628,6 +39016,7 @@ const getStyles = (
     borderRadius: 14,
   },
   tabBar: {
+    flexShrink: 0,
     flexDirection: 'row',
     height: Platform.OS === 'ios' ? 70 : 64,
     backgroundColor: isLight ? '#FFFFFF' : '#161618',

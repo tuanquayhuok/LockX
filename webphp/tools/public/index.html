@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>REA Tools Web Terminal Console • Reverse Engineer Anything</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    body {
+      background-color: #070B14;
+      color: #E2E8F0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      background: rgba(15, 23, 42, 0.9);
+      backdrop-filter: blur(14px);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 12px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand-icon {
+      width: 38px;
+      height: 38px;
+      background: linear-gradient(135deg, #0A84FF, #38BDF8);
+      border-radius: 11px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 18px;
+      box-shadow: 0 4px 14px rgba(10, 132, 255, 0.4);
+    }
+    .brand-title {
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      color: #FFFFFF;
+    }
+    .brand-badge {
+      font-size: 10px;
+      background: #0284C7;
+      color: #fff;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      margin-left: 6px;
+    }
+    .container {
+      max-width: 1350px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 16px 20px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .card {
+      background: #0F172A;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      padding: 18px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+    .input-label {
+      font-size: 13px;
+      font-weight: 700;
+      color: #94A3B8;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .url-input-group {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .url-input {
+      flex: 1;
+      background: #1E293B;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 10px;
+      padding: 12px 16px;
+      color: #F8FAFC;
+      font-size: 14.5px;
+      outline: none;
+      transition: all 0.2s;
+    }
+    .url-input:focus {
+      border-color: #38BDF8;
+      box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2);
+    }
+    .btn {
+      background: #0066FF;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 12px 20px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s;
+    }
+    .btn:hover {
+      background: #0052CC;
+      transform: translateY(-1px);
+    }
+    .btn-secondary {
+      background: #1E293B;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #CBD5E1;
+    }
+    .btn-secondary:hover {
+      background: #334155;
+      color: #FFF;
+    }
+    .btn-clear {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #F87171;
+    }
+    .btn-clear:hover {
+      background: rgba(239, 68, 68, 0.25);
+    }
+
+    /* Command Cheat Sheet Table with Descriptions */
+    .docs-section {
+      background: #0B132B;
+      border: 1px solid rgba(56, 189, 248, 0.15);
+      border-radius: 14px;
+      padding: 14px 18px;
+      margin-top: 10px;
+    }
+    .docs-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+    }
+    .docs-title {
+      font-size: 13.5px;
+      font-weight: 800;
+      color: #38BDF8;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .command-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .cmd-card {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 10px 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .cmd-card:hover {
+      background: rgba(56, 189, 248, 0.1);
+      border-color: #38BDF8;
+      transform: translateY(-1px);
+    }
+    .cmd-card-name {
+      font-family: monospace;
+      font-size: 13px;
+      font-weight: 700;
+      color: #38BDF8;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .cmd-card-desc {
+      font-size: 12px;
+      color: #94A3B8;
+      margin-top: 4px;
+      line-height: 1.45;
+    }
+    .cmd-badge {
+      font-size: 9.5px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 800;
+    }
+    .badge-web { background: rgba(56, 189, 248, 0.2); color: #38BDF8; }
+    .badge-android { background: rgba(48, 209, 88, 0.2); color: #30D158; }
+    .badge-binary { background: rgba(239, 68, 68, 0.2); color: #F87171; }
+    .badge-info { background: rgba(168, 85, 247, 0.2); color: #C084FC; }
+
+    /* Terminal Console */
+    .terminal-container {
+      background: #030712;
+      border: 1px solid #1F2937;
+      border-radius: 14px;
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 480px;
+      overflow: hidden;
+      box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.7);
+    }
+    .terminal-header {
+      background: #111827;
+      padding: 10px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #1F2937;
+    }
+    .terminal-dots {
+      display: flex;
+      gap: 6px;
+    }
+    .dot {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+    }
+    .dot-red { background: #EF4444; }
+    .dot-yellow { background: #F59E0B; }
+    .dot-green { background: #10B981; }
+    .terminal-title {
+      font-family: monospace;
+      font-size: 12px;
+      color: #64748B;
+      font-weight: 600;
+    }
+    .terminal-body {
+      padding: 16px;
+      flex: 1;
+      overflow-y: auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      color: #A7F3D0;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .terminal-prompt {
+      color: #38BDF8;
+      font-weight: bold;
+    }
+    .terminal-error {
+      color: #F87171;
+    }
+    .terminal-system {
+      color: #94A3B8;
+      font-style: italic;
+    }
+    .terminal-input-bar {
+      padding: 10px 14px;
+      background: #0F172A;
+      border-top: 1px solid #1F2937;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .terminal-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: #F8FAFC;
+      font-family: monospace;
+      font-size: 13.5px;
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 100px;
+      font-size: 11px;
+      font-weight: 700;
+      background: rgba(16, 185, 129, 0.15);
+      color: #34D399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #34D399;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.3; }
+      100% { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="brand-icon">
+        <i class="fa-solid fa-terminal"></i>
+      </div>
+      <div>
+        <div style="display: flex; align-items: center;">
+          <span class="brand-title">REA Web Console</span>
+          <span class="brand-badge">TOOL ENGINE</span>
+        </div>
+        <div style="font-size: 11px; color: #64748B; margin-top: 2px;">D:\GVault-Expo\webphp\tools\rea</div>
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <div class="status-badge">
+        <span class="status-dot"></span>
+        <span>ENGINE READY</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="container">
+    <!-- Top Action Card: Input URL & Command Options -->
+    <div class="card">
+      <div class="input-label">
+        <i class="fa-solid fa-link" style="color: #38BDF8;"></i>
+        <span>Nhập hoặc dán URL / Tệp tin / Binary cần phân tích:</span>
+      </div>
+      <div class="url-input-group">
+        <input 
+          type="text" 
+          id="targetUrl" 
+          class="url-input" 
+          placeholder="Dán URL trang web (VD: https://ghienphimz.mom) hoặc đường dẫn file APK / EXE..."
+          value="https://ghienphimz.mom"
+        />
+        <button class="btn" id="btnInspectPage">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <span>Phân Tích URL Này</span>
+        </button>
+        <button class="btn btn-secondary" onclick="pasteFromClipboard()">
+          <i class="fa-solid fa-paste"></i> Dán Clipboard
+        </button>
+      </div>
+
+      <!-- Command Cheat Sheet / Guide with Explanations -->
+      <div class="docs-section">
+        <div class="docs-header" onclick="toggleDocs()">
+          <div class="docs-title">
+            <i class="fa-solid fa-circle-question"></i>
+            <span>DANH MỤC CÁC LỆNH REA & CHÚ THÍCH CÔNG DỤNG (Bấm vào lệnh bất kỳ để chạy ngay):</span>
+          </div>
+          <span style="font-size: 12px; color: #64748B;"><i class="fa-solid fa-chevron-down" id="toggleIcon"></i></span>
+        </div>
+
+        <div class="command-grid" id="commandGrid">
+          <!-- 1. Web & JS Analysis -->
+          <div class="cmd-card" onclick="runWithUrl('inspect-web-page')">
+            <div class="cmd-card-name">
+              <span>inspect-web-page &lt;url&gt;</span>
+              <span class="cmd-badge badge-web">WEB / DOM</span>
+            </div>
+            <div class="cmd-card-desc">
+              <strong>Tác dụng:</strong> Phân tích thụ động trang web qua Chrome DevTools Protocol (CDP), trích xuất cấu trúc DOM, script tag và tài nguyên mạng.
+            </div>
+          </div>
+
+          <div class="cmd-card" onclick="runWithUrl('recover-javascript-sources')">
+            <div class="cmd-card-name">
+              <span>recover-javascript-sources</span>
+              <span class="cmd-badge badge-web">JS UNPACK</span>
+            </div>
+            <div class="cmd-card-desc">
+              <strong>Tác dụng:</strong> Bóc tách mã nguồn Webpack bundles, gỡ rối (un-minify), tái lập các file JavaScript/TypeScript gốc từ URL web hoặc file.
+            </div>
+          </div>
+
+          <div class="cmd-card" onclick="runWithUrl('inspect-web-network-capture')">
+            <div class="cmd-card-name">
+              <span>inspect-web-network-capture</span>
+              <span class="cmd-badge badge-web">TRAFFIC / API</span>
+            </div>
+            <div class="cmd-card-desc">
+              <strong>Tác dụng:</strong> Bắt các gói tin mạng HTTP/HTTPS (HAR hoặc mitmproxy), phân tích danh sách API endpoint, header và token truyền đi.
+            </div>
+          </div>
+
+          <!-- 2. Android App Analysis -->
+          <div class="cmd-card" onclick="runPredefined('list-adb-devices')">
+            <div class="cmd-card-name">
+              <span>list-adb-devices</span>
+              <span class="cmd-badge badge-android">ADB / DEVICE</span>
+            </div>
+            <div class="cmd-card-desc">
+              <strong>Tác dụng:</strong> Liệt kê danh sách tất cả điện thoại thật hoặc máy ảo Android (LDPlayer, Nox, BlueStacks) đang kết nối với máy tính.
+            </div>
+          </div>
+
+          <div class="cmd-card" onclick="runWithUrl('inspect-apk')">
+            <div class="cmd-card-name">
+              <span>inspect-apk &lt;file.apk&gt;</span>
+              <span class="cmd-badge badge-android">ANDROID APK</span>
+            </div>
+            <div class="cmd-card-desc">
+              <strong>Tác dụng:</strong> Đọc nhanh AndroidManifest.xml, quyền hạn permissions, package name, activities và services của file APK mà không cần bung toàn bộ.
+            </div>
+          </div>
+
+          <div class="cmd-card" onclick="runWithUrl('decompile-apk')">
+            <div class="cmd-card-name">
+              <span>decompile-apk &lt;file.apk&gt;</span>
+              <span class="cmd-badge badge-android">JADX REVERSE</span>
+            </div>
+            <div class="cmd-card-desc">
+              <strong>Tác dụng:</strong> Dịch ngược toàn bộ file APK sang mã nguồn Java hoàn chỉnh và giải nén toàn bộ icon/hình ảnh giao diện bằng JADX + Apktool.
+            </div>
+          </div>
+
+          <!-- 3. Binary & System Analysis -->
+          <div class="cmd-card" onclick="runPredefined('providers')">
+            <div class="cmd-card-name">
+              <span>providers</span>
+              <span class="cmd-badge badge-info">CORE STATUS</span>
+            </div>
+            <div class="cmd-card-desc">
+              <strong>Tác dụng:</strong> Kiểm tra các công cụ phân tích dịch ngược đang hoạt động trên hệ thống (Ghidra, JADX, ADB, Hopper, LLDB...).
+            </div>
+          </div>
+
+          <div class="cmd-card" onclick="runWithUrl('inspect-pe-resources')">
+            <div class="cmd-card-name">
+              <span>inspect-pe-resources &lt;file.exe&gt;</span>
+              <span class="cmd-badge badge-binary">WINDOWS EXE</span>
+            </div>
+            <div class="cmd-card-desc">
+              <strong>Tác dụng:</strong> Trích xuất tài nguyên bên trong file .EXE Windows (icon, chuỗi string bí mật, chứng chỉ số và file nhúng).
+            </div>
+          </div>
+
+          <div class="cmd-card" onclick="runPredefined('help')">
+            <div class="cmd-card-name">
+              <span>--help</span>
+              <span class="cmd-badge badge-info">ALL COMMANDS</span>
+            </div>
+            <div class="cmd-card-desc">
+              <strong>Tác dụng:</strong> Xuất toàn bộ bảng danh mục hơn 50+ lệnh dịch ngược chuyên sâu của hệ thống REA kèm tham số chi tiết.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Terminal Console Window -->
+    <div class="terminal-container">
+      <div class="terminal-header">
+        <div class="terminal-dots">
+          <div class="dot dot-red"></div>
+          <div class="dot dot-yellow"></div>
+          <div class="dot dot-green"></div>
+        </div>
+        <div class="terminal-title">rea-agents@6.4.0 • bash / powershell session</div>
+        <div>
+          <button class="btn btn-secondary btn-clear" style="padding: 4px 10px; font-size: 11px;" onclick="clearTerminal()">
+            <i class="fa-solid fa-trash"></i> Xóa log
+          </button>
+        </div>
+      </div>
+
+      <div class="terminal-body" id="terminalOutput">
+<span class="terminal-system">[REA Engine] Đã cập nhật Runner hoàn tất (Fix triệt để lỗi escaping Windows). Sẵn sàng nhận lệnh!</span>
+<span class="terminal-system">Bấm vào bất kỳ lệnh nào trong bảng chú thích ở trên hoặc gõ lệnh trực tiếp bên dưới:</span>
+      </div>
+
+      <!-- Terminal Direct Command Input -->
+      <div class="terminal-input-bar">
+        <span class="terminal-prompt">rea&gt;</span>
+        <input 
+          type="text" 
+          id="cmdInput" 
+          class="terminal-input" 
+          placeholder="Gõ lệnh REA (ví dụ: providers, --help, inspect-web-page https://ghienphimz.mom)..." 
+        />
+        <button class="btn" style="padding: 6px 14px; font-size: 12.5px;" id="btnRunCmd">
+          <i class="fa-solid fa-play"></i> Chạy Lệnh
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const termOutput = document.getElementById('terminalOutput');
+    const targetUrlInput = document.getElementById('targetUrl');
+    const cmdInput = document.getElementById('cmdInput');
+
+    function appendLog(text, type = 'stdout') {
+      const span = document.createElement('span');
+      if (type === 'stderr') span.className = 'terminal-error';
+      else if (type === 'system') span.className = 'terminal-system';
+      else if (type === 'prompt') span.className = 'terminal-prompt';
+      span.textContent = text;
+      termOutput.appendChild(span);
+      termOutput.scrollTop = termOutput.scrollHeight;
+    }
+
+    function clearTerminal() {
+      termOutput.innerHTML = '<span class="terminal-system">[REA Engine] Đã làm sạch màn hình terminal.</span>\n';
+    }
+
+    async function pasteFromClipboard() {
+      try {
+        const text = await navigator.clipboard.readText();
+        if (text) {
+          targetUrlInput.value = text.trim();
+          appendLog(`[Hệ thống] Đã dán URL từ clipboard: ${text}\n`, 'system');
+        }
+      } catch (err) {
+        alert('Vui lòng cấp quyền clipboard cho trình duyệt!');
+      }
+    }
+
+    async function executeApi(payload) {
+      appendLog(`\n$ rea ${payload.command || payload.rawCommand || ''} ${payload.url || ''}\n`, 'prompt');
+      try {
+        const response = await fetch('/api/run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value);
+          const lines = chunk.split('\n');
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const parsed = JSON.parse(line.substring(6));
+                if (parsed.type === 'stdout') appendLog(parsed.data, 'stdout');
+                else if (parsed.type === 'stderr') appendLog(parsed.data, 'stderr');
+                else if (parsed.type === 'exit') appendLog(`\n[Process exited with code ${parsed.code}]\n`, 'system');
+              } catch (e) {}
+            }
+          }
+        }
+      } catch (e) {
+        appendLog(`Lỗi kết nối máy chủ: ${e.message}\n`, 'stderr');
+      }
+    }
+
+    document.getElementById('btnInspectPage').addEventListener('click', () => {
+      const url = targetUrlInput.value.trim();
+      if (!url) {
+        alert('Vui lòng nhập URL!');
+        return;
+      }
+      executeApi({ command: 'inspect-web-page', url });
+    });
+
+    document.getElementById('btnRunCmd').addEventListener('click', () => {
+      const raw = cmdInput.value.trim();
+      if (!raw) return;
+      cmdInput.value = '';
+      executeApi({ command: 'custom', rawCommand: raw });
+    });
+
+    cmdInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        document.getElementById('btnRunCmd').click();
+      }
+    });
+
+    function runPredefined(cmd) {
+      executeApi({ command: cmd });
+    }
+
+    function runWithUrl(cmd) {
+      const url = targetUrlInput.value.trim();
+      if (!url && cmd !== 'providers' && cmd !== 'help') {
+        alert('Vui lòng nhập URL hoặc đường dẫn file ở ô phía trên trước!');
+        targetUrlInput.focus();
+        return;
+      }
+      executeApi({ command: cmd, url: url || undefined });
+    }
+
+    function toggleDocs() {
+      const grid = document.getElementById('commandGrid');
+      const icon = document.getElementById('toggleIcon');
+      if (grid.style.display === 'none') {
+        grid.style.display = 'grid';
+        icon.className = 'fa-solid fa-chevron-down';
+      } else {
+        grid.style.display = 'none';
+        icon.className = 'fa-solid fa-chevron-right';
+      }
+    }
+  </script>
+</body>
+</html>

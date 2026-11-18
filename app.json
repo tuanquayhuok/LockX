@@ -60,11 +60,16 @@
           "audio",
           "remote-notification"
         ],
-        "UIViewControllerBasedStatusBarAppearance": false
+        "UIViewControllerBasedStatusBarAppearance": false,
+        "CADisableMinimumFrameDurationOnPhone": true,
+        "CADisableMinimumFrameDuration": true,
+        "NSSupportsLiveActivities": true,
+        "NSSupportsLiveActivitiesFrequentUpdates": true
       }
     },
     "android": {
       "package": "com.lockx.app",
+      "hardwareAccelerated": true,
       "adaptiveIcon": {
         "backgroundColor": "#000000",
         "foregroundImage": "./assets/android-icon-foreground.png"

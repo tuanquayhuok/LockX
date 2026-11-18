@@ -200,3 +200,73 @@ export const GoogleGeminiSvg: React.FC<SvgIconProps> = ({ size = 28, style }) =>
     </View>
   );
 };
+
+/**
+ * Biểu tượng 3D Vector LOCKX BANK chính thức
+ * Chữ L xanh 3D phát sáng lồng kiến trúc trụ ngân hàng cổ điển Hy Lạp/La Mã
+ */
+export const LockXBankLogoSvg: React.FC<SvgIconProps & { showText?: boolean }> = ({ size = 64, style, showText = false }) => {
+  return (
+    <View style={[{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }, style]}>
+      <Svg viewBox="0 0 512 512" width="100%" height="100%">
+        <Defs>
+          <LinearGradient id="lxbFacet1" x1="0%" y1="0%" x2="100%" y2="100%">
+            <Stop offset="0%" stopColor="#38BDF8" />
+            <Stop offset="100%" stopColor="#007AFF" />
+          </LinearGradient>
+          <LinearGradient id="lxbFacet2" x1="0%" y1="0%" x2="100%" y2="100%">
+            <Stop offset="0%" stopColor="#0062E0" />
+            <Stop offset="100%" stopColor="#00358E" />
+          </LinearGradient>
+          <LinearGradient id="lxbFacet3" x1="0%" y1="0%" x2="100%" y2="100%">
+            <Stop offset="0%" stopColor="#0091FF" />
+            <Stop offset="100%" stopColor="#0051C7" />
+          </LinearGradient>
+          <LinearGradient id="lxbGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+            <Stop offset="0%" stopColor="#60A5FA" stopOpacity="0.4" />
+            <Stop offset="100%" stopColor="#1E3A8A" stopOpacity="0" />
+          </LinearGradient>
+        </Defs>
+
+        {/* Glow halo */}
+        <Circle cx="256" cy="256" r="230" fill="url(#lxbGlow)" />
+
+        {/* Squircle nền xanh sang trọng */}
+        <Rect x="40" y="40" width="432" height="432" rx="100" fill="#0A1838" stroke="#1E40AF" strokeWidth="6" />
+
+        {/* Khối chữ L 3D isometric hiện đại */}
+        {/* Mặt trên / cánh trái */}
+        <Path
+          d="M 120 120 L 220 70 L 220 340 L 120 380 Z"
+          fill="url(#lxbFacet1)"
+        />
+        {/* Mặt nghiêng khối trụ bên phải */}
+        <Path
+          d="M 220 70 L 290 110 L 290 310 L 220 340 Z"
+          fill="url(#lxbFacet2)"
+        />
+        {/* Chân chữ L nằm ngang vươn ra */}
+        <Path
+          d="M 120 380 L 220 340 L 400 340 L 370 410 L 120 410 Z"
+          fill="url(#lxbFacet3)"
+        />
+
+        {/* Kiến trúc Trụ Ngân Hàng Cổ Điển (Bank Pillars) màu trắng bạc */}
+        <G transform="translate(190, 160) scale(0.65)">
+          {/* Mái tam giác (Pediment) */}
+          <Path d="M 10 70 L 110 15 L 210 70 Z" fill="#FFFFFF" />
+          {/* Xà ngang trần (Architrave) */}
+          <Rect x="15" y="74" width="190" height="14" rx="3" fill="#E2E8F0" />
+          {/* 4 Trụ Cột (Pillars) */}
+          <Rect x="26" y="92" width="22" height="90" rx="4" fill="#FFFFFF" />
+          <Rect x="74" y="92" width="22" height="90" rx="4" fill="#FFFFFF" />
+          <Rect x="124" y="92" width="22" height="90" rx="4" fill="#FFFFFF" />
+          <Rect x="172" y="92" width="22" height="90" rx="4" fill="#FFFFFF" />
+          {/* Bậc thềm móng (Base) */}
+          <Rect x="15" y="186" width="190" height="14" rx="3" fill="#CBD5E1" />
+          <Rect x="5" y="204" width="210" height="16" rx="4" fill="#94A3B8" />
+        </G>
+      </Svg>
+    </View>
+  );
+};

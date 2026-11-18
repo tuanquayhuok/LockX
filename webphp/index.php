@@ -1463,6 +1463,11 @@ $currentAdmin = $_SESSION['admin_user'] ?? 'admin_lockx';
                     </div>
                 <?php endif; ?>
 
+                <!-- Link to Key Manager -->
+                <a href="key.php" class="btn btn-outline btn-sm" style="border-color: #8B5CF6; color: #A78BFA;" title="Quản lý & Sinh mã bản quyền tiện ích">
+                    <svg class="ui-icon" style="color: #A78BFA;"><use href="#i-shield"></use></svg> Quản Lý Key
+                </a>
+
                 <!-- Theme Toggle Button -->
                 <button type="button" onclick="toggleTheme()" class="btn btn-outline btn-sm" title="Chuyển chế độ Sáng / Tối" id="themeBtn">
                     <svg class="ui-icon"><use href="#i-dashboard"></use></svg> Chế Độ

@@ -25,7 +25,7 @@ class Database {
         } catch (PDOException $e) {
             // Nếu là trang Dashboard Web (index.php, admin.php), ném exception để giao diện xử lý
             $scriptName = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
-            if (strpos($scriptName, 'index.php') !== false || strpos($scriptName, 'admin.php') !== false || (isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'text/html') !== false)) {
+            if (php_sapi_name() === 'cli' || strpos($scriptName, 'index.php') !== false || strpos($scriptName, 'admin.php') !== false || strpos($scriptName, 'key.php') !== false || strpos($scriptName, 'verify.php') !== false || (isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'text/html') !== false)) {
                 throw $e;
             }
 

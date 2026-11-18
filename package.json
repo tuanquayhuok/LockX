@@ -5,6 +5,7 @@
   "dependencies": {
     "@expo/vector-icons": "^15.1.1",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "cors": "^2.8.6",
     "expo": "~57.0.24",
     "expo-asset": "~57.0.18",
     "expo-audio": "~57.0.5",
@@ -14,9 +15,11 @@
     "expo-device": "~57.0.2",
     "expo-document-picker": "~57.0.2",
     "expo-font": "~57.0.4",
+    "expo-glass-effect": "~57.0.5",
     "expo-local-authentication": "^57.0.3",
     "expo-notifications": "~57.0.20",
     "expo-status-bar": "~57.0.1",
+    "express": "^5.3.0",
     "react": "19.2.3",
     "react-dom": "^19.2.3",
     "react-native": "0.86.3",
@@ -25,6 +28,8 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
+    "eslint": "^9.0.0",
+    "eslint-config-expo": "~57.0.2",
     "typescript": "~6.0.3"
   },
   "scripts": {
@@ -32,7 +37,8 @@
     "dev": "expo start --web",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "lint": "expo lint"
   },
   "private": true
 }
