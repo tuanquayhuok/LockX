@@ -33392,18 +33392,10 @@ function MainApp() {
                 <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFFFFF' }}>Đóng</Text>
               </TouchableOpacity>
 
-              <View style={{ flex: 1, paddingHorizontal: 12, alignItems: 'center' }}>
-                <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#FFFFFF' }} numberOfLines={1}>
+              <View style={{ flex: 1, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: 14, fontWeight: '800', color: '#FFFFFF' }} numberOfLines={1}>
                   {previewMovieItem?.title || previewVideoTitle || 'Rạp Phim VIP'}
                 </Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 1 }}>
-                  <Svg width={10} height={10} viewBox="0 0 24 24" fill="#E50914">
-                    <SvgCircle cx="12" cy="12" r="10" />
-                  </Svg>
-                  <Text style={{ fontSize: 10, fontWeight: '800', color: '#E50914', letterSpacing: 0.5 }}>
-                    LOCKX CINEMA VIP
-                  </Text>
-                </View>
               </View>
 
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -33462,8 +33454,8 @@ function MainApp() {
                 // Khi bề ngang màn hình di động < 430px (ví dụ iPhone 13 390px, iPhone 15 393px),
                 // JWPlayer cần tối thiểu ~430px để hiển thị đầy đủ các nút Tua 10s, Play, Âm lượng, Thời lượng, Cài đặt và Toàn Màn Hình [ ].
                 // Bằng cách render iframe với targetWidth = 430px và scale xuống screenWidth, toàn bộ thanh chức năng sẽ hiển thị 100% không bị cắt mép!
-                const isMobileScaled = screenWidth < 430;
-                const targetWidth = isMobileScaled ? 430 : screenWidth;
+                const isMobileScaled = screenWidth < 460;
+                const targetWidth = isMobileScaled ? 460 : screenWidth;
                 const scaleRatio = isMobileScaled ? screenWidth / targetWidth : 1;
                 const containerHeight = Math.min(Math.round(screenWidth * (9 / 16)), 360);
                 const iframeHeight = isMobileScaled ? Math.round(targetWidth * (9 / 16)) : '100%';
