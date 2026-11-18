@@ -8714,6 +8714,21 @@ function MainApp() {
   const [isSavedMovie, setIsSavedMovie] = useState<boolean>(false);
   const [isLikedMovie, setIsLikedMovie] = useState<boolean>(false);
   const [isHeaderSearchActive, setIsHeaderSearchActive] = useState<boolean>(false);
+  const [cinemaPlayerScreenWidth, setCinemaPlayerScreenWidth] = useState<number>(() => {
+    if (typeof window !== 'undefined' && window.innerWidth) return window.innerWidth;
+    return Dimensions.get('window').width || 390;
+  });
+
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const handleResize = () => setCinemaPlayerScreenWidth(window.innerWidth);
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+    } else {
+      const sub = Dimensions.addEventListener('change', ({ window: w }) => setCinemaPlayerScreenWidth(w.width));
+      return () => sub?.remove?.();
+    }
+  }, []);
 
   // States cho tính năng Bình Luận (Thích, Trả lời bình luận, Đăng bình luận)
   const [movieComments, setMovieComments] = useState<Array<{
@@ -33441,252 +33456,81 @@ function MainApp() {
             </View>
 
             <ScrollView contentContainerStyle={{ paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
-              {/* ── 1. CINEMATIC VIDEO PLAYER CONTAINER (KẾT HỢP LIỀN MẠCH TRỰC TIẾP VỚI VIDEO) ── */}
-              <View
-                id="lockx-video-player-container"
-                style={{
-                  width: '100%',
-                  backgroundColor: '#000000',
-                  position: 'relative',
-                  borderBottomWidth: 1,
-                  borderBottomColor: 'rgba(255, 255, 255, 0.1)',
-                }}
-              >
-                {/* Khung Chiếu Video 16:9 Chuẩn */}
-                <View
-                  style={{
-                    width: '100%',
-                    height: Math.min(Math.round(Dimensions.get('window').width * (9 / 16)), 360),
-                    position: 'relative',
-                    backgroundColor: '#000000',
-                  }}
-                >
-                  {Platform.OS === 'web' ? (
-                    React.createElement('iframe', {
-                      id: 'lockx-cinema-iframe',
-                      key: `player-${previewPlayerMode}-${previewPlayerMode === 'stream' ? previewVideoUrl : previewEmbedUrl}`,
-                      src: previewPlayerMode === 'stream'
-                        ? (previewVideoUrl
-                            ? (previewVideoUrl.includes('.m3u8')
-                                ? `https://player.phimapi.com/player/?url=${encodeURIComponent(previewVideoUrl)}`
-                                : previewVideoUrl)
-                            : 'about:blank')
-                        : (previewEmbedUrl || (previewVideoUrl ? `https://player.phimapi.com/player/?url=${encodeURIComponent(previewVideoUrl)}` : 'about:blank')),
-                      style: { width: '100%', height: '100%', border: 'none', backgroundColor: '#000000', display: 'block' },
-                      allow: 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen',
-                      allowFullScreen: true,
-                    })
-                  ) : (
-                    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-                      <Svg width={54} height={54} viewBox="0 0 24 24" fill="#E50914">
-                        <SvgPath d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" />
-                      </Svg>
-                      <Text style={{ color: '#FFFFFF', marginTop: 10, fontSize: 14, fontWeight: '700', textAlign: 'center' }}>
-                        {previewPlayerMode === 'stream' ? 'Đang phát Luồng HLS 1080p' : 'Đang phát Web Embed Player'}
-                      </Text>
-                      <TouchableOpacity
-                        onPress={() => Linking.openURL(previewPlayerMode === 'stream' ? previewVideoUrl : (previewEmbedUrl || previewVideoUrl)).catch(() => {})}
-                        style={{ marginTop: 14, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10, backgroundColor: '#E50914' }}
-                      >
-                        <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>▶ Mở Trình Duyệt Toàn Màn Hình</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
+              {/* ── 1. CINEMATIC VIDEO PLAYER (16:9 EDGE-TO-EDGE CHUẨN ĐẦY ĐỦ CHỨC NĂNG) ── */}
+              {(() => {
+                const screenWidth = cinemaPlayerScreenWidth || (typeof window !== 'undefined' ? window.innerWidth : Dimensions.get('window').width) || 390;
+                // Khi bề ngang màn hình di động < 430px (ví dụ iPhone 13 390px, iPhone 15 393px),
+                // JWPlayer cần tối thiểu ~430px để hiển thị đầy đủ các nút Tua 10s, Play, Âm lượng, Thời lượng, Cài đặt và Toàn Màn Hình [ ].
+                // Bằng cách render iframe với targetWidth = 430px và scale xuống screenWidth, toàn bộ thanh chức năng sẽ hiển thị 100% không bị cắt mép!
+                const isMobileScaled = screenWidth < 430;
+                const targetWidth = isMobileScaled ? 430 : screenWidth;
+                const scaleRatio = isMobileScaled ? screenWidth / targetWidth : 1;
+                const containerHeight = Math.min(Math.round(screenWidth * (9 / 16)), 360);
+                const iframeHeight = isMobileScaled ? Math.round(targetWidth * (9 / 16)) : '100%';
 
-                  {/* Nút Phóng To & PiP Nổi Góc Trên Của Video */}
+                return (
                   <View
+                    id="lockx-video-player-container"
+                    onLayout={(e) => {
+                      const w = e.nativeEvent.layout.width;
+                      if (w > 0 && Math.abs(w - cinemaPlayerScreenWidth) > 2) {
+                        setCinemaPlayerScreenWidth(w);
+                      }
+                    }}
                     style={{
-                      position: 'absolute',
-                      top: 8,
-                      right: 8,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 6,
-                      zIndex: 50,
+                      width: '100%',
+                      height: containerHeight,
+                      backgroundColor: '#000000',
+                      position: 'relative',
+                      overflow: 'hidden',
+                      borderBottomWidth: 1,
+                      borderBottomColor: 'rgba(255, 255, 255, 0.1)',
                     }}
                   >
-                    <TouchableOpacity
-                      activeOpacity={0.8}
-                      onPress={toggleCinemaPiP}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 4,
-                        backgroundColor: cinemaIsPiPActive ? '#007AFF' : 'rgba(0, 0, 0, 0.75)',
-                        paddingHorizontal: 8,
-                        paddingVertical: 5,
-                        borderRadius: 6,
-                        borderWidth: 1,
-                        borderColor: 'rgba(255, 255, 255, 0.25)',
-                      }}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      <Svg width={13} height={13} viewBox="0 0 24 24" fill="none">
-                        <SvgRect x="2" y="4" width="20" height="16" rx="3" stroke="#FFFFFF" strokeWidth="2" />
-                        <SvgRect x="12" y="11" width="8" height="6" rx="1.5" fill={cinemaIsPiPActive ? '#FFFFFF' : '#E50914'} />
-                      </Svg>
-                      <Text style={{ color: '#FFFFFF', fontSize: 10.5, fontWeight: '800' }}>PiP</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      activeOpacity={0.8}
-                      onPress={toggleCinemaFullscreen}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 4,
-                        backgroundColor: cinemaIsFullscreen ? '#E50914' : 'rgba(0, 0, 0, 0.75)',
-                        paddingHorizontal: 8,
-                        paddingVertical: 5,
-                        borderRadius: 6,
-                        borderWidth: 1,
-                        borderColor: 'rgba(255, 255, 255, 0.25)',
-                      }}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      <Svg width={13} height={13} viewBox="0 0 24 24" fill="none">
-                        <SvgPath d="M8 3H5C3.9 3 3 3.9 3 5V8M21 8V5C21 3.9 20.1 3 19 3H16M16 21H19C20.1 21 21 20.1 21 19V16M3 16V19C3 20.1 3.9 21 5 21H8" stroke="#FFFFFF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                      </Svg>
-                      <Text style={{ color: '#FFFFFF', fontSize: 10.5, fontWeight: '800' }}>
-                        {cinemaIsFullscreen ? 'Thu Nhỏ' : 'Toàn Màn Hình'}
-                      </Text>
-                    </TouchableOpacity>
+                    {Platform.OS === 'web' ? (
+                      React.createElement('iframe', {
+                        id: 'lockx-cinema-iframe',
+                        key: `player-${previewPlayerMode}-${previewPlayerMode === 'stream' ? previewVideoUrl : previewEmbedUrl}`,
+                        src: previewPlayerMode === 'stream'
+                          ? (previewVideoUrl
+                              ? (previewVideoUrl.includes('.m3u8')
+                                  ? `https://player.phimapi.com/player/?url=${encodeURIComponent(previewVideoUrl)}`
+                                  : previewVideoUrl)
+                              : 'about:blank')
+                          : (previewEmbedUrl || (previewVideoUrl ? `https://player.phimapi.com/player/?url=${encodeURIComponent(previewVideoUrl)}` : 'about:blank')),
+                        style: {
+                          width: isMobileScaled ? targetWidth : '100%',
+                          height: iframeHeight,
+                          border: 'none',
+                          backgroundColor: '#000000',
+                          display: 'block',
+                          ...(isMobileScaled ? {
+                            transform: `scale(${scaleRatio})`,
+                            transformOrigin: 'top left',
+                          } : {}),
+                        },
+                        allow: 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen',
+                        allowFullScreen: true,
+                      })
+                    ) : (
+                      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+                        <Svg width={54} height={54} viewBox="0 0 24 24" fill="#E50914">
+                          <SvgPath d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" />
+                        </Svg>
+                        <Text style={{ color: '#FFFFFF', marginTop: 10, fontSize: 14, fontWeight: '700', textAlign: 'center' }}>
+                          {previewPlayerMode === 'stream' ? 'Đang phát Luồng HLS 1080p' : 'Đang phát Web Embed Player'}
+                        </Text>
+                        <TouchableOpacity
+                          onPress={() => Linking.openURL(previewPlayerMode === 'stream' ? previewVideoUrl : (previewEmbedUrl || previewVideoUrl)).catch(() => {})}
+                          style={{ marginTop: 14, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10, backgroundColor: '#E50914' }}
+                        >
+                          <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>▶ Mở Trình Duyệt Toàn Màn Hình</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
                   </View>
-                </View>
-
-                {/* Thanh Điều Khiển Kết Hợp Trực Tiếp Liền Mạch Dưới Video */}
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    backgroundColor: '#0A0A0E',
-                    paddingHorizontal: 12,
-                    paddingVertical: 7,
-                    borderTopWidth: 1,
-                    borderTopColor: 'rgba(255, 255, 255, 0.08)',
-                  }}
-                >
-                  {/* Nhóm Tua Nhanh 10 Giây */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <TouchableOpacity
-                      activeOpacity={0.8}
-                      onPress={() => handleSeekRelative(-10)}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 3,
-                        backgroundColor: '#181820',
-                        paddingHorizontal: 8,
-                        paddingVertical: 5,
-                        borderRadius: 6,
-                        borderWidth: 1,
-                        borderColor: 'rgba(255, 255, 255, 0.1)',
-                      }}
-                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                    >
-                      <Svg width={13} height={13} viewBox="0 0 24 24" fill="none">
-                        <SvgPath d="M1 4V10H7" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                        <SvgPath d="M3.51 15A9 9 0 106 5.64L1 10" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                      </Svg>
-                      <Text style={{ color: '#D1D5DB', fontSize: 10.5, fontWeight: '800' }}>-10s</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      activeOpacity={0.8}
-                      onPress={() => handleSeekRelative(10)}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 3,
-                        backgroundColor: '#181820',
-                        paddingHorizontal: 8,
-                        paddingVertical: 5,
-                        borderRadius: 6,
-                        borderWidth: 1,
-                        borderColor: 'rgba(255, 255, 255, 0.1)',
-                      }}
-                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                    >
-                      <Svg width={13} height={13} viewBox="0 0 24 24" fill="none">
-                        <SvgPath d="M23 4V10H17" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                        <SvgPath d="M20.49 15A9 9 0 1118 5.64L23 10" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                      </Svg>
-                      <Text style={{ color: '#D1D5DB', fontSize: 10.5, fontWeight: '800' }}>+10s</Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  {/* Nút Chỉnh Tốc Độ Video (1.0x / 1.25x / 1.5x / 2.0x) */}
-                  <TouchableOpacity
-                    activeOpacity={0.8}
-                    onPress={cyclePlaybackSpeed}
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 4,
-                      backgroundColor: '#181820',
-                      paddingHorizontal: 9,
-                      paddingVertical: 5,
-                      borderRadius: 6,
-                      borderWidth: 1,
-                      borderColor: 'rgba(255, 214, 10, 0.35)',
-                    }}
-                  >
-                    <Svg width={11} height={11} viewBox="0 0 24 24" fill="#FFD60A">
-                      <SvgPolygon points="13,2 3,14 12,14 11,22 21,10 12,10" />
-                    </Svg>
-                    <Text style={{ color: '#FFD60A', fontSize: 11, fontWeight: '900' }}>
-                      {cinemaPlaybackSpeed}
-                    </Text>
-                  </TouchableOpacity>
-
-                  {/* Cụm Phóng To & PiP Tiện Lợi (Không bao giờ bị cắt mép màn hình) */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <TouchableOpacity
-                      activeOpacity={0.8}
-                      onPress={toggleCinemaPiP}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 3,
-                        backgroundColor: cinemaIsPiPActive ? '#007AFF' : '#181820',
-                        paddingHorizontal: 8,
-                        paddingVertical: 5,
-                        borderRadius: 6,
-                        borderWidth: 1,
-                        borderColor: cinemaIsPiPActive ? '#007AFF' : 'rgba(255, 255, 255, 0.1)',
-                      }}
-                    >
-                      <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
-                        <SvgRect x="2" y="4" width="20" height="16" rx="3" stroke="#FFFFFF" strokeWidth="2" />
-                        <SvgRect x="12" y="11" width="8" height="6" rx="1.5" fill={cinemaIsPiPActive ? '#FFFFFF' : '#E50914'} />
-                      </Svg>
-                      <Text style={{ color: '#FFFFFF', fontSize: 10.5, fontWeight: '800' }}>PiP</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      activeOpacity={0.8}
-                      onPress={toggleCinemaFullscreen}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 4,
-                        backgroundColor: '#E50914',
-                        paddingHorizontal: 9,
-                        paddingVertical: 5,
-                        borderRadius: 6,
-                      }}
-                    >
-                      <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
-                        <SvgPath d="M8 3H5C3.9 3 3 3.9 3 5V8M21 8V5C21 3.9 20.1 3 19 3H16M16 21H19C20.1 21 21 20.1 21 19V16M3 16V19C3 20.1 3.9 21 5 21H8" stroke="#FFFFFF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                      </Svg>
-                      <Text style={{ color: '#FFFFFF', fontSize: 10.5, fontWeight: '900' }}>
-                        {cinemaIsFullscreen ? 'Thu Nhỏ' : 'Toàn Màn'}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
+                );
+              })()}
 
               {/* ── 2. MOVIE DETAILS (CHUẨN NETFLIX / FPT PLAY VIP) ── */}
               <View style={{ paddingHorizontal: 16, paddingTop: 4 }}>
