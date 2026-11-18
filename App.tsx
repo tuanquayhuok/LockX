@@ -31206,7 +31206,7 @@ function MainApp() {
               alignItems: 'center',
               justifyContent: 'space-between',
               paddingHorizontal: 16,
-              paddingTop: Platform.OS === 'web' ? 22 : 48,
+              paddingTop: Platform.OS === 'web' ? 44 : 52,
               paddingBottom: 12,
               backgroundColor: '#0E0E12',
               borderBottomWidth: 1,
@@ -31220,7 +31220,7 @@ function MainApp() {
                 flexDirection: 'row',
                 alignItems: 'center',
                 gap: 6,
-                paddingHorizontal: 11,
+                paddingHorizontal: 12,
                 paddingVertical: 7,
                 borderRadius: 20,
                 backgroundColor: 'rgba(255, 255, 255, 0.08)',
@@ -31248,7 +31248,7 @@ function MainApp() {
                     borderRadius: 5,
                   }}
                 >
-                  <Text style={{ fontSize: 9.5, fontWeight: '900', color: '#FFFFFF', letterSpacing: 0.5 }}>VIP HUB</Text>
+                  <Text style={{ fontSize: 9.5, fontWeight: '900', color: '#FFFFFF', letterSpacing: 0.5 }}>VIP</Text>
                 </View>
               </View>
               <Text style={{ fontSize: 10.5, color: '#8E8E93', fontWeight: '500', marginTop: 2 }}>
@@ -31256,32 +31256,8 @@ function MainApp() {
               </Text>
             </View>
 
-            <TouchableOpacity
-              onPress={() => {
-                setShowCreateRoomModal(true);
-                if (!cinemaSelectedMovie && allCatalogMovies.length > 0) {
-                  setCinemaSelectedMovie(allCatalogMovies[0]);
-                }
-              }}
-              activeOpacity={0.8}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 5,
-                backgroundColor: 'rgba(229, 9, 20, 0.2)',
-                borderWidth: 1,
-                borderColor: '#E50914',
-                paddingHorizontal: 11,
-                paddingVertical: 7,
-                borderRadius: 10,
-              }}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            >
-              <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
-                <SvgPath d="M12 5V19M5 12H19" stroke="#E50914" strokeWidth="2.5" strokeLinecap="round" />
-              </Svg>
-              <Text style={{ fontSize: 12, fontWeight: '800', color: '#E50914' }}>Tạo Phòng</Text>
-            </TouchableOpacity>
+            {/* Cân đối khoảng cách với nút Thoát bên trái */}
+            <View style={{ width: 68 }} />
           </View>
 
           {/* ═══════════════════════════════════════════════════════════════ */}
@@ -31361,7 +31337,7 @@ function MainApp() {
               contentContainerStyle={{ padding: 14, paddingBottom: 80 }}
               showsVerticalScrollIndicator={false}
             >
-              {/* ── BANNER CAROUSEL SLIDER (HIỆU ỨNG TRƯỢT NHIỀU BANNER KHÔNG VỠ ẢNH) ── */}
+              {/* ── BANNER CAROUSEL SLIDER (CHỈ CÓ HÌNH ẢNH, KHÔNG TEXT, ẤN VÔ MỞ CHI TIẾT PHIM) ── */}
               {cinemaBannerList.length > 0 && (() => {
                 const currentBanner = cinemaBannerList[cinemaActiveBannerIndex % cinemaBannerList.length];
                 return (
@@ -31375,12 +31351,16 @@ function MainApp() {
                       marginBottom: 16,
                       position: 'relative',
                       shadowColor: '#000000',
-                      shadowOffset: { width: 0, height: 8 },
-                      shadowOpacity: 0.6,
-                      shadowRadius: 14,
+                      shadowOffset: { width: 0, height: 6 },
+                      shadowOpacity: 0.5,
+                      shadowRadius: 12,
                     }}
                   >
-                    <View style={{ height: 215, position: 'relative' }}>
+                    <TouchableOpacity
+                      activeOpacity={0.9}
+                      onPress={() => handleCinemaSelectMovie(currentBanner)}
+                      style={{ width: '100%', height: 205, position: 'relative' }}
+                    >
                       <Image
                         key={`banner-img-${currentBanner?.code || currentBanner?.title}`}
                         source={{ uri: currentBanner?.image }}
@@ -31388,223 +31368,87 @@ function MainApp() {
                         resizeMode="cover"
                       />
 
-                      {/* Multi-gradient backdrop overlay */}
+                      {/* Dots Indicator ở góc dưới banner */}
                       <View
                         style={{
                           position: 'absolute',
-                          top: 0,
+                          bottom: 10,
                           left: 0,
                           right: 0,
-                          bottom: 0,
-                          backgroundColor: 'rgba(5, 5, 8, 0.52)',
-                          justifyContent: 'space-between',
-                          padding: 14,
+                          flexDirection: 'row',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          gap: 6,
                         }}
                       >
-                        {/* Top Badges */}
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <View
-                            style={{
-                              flexDirection: 'row',
-                              alignItems: 'center',
-                              gap: 5,
-                              backgroundColor: '#E50914',
-                              paddingHorizontal: 9,
-                              paddingVertical: 4,
-                              borderRadius: 6,
-                            }}
-                          >
-                            <Svg width={12} height={12} viewBox="0 0 24 24" fill="#FFFFFF">
-                              <SvgPath d="M12 23c6.075 0 11-4.925 11-11 0-4.04-2.185-7.57-5.46-9.52-.39-.23-.88.08-.83.53.4 3.73-1.63 6.99-4.71 8.35V2.5c0-.42-.48-.68-.83-.44C7.03 4.88 4 9.17 4 14c0 4.97 3.58 9 8 9z" />
-                            </Svg>
-                            <Text style={{ fontSize: 10.5, fontWeight: '900', color: '#FFFFFF', letterSpacing: 0.3 }}>
-                              SIÊU PHẨM • 4K ULTRA HD
-                            </Text>
-                          </View>
-
-                          <View
-                            style={{
-                              backgroundColor: 'rgba(0, 0, 0, 0.75)',
-                              borderWidth: 1,
-                              borderColor: 'rgba(255, 214, 10, 0.4)',
-                              paddingHorizontal: 9,
-                              paddingVertical: 4,
-                              borderRadius: 6,
-                              flexDirection: 'row',
-                              alignItems: 'center',
-                              gap: 4,
-                            }}
-                          >
-                            <Svg width={12} height={12} viewBox="0 0 24 24" fill="#FFD60A">
-                              <SvgPolygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
-                            </Svg>
-                            <Text style={{ fontSize: 11.5, fontWeight: '900', color: '#FFD60A' }}>
-                              {currentBanner?.rating || '9.8'}
-                            </Text>
-                          </View>
-                        </View>
-
-                        {/* Bottom Info & Buttons */}
-                        <View>
-                          <Text
-                            style={{
-                              fontSize: 20,
-                              fontWeight: '900',
-                              color: '#FFFFFF',
-                              marginBottom: 4,
-                              textShadowColor: 'rgba(0, 0, 0, 0.9)',
-                              textShadowOffset: { width: 0, height: 2 },
-                              textShadowRadius: 6,
-                            }}
-                            numberOfLines={1}
-                          >
-                            {currentBanner?.title}
-                          </Text>
-
-                          <Text
-                            style={{
-                              fontSize: 12,
-                              color: '#E5E7EB',
-                              marginBottom: 10,
-                              fontWeight: '600',
-                              textShadowColor: 'rgba(0, 0, 0, 0.8)',
-                              textShadowOffset: { width: 0, height: 1 },
-                              textShadowRadius: 4,
-                            }}
-                            numberOfLines={1}
-                          >
-                            {currentBanner?.year} • {currentBanner?.duration} • {currentBanner?.views} lượt xem • Lồng Tiếng & Vietsub
-                          </Text>
-
-                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <View style={{ flexDirection: 'row', gap: 10 }}>
-                              <TouchableOpacity
-                                activeOpacity={0.85}
-                                onPress={() => {
-                                  handleSelectScrapedMovie(currentBanner);
-                                  handleWatchDirectly(currentBanner);
-                                }}
-                                style={{
-                                  flexDirection: 'row',
-                                  alignItems: 'center',
-                                  gap: 6,
-                                  backgroundColor: '#E50914',
-                                  paddingHorizontal: 16,
-                                  paddingVertical: 9,
-                                  borderRadius: 10,
-                                  shadowColor: '#E50914',
-                                  shadowOffset: { width: 0, height: 4 },
-                                  shadowOpacity: 0.5,
-                                  shadowRadius: 8,
-                                }}
-                              >
-                                <Svg width={14} height={14} viewBox="0 0 24 24" fill="#FFFFFF">
-                                  <SvgPolygon points="5,3 19,12 5,21" />
-                                </Svg>
-                                <Text style={{ fontSize: 13, fontWeight: '900', color: '#FFFFFF' }}>
-                                  Xem Ngay
-                                </Text>
-                              </TouchableOpacity>
-
-                              <TouchableOpacity
-                                activeOpacity={0.85}
-                                onPress={() => handleCinemaSelectMovie(currentBanner)}
-                                style={{
-                                  flexDirection: 'row',
-                                  alignItems: 'center',
-                                  gap: 6,
-                                  backgroundColor: 'rgba(255, 255, 255, 0.22)',
-                                  borderWidth: 1,
-                                  borderColor: 'rgba(255, 255, 255, 0.3)',
-                                  paddingHorizontal: 14,
-                                  paddingVertical: 9,
-                                  borderRadius: 10,
-                                }}
-                              >
-                                <Svg width={15} height={15} viewBox="0 0 24 24" fill="none">
-                                  <SvgCircle cx="12" cy="12" r="10" stroke="#FFFFFF" strokeWidth="2.2" />
-                                  <SvgLine x1="12" y1="16" x2="12" y2="12" stroke="#FFFFFF" strokeWidth="2.2" strokeLinecap="round" />
-                                  <SvgCircle cx="12" cy="8" r="1.2" fill="#FFFFFF" />
-                                </Svg>
-                                <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFFFFF' }}>
-                                  Chi Tiết
-                                </Text>
-                              </TouchableOpacity>
-                            </View>
-
-                            {/* Dots Indicator */}
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                              {cinemaBannerList.map((_, dotIdx) => {
-                                const isCurrent = (cinemaActiveBannerIndex % cinemaBannerList.length) === dotIdx;
-                                return (
-                                  <TouchableOpacity
-                                    key={`b-dot-${dotIdx}`}
-                                    activeOpacity={0.8}
-                                    onPress={() => setCinemaActiveBannerIndex(dotIdx)}
-                                    style={{
-                                      width: isCurrent ? 20 : 6,
-                                      height: 6,
-                                      borderRadius: 3,
-                                      backgroundColor: isCurrent ? '#E50914' : 'rgba(255, 255, 255, 0.4)',
-                                    }}
-                                  />
-                                );
-                              })}
-                            </View>
-                          </View>
-                        </View>
+                        {cinemaBannerList.map((_, dotIdx) => {
+                          const isCurrent = (cinemaActiveBannerIndex % cinemaBannerList.length) === dotIdx;
+                          return (
+                            <TouchableOpacity
+                              key={`b-dot-${dotIdx}`}
+                              activeOpacity={0.8}
+                              onPress={() => setCinemaActiveBannerIndex(dotIdx)}
+                              style={{
+                                width: isCurrent ? 22 : 6,
+                                height: 6,
+                                borderRadius: 3,
+                                backgroundColor: isCurrent ? '#E50914' : 'rgba(255, 255, 255, 0.45)',
+                              }}
+                            />
+                          );
+                        })}
                       </View>
+                    </TouchableOpacity>
 
-                      {/* Previous Slide Button */}
-                      <TouchableOpacity
-                        activeOpacity={0.8}
-                        onPress={() => setCinemaActiveBannerIndex((prev) => (prev - 1 + cinemaBannerList.length) % cinemaBannerList.length)}
-                        style={{
-                          position: 'absolute',
-                          left: 8,
-                          top: '38%',
-                          width: 32,
-                          height: 32,
-                          borderRadius: 16,
-                          backgroundColor: 'rgba(0, 0, 0, 0.65)',
-                          borderWidth: 1,
-                          borderColor: 'rgba(255, 255, 255, 0.2)',
-                          justifyContent: 'center',
-                          alignItems: 'center',
-                          zIndex: 20,
-                        }}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      >
-                        <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-                          <SvgPath d="M15 19L8 12L15 5" stroke="#FFFFFF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                        </Svg>
-                      </TouchableOpacity>
+                    {/* Previous Slide Button */}
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      onPress={() => setCinemaActiveBannerIndex((prev) => (prev - 1 + cinemaBannerList.length) % cinemaBannerList.length)}
+                      style={{
+                        position: 'absolute',
+                        left: 8,
+                        top: '40%',
+                        width: 32,
+                        height: 32,
+                        borderRadius: 16,
+                        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                        borderWidth: 1,
+                        borderColor: 'rgba(255, 255, 255, 0.2)',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        zIndex: 20,
+                      }}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                        <SvgPath d="M15 19L8 12L15 5" stroke="#FFFFFF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </Svg>
+                    </TouchableOpacity>
 
-                      {/* Next Slide Button */}
-                      <TouchableOpacity
-                        activeOpacity={0.8}
-                        onPress={() => setCinemaActiveBannerIndex((prev) => (prev + 1) % cinemaBannerList.length)}
-                        style={{
-                          position: 'absolute',
-                          right: 8,
-                          top: '38%',
-                          width: 32,
-                          height: 32,
-                          borderRadius: 16,
-                          backgroundColor: 'rgba(0, 0, 0, 0.65)',
-                          borderWidth: 1,
-                          borderColor: 'rgba(255, 255, 255, 0.2)',
-                          justifyContent: 'center',
-                          alignItems: 'center',
-                          zIndex: 20,
-                        }}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      >
-                        <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-                          <SvgPath d="M9 5L16 12L9 19" stroke="#FFFFFF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                        </Svg>
-                      </TouchableOpacity>
-                    </View>
+                    {/* Next Slide Button */}
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      onPress={() => setCinemaActiveBannerIndex((prev) => (prev + 1) % cinemaBannerList.length)}
+                      style={{
+                        position: 'absolute',
+                        right: 8,
+                        top: '40%',
+                        width: 32,
+                        height: 32,
+                        borderRadius: 16,
+                        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                        borderWidth: 1,
+                        borderColor: 'rgba(255, 255, 255, 0.2)',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        zIndex: 20,
+                      }}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                        <SvgPath d="M9 5L16 12L9 19" stroke="#FFFFFF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </Svg>
+                    </TouchableOpacity>
                   </View>
                 );
               })()}
@@ -33504,60 +33348,6 @@ function MainApp() {
                     <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#D1D5DB' }}>DOLBY 5.1</Text>
                   </View>
                 </View>
-
-                {/* Primary Netflix Action Buttons */}
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  onPress={() => {
-                    setPreviewPlayerMode(previewPlayerMode === 'stream' ? 'embed' : 'stream');
-                    triggerToast(`Đã chuyển sang ${previewPlayerMode === 'stream' ? 'Luồng Web Embed' : 'Luồng HLS Direct'}!`, 'Đổi Luồng Phát', 'info');
-                  }}
-                  style={{
-                    backgroundColor: '#FFFFFF',
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    paddingVertical: 11,
-                    borderRadius: 8,
-                    gap: 8,
-                    marginBottom: 8,
-                  }}
-                >
-                  <Svg width={18} height={18} viewBox="0 0 24 24" fill="#000000">
-                    <SvgPolygon points="5,3 19,12 5,21" />
-                  </Svg>
-                  <Text style={{ color: '#000000', fontSize: 14, fontWeight: '900', letterSpacing: 0.3 }}>
-                    {previewPlayerMode === 'stream' ? 'Đang Phát Luồng HLS 1080p (Bấm để đổi Embed)' : 'Đang Phát Embed Player (Bấm để đổi HLS)'}
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  onPress={() => {
-                    const toDownload = previewVideoUrl || previewEmbedUrl || '';
-                    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                      navigator.clipboard.writeText(toDownload);
-                    }
-                    triggerToast('Đã copy đường dẫn stream! Mở VLC hoặc Safari để tải về.', 'Tải Phim', 'success');
-                  }}
-                  style={{
-                    backgroundColor: 'rgba(255, 255, 255, 0.12)',
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    paddingVertical: 10,
-                    borderRadius: 8,
-                    gap: 8,
-                    marginBottom: 14,
-                  }}
-                >
-                  <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-                    <SvgPath d="M12 3V15M12 15L7 10M12 15L17 10M4 21H20" stroke="#FFFFFF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-                  </Svg>
-                  <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>
-                    Tải Tập Phim (Xem Offline)
-                  </Text>
-                </TouchableOpacity>
 
                 {/* Synopsis with Expand/Collapse */}
                 <Text
