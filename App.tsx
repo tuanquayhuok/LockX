@@ -33460,11 +33460,14 @@ function MainApp() {
                 // Tua lại 10s, Play, Tua tới 10s, Âm lượng, Bộ đếm thời gian, Thanh tua tiến trình,
                 // Bánh răng Cài đặt, Cửa sổ nổi PiP, và Phóng to toàn màn hình [ ].
                 // Scale CSS transform từ 540px giúp mọi chức năng không bị cắt mép trên mọi dòng iPhone/Android (kể cả khi đang xem).
-                const isMobileScaled = screenWidth < 540;
-                const targetWidth = isMobileScaled ? 540 : screenWidth;
+                // Cân chỉnh vừa vặn tỉ lệ 16:9 chuẩn (targetWidth 468px)
+                // Đảm bảo video to rõ không bị teo nhỏ, không lộ khoảng đen bên dưới,
+                // đồng thời thanh điều khiển hiển thị đầy đủ 100% (Settings, PiP, Fullscreen).
+                const isMobileScaled = screenWidth < 468;
+                const targetWidth = isMobileScaled ? 468 : screenWidth;
                 const scaleRatio = isMobileScaled ? screenWidth / targetWidth : 1;
-                const containerHeight = Math.min(Math.round(screenWidth * (9 / 16)), 380);
                 const targetHeight = isMobileScaled ? Math.round(targetWidth * (9 / 16)) : '100%';
+                const containerHeight = isMobileScaled ? Math.round(targetHeight * scaleRatio) : Math.min(Math.round(screenWidth * (9 / 16)), 360);
 
                 return (
                   <View
