@@ -33451,14 +33451,16 @@ function MainApp() {
               {/* ── 1. CINEMATIC VIDEO PLAYER (16:9 EDGE-TO-EDGE CHUẨN ĐẦY ĐỦ CHỨC NĂNG) ── */}
               {(() => {
                 const screenWidth = cinemaPlayerScreenWidth || (typeof window !== 'undefined' ? window.innerWidth : Dimensions.get('window').width) || 390;
-                // Khi bề ngang màn hình di động < 430px (ví dụ iPhone 13 390px, iPhone 15 393px),
-                // JWPlayer cần tối thiểu ~430px để hiển thị đầy đủ các nút Tua 10s, Play, Âm lượng, Thời lượng, Cài đặt và Toàn Màn Hình [ ].
-                // Bằng cách render iframe với targetWidth = 430px và scale xuống screenWidth, toàn bộ thanh chức năng sẽ hiển thị 100% không bị cắt mép!
-                const isMobileScaled = screenWidth < 460;
-                const targetWidth = isMobileScaled ? 460 : screenWidth;
-                const scaleRatio = isMobileScaled ? screenWidth / targetWidth : 1;
+                // JWPlayer controlbar cần tối thiểu ~440px ngang để hiển thị toàn bộ icon (bao gồm Fullscreen).
+                // Popup "Tiếp tục xem" (resumeModal) dùng position:fixed bên trong iframe, cần chiều cao viewport đủ lớn.
+                // Ta render iframe ở kích thước thật (targetWidth × targetHeight), rồi dùng CSS zoom (không phải transform)
+                // để thu nhỏ vừa container. CSS zoom giữ layout chính xác hơn transform cho fixed-position overlays.
+                const isMobileScaled = screenWidth < 440;
+                const targetWidth = isMobileScaled ? 440 : screenWidth;
+                const zoomRatio = isMobileScaled ? screenWidth / targetWidth : 1;
                 const containerHeight = Math.min(Math.round(screenWidth * (9 / 16)), 360);
-                const iframeHeight = isMobileScaled ? Math.round(targetWidth * (9 / 16)) : '100%';
+                // Iframe internal height: để popup resume vừa vặn, dùng tỉ lệ cao hơn 16:9 một chút cho viewport nội bộ
+                const iframeInternalHeight = isMobileScaled ? Math.round(containerHeight / zoomRatio) : '100%';
 
                 return (
                   <View
@@ -33492,13 +33494,12 @@ function MainApp() {
                           : (previewEmbedUrl || (previewVideoUrl ? `https://player.phimapi.com/player/?url=${encodeURIComponent(previewVideoUrl)}` : 'about:blank')),
                         style: {
                           width: isMobileScaled ? targetWidth : '100%',
-                          height: iframeHeight,
+                          height: iframeInternalHeight,
                           border: 'none',
                           backgroundColor: '#000000',
                           display: 'block',
                           ...(isMobileScaled ? {
-                            transform: `scale(${scaleRatio})`,
-                            transformOrigin: 'top left',
+                            zoom: zoomRatio,
                           } : {}),
                         },
                         allow: 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen',
