@@ -33455,12 +33455,16 @@ function MainApp() {
                 // Popup "Tiếp tục xem" (resumeModal) dùng position:fixed bên trong iframe, cần chiều cao viewport đủ lớn.
                 // Ta render iframe ở kích thước thật (targetWidth × targetHeight), rồi dùng CSS zoom (không phải transform)
                 // để thu nhỏ vừa container. CSS zoom giữ layout chính xác hơn transform cho fixed-position overlays.
-                const isMobileScaled = screenWidth < 440;
-                const targetWidth = isMobileScaled ? 440 : screenWidth;
-                const zoomRatio = isMobileScaled ? screenWidth / targetWidth : 1;
-                const containerHeight = Math.min(Math.round(screenWidth * (9 / 16)), 360);
-                // Iframe internal height: để popup resume vừa vặn, dùng tỉ lệ cao hơn 16:9 một chút cho viewport nội bộ
-                const iframeInternalHeight = isMobileScaled ? Math.round(containerHeight / zoomRatio) : '100%';
+                // JWPlayer controlbar khi đang phát video (kèm bộ đếm thời lượng dài như 46:12 / 01:39:22)
+                // cần bề ngang tối thiểu ~540px để hiển thị đầy đủ 100% tất cả các nút:
+                // Tua lại 10s, Play, Tua tới 10s, Âm lượng, Bộ đếm thời gian, Thanh tua tiến trình,
+                // Bánh răng Cài đặt, Cửa sổ nổi PiP, và Phóng to toàn màn hình [ ].
+                // Scale CSS transform từ 540px giúp mọi chức năng không bị cắt mép trên mọi dòng iPhone/Android (kể cả khi đang xem).
+                const isMobileScaled = screenWidth < 540;
+                const targetWidth = isMobileScaled ? 540 : screenWidth;
+                const scaleRatio = isMobileScaled ? screenWidth / targetWidth : 1;
+                const containerHeight = Math.min(Math.round(screenWidth * (9 / 16)), 380);
+                const targetHeight = isMobileScaled ? Math.round(targetWidth * (9 / 16)) : '100%';
 
                 return (
                   <View
@@ -33494,12 +33498,13 @@ function MainApp() {
                           : (previewEmbedUrl || (previewVideoUrl ? `https://player.phimapi.com/player/?url=${encodeURIComponent(previewVideoUrl)}` : 'about:blank')),
                         style: {
                           width: isMobileScaled ? targetWidth : '100%',
-                          height: iframeInternalHeight,
+                          height: isMobileScaled ? targetHeight : '100%',
                           border: 'none',
                           backgroundColor: '#000000',
                           display: 'block',
                           ...(isMobileScaled ? {
-                            zoom: zoomRatio,
+                            transform: `scale(${scaleRatio})`,
+                            transformOrigin: 'top left',
                           } : {}),
                         },
                         allow: 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen',
