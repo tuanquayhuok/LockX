@@ -8545,7 +8545,7 @@ function MainApp() {
   const getLicenseTimeRemainingText = (data: any, keyStr: string) => {
     if (!keyStr) return 'Chưa có key';
     if (data?.is_lifetime || keyStr.includes('VIP') || keyStr.includes('PRO') || data?.duration_days === 0) {
-      return 'Vĩnh Viễn (Lifetime VIP • Trọn Đời)';
+      return 'Vĩnh Viễn (Lifetime VIP)';
     }
     if (!data?.expires_at) {
       return 'Gói 30 Ngày (Đang Hoạt Động)';
@@ -19883,8 +19883,8 @@ function MainApp() {
           >
             {/* HERO BANNER: LOCKX TOOLBOX PRO */}
             <View style={{
-              borderRadius: 24,
-              padding: 20,
+              borderRadius: 22,
+              padding: 16,
               backgroundColor: isLight ? '#FFFFFF' : '#141416',
               borderWidth: 1,
               borderColor: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)',
@@ -19892,7 +19892,7 @@ function MainApp() {
               shadowOffset: { width: 0, height: 6 },
               shadowOpacity: isLight ? 0.08 : 0.25,
               shadowRadius: 16,
-              marginBottom: 20,
+              marginBottom: 16,
               position: 'relative',
               overflow: 'hidden',
             }}>
@@ -19901,56 +19901,64 @@ function MainApp() {
                 position: 'absolute',
                 top: -30,
                 right: -30,
-                width: 140,
-                height: 140,
-                borderRadius: 70,
-                backgroundColor: 'rgba(139, 92, 246, 0.18)',
+                width: 130,
+                height: 130,
+                borderRadius: 65,
+                backgroundColor: 'rgba(139, 92, 246, 0.15)',
               }} />
 
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 12 }}>
+                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                   <View style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 14,
+                    width: 42,
+                    height: 42,
+                    borderRadius: 13,
                     backgroundColor: 'rgba(139, 92, 246, 0.2)',
                     justifyContent: 'center',
                     alignItems: 'center',
                     borderWidth: 1,
                     borderColor: 'rgba(139, 92, 246, 0.4)',
+                    flexShrink: 0,
                   }}>
-                    <Ionicons name="sparkles" size={22} color="#A78BFA" />
+                    <Svg width={20} height={20} viewBox="0 0 24 24" fill="#A78BFA">
+                      <SvgPolygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
+                    </Svg>
                   </View>
-                  <View>
-                    <Text style={{ fontSize: 20, fontWeight: '800', color: isLight ? '#0F172A' : '#FFFFFF', letterSpacing: -0.4 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text numberOfLines={1} style={{ fontSize: 18, fontWeight: '800', color: isLight ? '#0F172A' : '#FFFFFF', letterSpacing: -0.3 }}>
                       LockX Toolbox Pro
                     </Text>
-                    <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 1 }}>
+                    <Text numberOfLines={1} style={{ fontSize: 11.5, color: '#8E8E93', marginTop: 1 }}>
                       Bộ công cụ tiện ích mạng, media & hệ thống
                     </Text>
                   </View>
                 </View>
+
+                {/* Status Pill Badge */}
                 <TouchableOpacity
                   activeOpacity={0.7}
                   onPress={handleRevokeToolsKey}
                   style={{
+                    flexShrink: 0,
                     flexDirection: 'row',
                     alignItems: 'center',
-                    gap: 6,
-                    paddingHorizontal: 10,
-                    paddingVertical: 5,
+                    gap: 5,
+                    paddingHorizontal: 9,
+                    paddingVertical: 4.5,
                     borderRadius: 20,
                     backgroundColor: 'rgba(16, 185, 129, 0.15)',
                     borderWidth: 1,
-                    borderColor: 'rgba(16, 185, 129, 0.3)',
+                    borderColor: 'rgba(16, 185, 129, 0.35)',
                   }}
                   title="Nhấn để đổi hoặc hủy Key"
                 >
-                  <Ionicons name="key" size={12} color="#10B981" />
+                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981' }} />
                   <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#10B981', letterSpacing: 0.5 }}>
-                    {toolsLicenseKey || 'PRO UNLOCKED'}
+                    VIP PRO
                   </Text>
-                  <Ionicons name="close-circle" size={13} color="#10B981" />
+                  <Svg width={12} height={12} viewBox="0 0 24 24" fill="#10B981">
+                    <SvgPath d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z" />
+                  </Svg>
                 </TouchableOpacity>
               </View>
 
@@ -19958,30 +19966,30 @@ function MainApp() {
               <View style={{
                 flexDirection: 'row',
                 backgroundColor: isLight ? '#F8FAFC' : '#1C1C1E',
-                borderRadius: 16,
-                padding: 12,
-                marginTop: 6,
+                borderRadius: 14,
+                padding: 10,
+                marginTop: 4,
                 justifyContent: 'space-around',
                 borderWidth: 1,
                 borderColor: isLight ? '#E2E8F0' : '#2C2C2E',
               }}>
                 <View style={{ alignItems: 'center' }}>
-                  <Text style={{ fontSize: 11, color: '#8E8E93', fontWeight: '600' }}>KHO TÀI KHOẢN</Text>
-                  <Text style={{ fontSize: 16, fontWeight: '800', color: appSettings.accentColor, marginTop: 2 }}>
+                  <Text style={{ fontSize: 10, color: '#8E8E93', fontWeight: '700' }}>KHO TÀI KHOẢN</Text>
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: appSettings.accentColor, marginTop: 2 }}>
                     {accounts.length}
                   </Text>
                 </View>
                 <View style={{ width: 1, backgroundColor: isLight ? '#E2E8F0' : '#2C2C2E' }} />
                 <View style={{ alignItems: 'center' }}>
-                  <Text style={{ fontSize: 11, color: '#8E8E93', fontWeight: '600' }}>ỨNG DỤNG BẢO VỆ</Text>
-                  <Text style={{ fontSize: 16, fontWeight: '800', color: '#38BDF8', marginTop: 2 }}>
+                  <Text style={{ fontSize: 10, color: '#8E8E93', fontWeight: '700' }}>ỨNG DỤNG BẢO VỆ</Text>
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: '#38BDF8', marginTop: 2 }}>
                     {phoneApps.length}
                   </Text>
                 </View>
                 <View style={{ width: 1, backgroundColor: isLight ? '#E2E8F0' : '#2C2C2E' }} />
                 <View style={{ alignItems: 'center' }}>
-                  <Text style={{ fontSize: 11, color: '#8E8E93', fontWeight: '600' }}>DNS / MẠNG</Text>
-                  <Text style={{ fontSize: 16, fontWeight: '800', color: '#10B981', marginTop: 2 }}>
+                  <Text style={{ fontSize: 10, color: '#8E8E93', fontWeight: '700' }}>DNS / MẠNG</Text>
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: '#10B981', marginTop: 2 }}>
                     ONLINE
                   </Text>
                 </View>
@@ -19991,34 +19999,38 @@ function MainApp() {
             {/* THẺ QUẢN LÝ BẢN QUYỀN KEY & THỜI HẠN SỬ DỤNG */}
             <View style={{
               borderRadius: 20,
-              padding: 16,
+              padding: 15,
               backgroundColor: isLight ? '#FFFFFF' : '#141416',
               borderWidth: 1.5,
               borderColor: isLight ? 'rgba(139, 92, 246, 0.25)' : 'rgba(139, 92, 246, 0.4)',
-              marginBottom: 20,
+              marginBottom: 18,
               shadowColor: '#8B5CF6',
               shadowOffset: { width: 0, height: 4 },
               shadowOpacity: isLight ? 0.08 : 0.2,
               shadowRadius: 12,
             }}>
               {/* Header Card */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 12 }}>
+                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <View style={{
-                    width: 34,
-                    height: 34,
-                    borderRadius: 10,
+                    width: 32,
+                    height: 32,
+                    borderRadius: 9,
                     backgroundColor: 'rgba(16, 185, 129, 0.15)',
                     justifyContent: 'center',
                     alignItems: 'center',
+                    flexShrink: 0,
                   }}>
-                    <Ionicons name="shield-checkmark" size={18} color="#10B981" />
+                    <Svg width={17} height={17} viewBox="0 0 24 24" fill="none">
+                      <SvgPath d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      <SvgPath d="M9 12l2 2 4-4" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </Svg>
                   </View>
-                  <View>
-                    <Text style={{ fontSize: 14, fontWeight: '800', color: isLight ? '#0F172A' : '#FFFFFF' }}>
+                  <View style={{ flex: 1 }}>
+                    <Text numberOfLines={1} style={{ fontSize: 13.5, fontWeight: '800', color: isLight ? '#0F172A' : '#FFFFFF' }}>
                       Quản Lý Bản Quyền Key
                     </Text>
-                    <Text style={{ fontSize: 11, color: '#10B981', fontWeight: '700' }}>
+                    <Text numberOfLines={1} style={{ fontSize: 10.5, color: '#10B981', fontWeight: '700', marginTop: 1 }}>
                       ● Đang Hoạt Động (VIP Pro)
                     </Text>
                   </View>
@@ -20034,66 +20046,79 @@ function MainApp() {
                     triggerToast('Đã sao chép mã Key bản quyền!', 'Sao Chép Thành Công', 'success', 'copy-outline');
                   }}
                   style={{
+                    flexShrink: 0,
                     flexDirection: 'row',
                     alignItems: 'center',
-                    gap: 6,
-                    paddingHorizontal: 10,
-                    paddingVertical: 5,
-                    borderRadius: 10,
+                    gap: 5,
+                    paddingHorizontal: 8,
+                    paddingVertical: 4.5,
+                    borderRadius: 8,
                     backgroundColor: isLight ? '#F1F5F9' : '#1E293B',
                     borderWidth: 1,
                     borderColor: isLight ? '#CBD5E1' : '#334155',
                   }}
                   title="Nhấn để sao chép mã"
                 >
-                  <Text style={{
+                  <Text numberOfLines={1} style={{
                     fontFamily: Platform.OS === 'web' ? 'monospace' : undefined,
                     fontWeight: '800',
-                    fontSize: 12,
+                    fontSize: 11,
                     color: '#8B5CF6'
                   }}>
                     {toolsLicenseKey}
                   </Text>
-                  <Ionicons name="copy-outline" size={13} color="#8B5CF6" />
+                  <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
+                    <SvgRect x="9" y="9" width="13" height="13" rx="2" stroke="#8B5CF6" strokeWidth="2" />
+                    <SvgPath d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" stroke="#8B5CF6" strokeWidth="2" />
+                  </Svg>
                 </TouchableOpacity>
               </View>
 
               {/* Time Remaining & Expiration Info Grid */}
               <View style={{
                 backgroundColor: isLight ? '#F8FAFC' : '#0F1117',
-                borderRadius: 14,
-                padding: 12,
-                gap: 8,
+                borderRadius: 12,
+                padding: 10,
+                gap: 7,
                 marginBottom: 12,
                 borderWidth: 1,
                 borderColor: isLight ? '#E2E8F0' : '#1E222D',
               }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Ionicons name="hourglass-outline" size={14} color="#F59E0B" />
-                    <Text style={{ fontSize: 12, color: '#8E8E93', fontWeight: '600' }}>Thời Gian Còn Lại:</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                    <Svg width={13} height={13} viewBox="0 0 24 24" fill="none">
+                      <SvgPath d="M5 22h14M5 2h14M17 22v-4.172a2 2 0 00-.586-1.414L12 12l-4.414 4.414A2 2 0 007 17.828V22M7 2v4.172a2 2 0 00.586 1.414L12 12l4.414-4.414A2 2 0 0017 6.172V2" stroke="#F59E0B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </Svg>
+                    <Text style={{ fontSize: 11.5, color: '#8E8E93', fontWeight: '600' }}>Thời Gian Còn Lại:</Text>
                   </View>
-                  <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#10B981' }}>
+                  <Text numberOfLines={1} style={{ fontSize: 11.5, fontWeight: '800', color: '#10B981', flex: 1, textAlign: 'right', marginLeft: 6 }}>
                     {getLicenseTimeRemainingText(toolsLicenseData, toolsLicenseKey)}
                   </Text>
                 </View>
 
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Ionicons name="calendar-outline" size={14} color="#38BDF8" />
-                    <Text style={{ fontSize: 12, color: '#8E8E93', fontWeight: '600' }}>Hết Hạn Lúc:</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                    <Svg width={13} height={13} viewBox="0 0 24 24" fill="none">
+                      <SvgRect x="3" y="4" width="18" height="18" rx="2" stroke="#38BDF8" strokeWidth="2" />
+                      <SvgLine x1="16" y1="2" x2="16" y2="6" stroke="#38BDF8" strokeWidth="2" strokeLinecap="round" />
+                      <SvgLine x1="8" y1="2" x2="8" y2="6" stroke="#38BDF8" strokeWidth="2" strokeLinecap="round" />
+                      <SvgLine x1="3" y1="10" x2="21" y2="10" stroke="#38BDF8" strokeWidth="2" />
+                    </Svg>
+                    <Text style={{ fontSize: 11.5, color: '#8E8E93', fontWeight: '600' }}>Hết Hạn Lúc:</Text>
                   </View>
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: isLight ? '#1E293B' : '#E2E8F0' }}>
+                  <Text numberOfLines={1} style={{ fontSize: 11.5, fontWeight: '700', color: isLight ? '#1E293B' : '#E2E8F0', flex: 1, textAlign: 'right', marginLeft: 6 }}>
                     {formatLicenseDateTime(toolsLicenseData?.expires_at)}
                   </Text>
                 </View>
 
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Ionicons name="flash-outline" size={14} color="#A78BFA" />
-                    <Text style={{ fontSize: 12, color: '#8E8E93', fontWeight: '600' }}>Ngày Kích Hoạt:</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                    <Svg width={13} height={13} viewBox="0 0 24 24" fill="none">
+                      <SvgPolygon points="13,2 3,14 12,14 11,22 21,10 12,10" fill="#A78BFA" />
+                    </Svg>
+                    <Text style={{ fontSize: 11.5, color: '#8E8E93', fontWeight: '600' }}>Ngày Kích Hoạt:</Text>
                   </View>
-                  <Text style={{ fontSize: 12, fontWeight: '600', color: '#8E8E93' }}>
+                  <Text numberOfLines={1} style={{ fontSize: 11.5, fontWeight: '600', color: '#8E8E93', flex: 1, textAlign: 'right', marginLeft: 6 }}>
                     {formatLicenseDateTime(toolsLicenseData?.activated_at || new Date().toISOString())}
                   </Text>
                 </View>
@@ -20110,15 +20135,17 @@ function MainApp() {
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: 6,
-                    paddingVertical: 10,
-                    borderRadius: 12,
+                    paddingVertical: 9,
+                    borderRadius: 11,
                     backgroundColor: 'rgba(239, 68, 68, 0.12)',
                     borderWidth: 1,
                     borderColor: 'rgba(239, 68, 68, 0.35)',
                   }}
                 >
-                  <Ionicons name="log-out-outline" size={16} color="#EF4444" />
-                  <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#EF4444' }}>
+                  <Svg width={15} height={15} viewBox="0 0 24 24" fill="none">
+                    <SvgPath d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" stroke="#EF4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </Svg>
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: '#EF4444' }}>
                     Đăng Xuất Key
                   </Text>
                 </TouchableOpacity>
@@ -20138,15 +20165,17 @@ function MainApp() {
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: 6,
-                    paddingVertical: 10,
-                    borderRadius: 12,
+                    paddingVertical: 9,
+                    borderRadius: 11,
                     backgroundColor: isLight ? '#F1F5F9' : '#1E1E24',
                     borderWidth: 1,
                     borderColor: isLight ? '#CBD5E1' : '#2D2D38',
                   }}
                 >
-                  <Ionicons name="open-outline" size={15} color="#8B5CF6" />
-                  <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#8B5CF6' }}>
+                  <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
+                    <SvgPath d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" stroke="#8B5CF6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </Svg>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#8B5CF6' }}>
                     Tạo Key Web
                   </Text>
                 </TouchableOpacity>
@@ -20154,10 +20183,12 @@ function MainApp() {
             </View>
 
             {/* SECTION 1: CÔNG CỤ MẠNG & HẠ TẦNG */}
-            <View style={{ marginBottom: 20 }}>
+            <View style={{ marginBottom: 18 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10, paddingHorizontal: 4 }}>
-                <Ionicons name="pulse" size={17} color="#38BDF8" />
-                <Text style={{ fontSize: 13, fontWeight: '800', color: '#38BDF8', textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                  <SvgPath d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="#38BDF8" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                </Svg>
+                <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#38BDF8', textTransform: 'uppercase', letterSpacing: 0.6 }}>
                   Mạng & Kết Nối Toàn Cầu
                 </Text>
               </View>
@@ -20173,38 +20204,45 @@ function MainApp() {
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
-                    padding: 14,
-                    borderRadius: 18,
+                    padding: 13,
+                    borderRadius: 16,
                     backgroundColor: isLight ? '#FFFFFF' : '#161618',
                     borderWidth: 1,
                     borderColor: isLight ? '#E5E5EA' : '#262629',
                   }}
                 >
                   <View style={{
-                    width: 46,
-                    height: 46,
-                    borderRadius: 14,
+                    width: 44,
+                    height: 44,
+                    borderRadius: 13,
                     backgroundColor: 'rgba(255, 149, 0, 0.15)',
                     justifyContent: 'center',
                     alignItems: 'center',
-                    marginRight: 14,
+                    marginRight: 12,
+                    flexShrink: 0,
                   }}>
-                    <Ionicons name="speedometer" size={24} color="#FF9500" />
+                    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+                      <SvgPath d="M12 2C6.48 2 2 6.48 2 12c0 2.85 1.2 5.42 3.12 7.24L12 12V3" stroke="#FF9500" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      <SvgCircle cx="12" cy="12" r="2" fill="#FF9500" />
+                      <SvgPath d="M16 16l4 4M8 16l-4 4" stroke="#FF9500" strokeWidth="2" strokeLinecap="round" />
+                    </Svg>
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Text style={{ fontSize: 15, fontWeight: '700', color: isLight ? '#0F172A' : '#FFFFFF' }}>
+                  <View style={{ flex: 1, marginRight: 6 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                      <Text numberOfLines={1} style={{ fontSize: 14.5, fontWeight: '700', color: isLight ? '#0F172A' : '#FFFFFF', flex: 1 }}>
                         Đo Tốc Độ Mạng & CDN
                       </Text>
-                      <View style={{ backgroundColor: 'rgba(255, 149, 0, 0.18)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                      <View style={{ backgroundColor: 'rgba(255, 149, 0, 0.18)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5, flexShrink: 0 }}>
                         <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#FF9500' }}>CLOUDFLARE</Text>
                       </View>
                     </View>
-                    <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 2 }}>
+                    <Text numberOfLines={2} style={{ fontSize: 11.5, color: '#8E8E93', marginTop: 2, lineHeight: 16 }}>
                       Đo băng thông tải về (Mbps), độ trễ ping và jitter thời gian thực
                     </Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={17} color="#636366" />
+                  <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
+                    <SvgPath d="M9 18l6-6-6-6" stroke="#636366" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </Svg>
                 </TouchableOpacity>
 
                 {/* 2. Tra Cứu IP & Geo */}
@@ -20218,47 +20256,56 @@ function MainApp() {
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
-                    padding: 14,
-                    borderRadius: 18,
+                    padding: 13,
+                    borderRadius: 16,
                     backgroundColor: isLight ? '#FFFFFF' : '#161618',
                     borderWidth: 1,
                     borderColor: isLight ? '#E5E5EA' : '#262629',
                   }}
                 >
                   <View style={{
-                    width: 46,
-                    height: 46,
-                    borderRadius: 14,
+                    width: 44,
+                    height: 44,
+                    borderRadius: 13,
                     backgroundColor: 'rgba(0, 122, 255, 0.15)',
                     justifyContent: 'center',
                     alignItems: 'center',
-                    marginRight: 14,
+                    marginRight: 12,
+                    flexShrink: 0,
                   }}>
-                    <Ionicons name="globe" size={24} color="#007AFF" />
+                    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+                      <SvgCircle cx="12" cy="12" r="10" stroke="#007AFF" strokeWidth="2" />
+                      <SvgPath d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" stroke="#007AFF" strokeWidth="1.8" />
+                    </Svg>
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Text style={{ fontSize: 15, fontWeight: '700', color: isLight ? '#0F172A' : '#FFFFFF' }}>
+                  <View style={{ flex: 1, marginRight: 6 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                      <Text numberOfLines={1} style={{ fontSize: 14.5, fontWeight: '700', color: isLight ? '#0F172A' : '#FFFFFF', flex: 1 }}>
                         Kiểm Tra IP & Nhà Mạng
                       </Text>
-                      <View style={{ backgroundColor: 'rgba(0, 122, 255, 0.18)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                      <View style={{ backgroundColor: 'rgba(0, 122, 255, 0.18)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5, flexShrink: 0 }}>
                         <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#007AFF' }}>GEO WHOIS</Text>
                       </View>
                     </View>
-                    <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 2 }}>
+                    <Text numberOfLines={2} style={{ fontSize: 11.5, color: '#8E8E93', marginTop: 2, lineHeight: 16 }}>
                       Tra cứu địa chỉ IPv4/IPv6, ASN, ISP Viettel / VNPT / FPT & bản đồ vị trí
                     </Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={17} color="#636366" />
+                  <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
+                    <SvgPath d="M9 18l6-6-6-6" stroke="#636366" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </Svg>
                 </TouchableOpacity>
               </View>
             </View>
 
             {/* SECTION 2: BÓC TÁCH MULTIMEDIA */}
-            <View style={{ marginBottom: 20 }}>
+            <View style={{ marginBottom: 18 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10, paddingHorizontal: 4 }}>
-                <Ionicons name="film" size={17} color="#EC4899" />
-                <Text style={{ fontSize: 13, fontWeight: '800', color: '#EC4899', textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                  <SvgRect x="2" y="2" width="20" height="20" rx="3" stroke="#EC4899" strokeWidth="2" />
+                  <SvgPath d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 7h5M17 17h5" stroke="#EC4899" strokeWidth="1.5" />
+                </Svg>
+                <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#EC4899', textTransform: 'uppercase', letterSpacing: 0.6 }}>
                   Bóc Tách & Studio Media
                 </Text>
               </View>
@@ -20274,38 +20321,44 @@ function MainApp() {
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
-                    padding: 14,
-                    borderRadius: 18,
+                    padding: 13,
+                    borderRadius: 16,
                     backgroundColor: isLight ? '#FFFFFF' : '#161618',
                     borderWidth: 1,
                     borderColor: isLight ? '#E5E5EA' : '#262629',
                   }}
                 >
                   <View style={{
-                    width: 46,
-                    height: 46,
-                    borderRadius: 14,
+                    width: 44,
+                    height: 44,
+                    borderRadius: 13,
                     backgroundColor: 'rgba(229, 9, 20, 0.15)',
                     justifyContent: 'center',
                     alignItems: 'center',
-                    marginRight: 14,
+                    marginRight: 12,
+                    flexShrink: 0,
                   }}>
-                    <Ionicons name="film" size={24} color="#E50914" />
+                    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+                      <SvgRect x="2" y="2" width="20" height="20" rx="3" stroke="#E50914" strokeWidth="2" />
+                      <SvgPolygon points="10,8 16,12 10,16" fill="#E50914" />
+                    </Svg>
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Text style={{ fontSize: 15, fontWeight: '700', color: isLight ? '#0F172A' : '#FFFFFF' }}>
+                  <View style={{ flex: 1, marginRight: 6 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                      <Text numberOfLines={1} style={{ fontSize: 14.5, fontWeight: '700', color: isLight ? '#0F172A' : '#FFFFFF', flex: 1 }}>
                         LockX Cinema & Rạp Phim
                       </Text>
-                      <View style={{ backgroundColor: 'rgba(229, 9, 20, 0.18)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                      <View style={{ backgroundColor: 'rgba(229, 9, 20, 0.18)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5, flexShrink: 0 }}>
                         <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#E50914' }}>1080P HLS</Text>
                       </View>
                     </View>
-                    <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 2 }}>
+                    <Text numberOfLines={2} style={{ fontSize: 11.5, color: '#8E8E93', marginTop: 2, lineHeight: 16 }}>
                       Xem phim trực tiếp trong app, tạo phòng xem chung & cào API đa nguồn
                     </Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={17} color="#636366" />
+                  <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
+                    <SvgPath d="M9 18l6-6-6-6" stroke="#636366" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </Svg>
                 </TouchableOpacity>
 
                 {/* 4. Cào Nhạc & Audio Studio */}
@@ -20318,38 +20371,45 @@ function MainApp() {
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
-                    padding: 14,
-                    borderRadius: 18,
+                    padding: 13,
+                    borderRadius: 16,
                     backgroundColor: isLight ? '#FFFFFF' : '#161618',
                     borderWidth: 1,
                     borderColor: isLight ? '#E5E5EA' : '#262629',
                   }}
                 >
                   <View style={{
-                    width: 46,
-                    height: 46,
-                    borderRadius: 14,
+                    width: 44,
+                    height: 44,
+                    borderRadius: 13,
                     backgroundColor: 'rgba(29, 185, 84, 0.15)',
                     justifyContent: 'center',
                     alignItems: 'center',
-                    marginRight: 14,
+                    marginRight: 12,
+                    flexShrink: 0,
                   }}>
-                    <Ionicons name="musical-notes" size={24} color="#1DB954" />
+                    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+                      <SvgPath d="M9 18V5l12-2v13" stroke="#1DB954" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      <SvgCircle cx="6" cy="18" r="3" stroke="#1DB954" strokeWidth="2" />
+                      <SvgCircle cx="18" cy="16" r="3" stroke="#1DB954" strokeWidth="2" />
+                    </Svg>
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Text style={{ fontSize: 15, fontWeight: '700', color: isLight ? '#0F172A' : '#FFFFFF' }}>
+                  <View style={{ flex: 1, marginRight: 6 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                      <Text numberOfLines={1} style={{ fontSize: 14.5, fontWeight: '700', color: isLight ? '#0F172A' : '#FFFFFF', flex: 1 }}>
                         Âm Nhạc & Trích Xuất Audio
                       </Text>
-                      <View style={{ backgroundColor: 'rgba(29, 185, 84, 0.18)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                      <View style={{ backgroundColor: 'rgba(29, 185, 84, 0.18)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5, flexShrink: 0 }}>
                         <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#1DB954' }}>320KBPS</Text>
                       </View>
                     </View>
-                    <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 2 }}>
+                    <Text numberOfLines={2} style={{ fontSize: 11.5, color: '#8E8E93', marginTop: 2, lineHeight: 16 }}>
                       Trích xuất bài hát Spotify, SoundCloud, Zing MP3 chuẩn Lossless & ảnh bìa
                     </Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={17} color="#636366" />
+                  <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
+                    <SvgPath d="M9 18l6-6-6-6" stroke="#636366" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </Svg>
                 </TouchableOpacity>
 
                 {/* 5. Báo Cáo Phim Lỗi & Quản Lý JSON */}
@@ -20362,49 +20422,57 @@ function MainApp() {
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
-                    padding: 14,
-                    borderRadius: 18,
+                    padding: 13,
+                    borderRadius: 16,
                     backgroundColor: isLight ? '#FFFFFF' : '#161618',
                     borderWidth: 1,
                     borderColor: isLight ? '#E5E5EA' : '#262629',
                   }}
                 >
                   <View style={{
-                    width: 46,
-                    height: 46,
-                    borderRadius: 14,
+                    width: 44,
+                    height: 44,
+                    borderRadius: 13,
                     backgroundColor: 'rgba(236, 72, 153, 0.15)',
                     justifyContent: 'center',
                     alignItems: 'center',
-                    marginRight: 14,
+                    marginRight: 12,
+                    flexShrink: 0,
                   }}>
-                    <Ionicons name="flag" size={24} color="#EC4899" />
+                    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+                      <SvgPath d="M4 15C5 14 7 14 8 15C10 16 12 16 14 15C16 14 18 14 20 15V4C18 3 16 3 14 4C12 5 10 5 8 4C7 3 5 3 4 4V22" stroke="#EC4899" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </Svg>
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Text style={{ fontSize: 15, fontWeight: '700', color: isLight ? '#0F172A' : '#FFFFFF' }}>
-                        Báo Cáo Phim Lỗi & Quản Lý JSON
+                  <View style={{ flex: 1, marginRight: 6 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                      <Text numberOfLines={1} style={{ fontSize: 14.5, fontWeight: '700', color: isLight ? '#0F172A' : '#FFFFFF', flex: 1 }}>
+                        Báo Cáo Phim Lỗi & JSON
                       </Text>
                       {reportedBrokenMovies.length > 0 && (
-                        <View style={{ backgroundColor: 'rgba(236, 72, 153, 0.18)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                        <View style={{ backgroundColor: 'rgba(236, 72, 153, 0.18)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5, flexShrink: 0 }}>
                           <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#EC4899' }}>{reportedBrokenMovies.length} PHIM</Text>
                         </View>
                       )}
                     </View>
-                    <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 2 }}>
+                    <Text numberOfLines={2} style={{ fontSize: 11.5, color: '#8E8E93', marginTop: 2, lineHeight: 16 }}>
                       Quản lý danh sách các tập phim bị lỗi và xuất file JSON cấu hình fix
                     </Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={17} color="#636366" />
+                  <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
+                    <SvgPath d="M9 18l6-6-6-6" stroke="#636366" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </Svg>
                 </TouchableOpacity>
               </View>
             </View>
 
             {/* SECTION 3: QUẢN TRỊ BẢO MẬT & SAO LƯU */}
-            <View style={{ marginBottom: 12 }}>
+            <View style={{ marginBottom: 16 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10, paddingHorizontal: 4 }}>
-                <Ionicons name="shield-checkmark" size={17} color="#10B981" />
-                <Text style={{ fontSize: 13, fontWeight: '800', color: '#10B981', textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                  <SvgPath d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <SvgPath d="M9 12l2 2 4-4" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </Svg>
+                <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#10B981', textTransform: 'uppercase', letterSpacing: 0.6 }}>
                   Bảo Trì & Quản Trị Hệ Thống
                 </Text>
               </View>
@@ -20420,38 +20488,43 @@ function MainApp() {
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
-                    padding: 14,
-                    borderRadius: 18,
+                    padding: 13,
+                    borderRadius: 16,
                     backgroundColor: isLight ? '#FFFFFF' : '#161618',
                     borderWidth: 1,
                     borderColor: isLight ? '#E5E5EA' : '#262629',
                   }}
                 >
                   <View style={{
-                    width: 46,
-                    height: 46,
-                    borderRadius: 14,
+                    width: 44,
+                    height: 44,
+                    borderRadius: 13,
                     backgroundColor: 'rgba(255, 59, 48, 0.15)',
                     justifyContent: 'center',
                     alignItems: 'center',
-                    marginRight: 14,
+                    marginRight: 12,
+                    flexShrink: 0,
                   }}>
-                    <Ionicons name="megaphone" size={24} color="#FF3B30" />
+                    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+                      <SvgPath d="M11 5L6 9H2v6h4l5 4V5zM19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07" stroke="#FF3B30" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </Svg>
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Text style={{ fontSize: 15, fontWeight: '700', color: isLight ? '#0F172A' : '#FFFFFF' }}>
-                        Bảng Điều Khiển Push Notification
+                  <View style={{ flex: 1, marginRight: 6 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                      <Text numberOfLines={1} style={{ fontSize: 14.5, fontWeight: '700', color: isLight ? '#0F172A' : '#FFFFFF', flex: 1 }}>
+                        Bảng Điều Khiển Push
                       </Text>
-                      <View style={{ backgroundColor: 'rgba(255, 59, 48, 0.18)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                      <View style={{ backgroundColor: 'rgba(255, 59, 48, 0.18)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5, flexShrink: 0 }}>
                         <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#FF3B30' }}>QUẢN TRỊ</Text>
                       </View>
                     </View>
-                    <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 2 }}>
-                      Gửi thử nghiệm thông báo đẩy cảnh báo an ninh tới người dùng
+                    <Text numberOfLines={2} style={{ fontSize: 11.5, color: '#8E8E93', marginTop: 2, lineHeight: 16 }}>
+                      Gửi thông báo đẩy hàng loạt test hệ thống và kiểm tra phản hồi APNs
                     </Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={17} color="#636366" />
+                  <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
+                    <SvgPath d="M9 18l6-6-6-6" stroke="#636366" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </Svg>
                 </TouchableOpacity>
 
                 {/* 7. Dọn Dẹp Bộ Nhớ Đệm */}
@@ -20461,33 +20534,38 @@ function MainApp() {
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
-                    padding: 14,
-                    borderRadius: 18,
+                    padding: 13,
+                    borderRadius: 16,
                     backgroundColor: isLight ? '#FFFFFF' : '#161618',
                     borderWidth: 1,
                     borderColor: isLight ? '#E5E5EA' : '#262629',
                   }}
                 >
                   <View style={{
-                    width: 46,
-                    height: 46,
-                    borderRadius: 14,
+                    width: 44,
+                    height: 44,
+                    borderRadius: 13,
                     backgroundColor: 'rgba(16, 185, 129, 0.15)',
                     justifyContent: 'center',
                     alignItems: 'center',
-                    marginRight: 14,
+                    marginRight: 12,
+                    flexShrink: 0,
                   }}>
-                    <Ionicons name="trash-bin-outline" size={24} color="#10B981" />
+                    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+                      <SvgPath d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </Svg>
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 15, fontWeight: '700', color: isLight ? '#0F172A' : '#FFFFFF' }}>
+                  <View style={{ flex: 1, marginRight: 6 }}>
+                    <Text numberOfLines={1} style={{ fontSize: 14.5, fontWeight: '700', color: isLight ? '#0F172A' : '#FFFFFF' }}>
                       Dọn Dẹp Bộ Nhớ Đệm (Cache)
                     </Text>
-                    <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 2 }}>
+                    <Text numberOfLines={2} style={{ fontSize: 11.5, color: '#8E8E93', marginTop: 2, lineHeight: 16 }}>
                       Giải phóng bộ nhớ tạm, tăng tốc độ phản hồi và làm mới app
                     </Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={17} color="#636366" />
+                  <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
+                    <SvgPath d="M9 18l6-6-6-6" stroke="#636366" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </Svg>
                 </TouchableOpacity>
 
                 {/* 8. Sao Lưu Dữ Liệu JSON */}
@@ -20497,33 +20575,38 @@ function MainApp() {
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
-                    padding: 14,
-                    borderRadius: 18,
+                    padding: 13,
+                    borderRadius: 16,
                     backgroundColor: isLight ? '#FFFFFF' : '#161618',
                     borderWidth: 1,
                     borderColor: isLight ? '#E5E5EA' : '#262629',
                   }}
                 >
                   <View style={{
-                    width: 46,
-                    height: 46,
-                    borderRadius: 14,
+                    width: 44,
+                    height: 44,
+                    borderRadius: 13,
                     backgroundColor: 'rgba(139, 92, 246, 0.15)',
                     justifyContent: 'center',
                     alignItems: 'center',
-                    marginRight: 14,
+                    marginRight: 12,
+                    flexShrink: 0,
                   }}>
-                    <Ionicons name="download-outline" size={24} color="#A78BFA" />
+                    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+                      <SvgPath d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" stroke="#A78BFA" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </Svg>
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 15, fontWeight: '700', color: isLight ? '#0F172A' : '#FFFFFF' }}>
+                  <View style={{ flex: 1, marginRight: 6 }}>
+                    <Text numberOfLines={1} style={{ fontSize: 14.5, fontWeight: '700', color: isLight ? '#0F172A' : '#FFFFFF' }}>
                       Xuất Sao Lưu Dữ Liệu JSON
                     </Text>
-                    <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 2 }}>
+                    <Text numberOfLines={2} style={{ fontSize: 11.5, color: '#8E8E93', marginTop: 2, lineHeight: 16 }}>
                       Tải về tệp cấu hình thiết lập an toàn để lưu trữ dự phòng
                     </Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={17} color="#636366" />
+                  <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
+                    <SvgPath d="M9 18l6-6-6-6" stroke="#636366" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </Svg>
                 </TouchableOpacity>
               </View>
             </View>
