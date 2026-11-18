@@ -8709,10 +8709,88 @@ function MainApp() {
   const [isEditingPlayerUrl, setIsEditingPlayerUrl] = useState<boolean>(false);
   const [editPlayerStreamInput, setEditPlayerStreamInput] = useState<string>('');
   const [editPlayerEmbedInput, setEditPlayerEmbedInput] = useState<string>('');
-  const [playerTab, setPlayerTab] = useState<'episodes' | 'similar' | 'settings'>('episodes');
+  const [playerTab, setPlayerTab] = useState<'episodes' | 'similar' | 'comments'>('episodes');
   const [isSynopsisExpanded, setIsSynopsisExpanded] = useState<boolean>(false);
   const [isSavedMovie, setIsSavedMovie] = useState<boolean>(false);
   const [isLikedMovie, setIsLikedMovie] = useState<boolean>(false);
+  const [isHeaderSearchActive, setIsHeaderSearchActive] = useState<boolean>(false);
+
+  // States cho tính năng Bình Luận (Thích, Trả lời bình luận, Đăng bình luận)
+  const [movieComments, setMovieComments] = useState<Array<{
+    id: string;
+    user: string;
+    avatarBg: string;
+    badge?: string;
+    text: string;
+    time: string;
+    likes: number;
+    isLiked?: boolean;
+    replies?: Array<{
+      id: string;
+      user: string;
+      avatarBg: string;
+      text: string;
+      time: string;
+      likes: number;
+      isLiked?: boolean;
+    }>;
+  }>>([
+    {
+      id: 'c-1',
+      user: 'Tuấn Khang VIP',
+      avatarBg: '#E50914',
+      badge: 'VIP Pro',
+      text: 'Phim chiếu rạp bản này nét thực sự, âm thanh 5.1 nghe cực đã tai! Đoạn kết quá xúc động.',
+      time: '25 phút trước',
+      likes: 42,
+      isLiked: false,
+      replies: [
+        {
+          id: 'r-1-1',
+          user: 'Hải Đăng',
+          avatarBg: '#007AFF',
+          text: 'Công nhận luôn bạn ơi, server 1 HLS load vèo vèo không giật một giây nào.',
+          time: '12 phút trước',
+          likes: 15,
+          isLiked: false,
+        },
+      ],
+    },
+    {
+      id: 'c-2',
+      user: 'Mai Phương',
+      avatarBg: '#34C759',
+      badge: 'Fan Cứng',
+      text: 'Trấn Thành với dàn diễn viên diễn xuất đỉnh chóp, xem đi xem lại vẫn rớt nước mắt 🥺',
+      time: '1 giờ trước',
+      likes: 28,
+      isLiked: false,
+      replies: [],
+    },
+    {
+      id: 'c-3',
+      user: 'Thành Long',
+      avatarBg: '#FF9500',
+      badge: 'Thành Viên',
+      text: 'Mọi người cho hỏi có tập sau chưa vậy? Hay là phim lẻ chiếu rạp trọn bộ vậy ạ?',
+      time: '3 giờ trước',
+      likes: 8,
+      isLiked: false,
+      replies: [
+        {
+          id: 'r-3-1',
+          user: 'LockX Admin',
+          avatarBg: '#AF52DE',
+          text: 'Phim điện ảnh chiếu rạp trọn bộ 1 tập Full HD 1080p nha bạn!',
+          time: '2 giờ trước',
+          likes: 19,
+          isLiked: true,
+        },
+      ],
+    },
+  ]);
+  const [commentInputText, setCommentInputText] = useState<string>('');
+  const [replyingToComment, setReplyingToComment] = useState<{ id: string; user: string } | null>(null);
 
   // ═══════════════════════════════════════════════════════════════
   // CINEMA HUB — States cho tính năng Rạp Phim trong App
@@ -16537,6 +16615,84 @@ function MainApp() {
       } catch {}
     }
     triggerToast(`Tốc độ phát: ${nextSpeed}`, 'Tốc Độ Video', 'info');
+  };
+
+  // Xử lý Thích / Bỏ thích bình luận hoặc trả lời
+  const handleToggleCommentLike = (commentId: string, replyId?: string) => {
+    setMovieComments((prev) =>
+      prev.map((c) => {
+        if (!replyId && c.id === commentId) {
+          const nextLiked = !c.isLiked;
+          return {
+            ...c,
+            isLiked: nextLiked,
+            likes: nextLiked ? c.likes + 1 : Math.max(0, c.likes - 1),
+          };
+        }
+        if (replyId && c.id === commentId && c.replies) {
+          return {
+            ...c,
+            replies: c.replies.map((r) => {
+              if (r.id === replyId) {
+                const nextLiked = !r.isLiked;
+                return {
+                  ...r,
+                  isLiked: nextLiked,
+                  likes: nextLiked ? r.likes + 1 : Math.max(0, r.likes - 1),
+                };
+              }
+              return r;
+            }),
+          };
+        }
+        return c;
+      })
+    );
+  };
+
+  // Gửi bình luận mới hoặc gửi trả lời bình luận
+  const handleSendMovieComment = () => {
+    if (!commentInputText.trim()) return;
+    const textContent = commentInputText.trim();
+    if (replyingToComment) {
+      setMovieComments((prev) =>
+        prev.map((c) => {
+          if (c.id === replyingToComment.id) {
+            const newReply = {
+              id: `rep-${Date.now()}`,
+              user: (typeof userProfile !== 'undefined' && userProfile?.name) || 'Bạn (VIP)',
+              avatarBg: '#E50914',
+              text: textContent,
+              time: 'Vừa xong',
+              likes: 0,
+              isLiked: false,
+            };
+            return {
+              ...c,
+              replies: [...(c.replies || []), newReply],
+            };
+          }
+          return c;
+        })
+      );
+      triggerToast(`Đã trả lời bình luận của @${replyingToComment.user}`, 'Bình Luận', 'success');
+      setReplyingToComment(null);
+    } else {
+      const newComment = {
+        id: `com-${Date.now()}`,
+        user: (typeof userProfile !== 'undefined' && userProfile?.name) || 'Bạn (VIP)',
+        avatarBg: '#E50914',
+        badge: 'VIP Pro',
+        text: textContent,
+        time: 'Vừa xong',
+        likes: 0,
+        isLiked: false,
+        replies: [],
+      };
+      setMovieComments((prev) => [newComment, ...prev]);
+      triggerToast('Đã đăng bình luận thành công!', 'Bình Luận', 'success');
+    }
+    setCommentInputText('');
   };
 
   const fetchCinemaMovieDetail = async (slug: string) => {
@@ -31387,51 +31543,126 @@ function MainApp() {
               borderBottomColor: 'rgba(255, 255, 255, 0.08)',
             }}
           >
-            <TouchableOpacity
-              onPress={() => setShowApiScraperModal(false)}
-              activeOpacity={0.8}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 6,
-                paddingHorizontal: 12,
-                paddingVertical: 7,
-                borderRadius: 20,
-                backgroundColor: 'rgba(255, 255, 255, 0.08)',
-                borderWidth: 1,
-                borderColor: 'rgba(255, 255, 255, 0.1)',
-              }}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            >
-              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-                <SvgPath d="M15 19L8 12L15 5" stroke="#FFFFFF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
-              <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFFFFF' }}>Thoát</Text>
-            </TouchableOpacity>
-
-            <View style={{ alignItems: 'center', flexShrink: 1, marginHorizontal: 8 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={{ fontSize: 16, fontWeight: '900', color: '#FFFFFF', letterSpacing: 0.5 }}>
-                  LOCKX CINEMA
-                </Text>
+            {isHeaderSearchActive ? (
+              <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <View
                   style={{
-                    backgroundColor: '#E50914',
-                    paddingHorizontal: 6,
-                    paddingVertical: 2,
-                    borderRadius: 5,
+                    flex: 1,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: '#1E1E26',
+                    borderRadius: 20,
+                    paddingHorizontal: 12,
+                    height: 38,
+                    borderWidth: 1,
+                    borderColor: 'rgba(255, 255, 255, 0.15)',
                   }}
                 >
-                  <Text style={{ fontSize: 9.5, fontWeight: '900', color: '#FFFFFF', letterSpacing: 0.5 }}>VIP</Text>
+                  <Svg width={15} height={15} viewBox="0 0 24 24" fill="none" style={{ marginRight: 6 }}>
+                    <SvgCircle cx="11" cy="11" r="8" stroke="#FFFFFF" strokeWidth="2" />
+                    <SvgLine x1="21" y1="21" x2="16.65" y2="16.65" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" />
+                  </Svg>
+                  <TextInput
+                    autoFocus
+                    style={{ flex: 1, color: '#FFFFFF', fontSize: 13, paddingVertical: 0 }}
+                    placeholder="Tìm tên phim, diễn viên..."
+                    placeholderTextColor="#8E8E93"
+                    value={catalogSearchQuery}
+                    onChangeText={setCatalogSearchQuery}
+                  />
+                  {catalogSearchQuery.length > 0 && (
+                    <TouchableOpacity onPress={() => setCatalogSearchQuery('')} style={{ padding: 4 }}>
+                      <Svg width={14} height={14} viewBox="0 0 24 24" fill="#8E8E93">
+                        <SvgPath d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z" />
+                      </Svg>
+                    </TouchableOpacity>
+                  )}
                 </View>
-              </View>
-              <Text style={{ fontSize: 10.5, color: '#8E8E93', fontWeight: '500', marginTop: 2 }}>
-                Rạp Phim Trực Tiếp & Xem Chung
-              </Text>
-            </View>
 
-            {/* Cân đối khoảng cách với nút Thoát bên trái */}
-            <View style={{ width: 68 }} />
+                <TouchableOpacity
+                  onPress={() => {
+                    setIsHeaderSearchActive(false);
+                    setCatalogSearchQuery('');
+                  }}
+                  activeOpacity={0.8}
+                  style={{
+                    paddingHorizontal: 10,
+                    paddingVertical: 7,
+                    borderRadius: 16,
+                    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                  }}
+                >
+                  <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#8E8E93' }}>Đóng</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <>
+                <TouchableOpacity
+                  onPress={() => setShowApiScraperModal(false)}
+                  activeOpacity={0.8}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    paddingHorizontal: 12,
+                    paddingVertical: 7,
+                    borderRadius: 20,
+                    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                    borderWidth: 1,
+                    borderColor: 'rgba(255, 255, 255, 0.1)',
+                  }}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                >
+                  <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                    <SvgPath d="M15 19L8 12L15 5" stroke="#FFFFFF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </Svg>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFFFFF' }}>Thoát</Text>
+                </TouchableOpacity>
+
+                <View style={{ alignItems: 'center', flexShrink: 1, marginHorizontal: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={{ fontSize: 16, fontWeight: '900', color: '#FFFFFF', letterSpacing: 0.5 }}>
+                      LOCKX CINEMA
+                    </Text>
+                    <View
+                      style={{
+                        backgroundColor: '#E50914',
+                        paddingHorizontal: 6,
+                        paddingVertical: 2,
+                        borderRadius: 5,
+                      }}
+                    >
+                      <Text style={{ fontSize: 9.5, fontWeight: '900', color: '#FFFFFF', letterSpacing: 0.5 }}>VIP</Text>
+                    </View>
+                  </View>
+                  <Text style={{ fontSize: 10.5, color: '#8E8E93', fontWeight: '500', marginTop: 2 }}>
+                    Rạp Phim Trực Tiếp & Xem Chung
+                  </Text>
+                </View>
+
+                {/* Nút Tìm Kiếm Thông Minh Trên Header */}
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => setIsHeaderSearchActive(true)}
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    backgroundColor: catalogSearchQuery ? '#E50914' : 'rgba(255, 255, 255, 0.08)',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    borderWidth: 1,
+                    borderColor: catalogSearchQuery ? '#E50914' : 'rgba(255, 255, 255, 0.1)',
+                  }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                    <SvgCircle cx="11" cy="11" r="8" stroke="#FFFFFF" strokeWidth="2" />
+                    <SvgLine x1="21" y1="21" x2="16.65" y2="16.65" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" />
+                  </Svg>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
 
           {/* ═══════════════════════════════════════════════════════════════ */}
@@ -31626,40 +31857,6 @@ function MainApp() {
                   </View>
                 );
               })()}
-
-              {/* SEARCH INPUT TRONG KHÁM PHÁ (100% SVG) */}
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  backgroundColor: '#141419',
-                  borderRadius: 12,
-                  paddingHorizontal: 12,
-                  height: 44,
-                  borderWidth: 1,
-                  borderColor: 'rgba(255, 255, 255, 0.08)',
-                  marginBottom: 12,
-                }}
-              >
-                <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" style={{ marginRight: 8 }}>
-                  <SvgCircle cx="11" cy="11" r="8" stroke="#8E8E93" strokeWidth="2" />
-                  <SvgLine x1="21" y1="21" x2="16.65" y2="16.65" stroke="#8E8E93" strokeWidth="2" strokeLinecap="round" />
-                </Svg>
-                <TextInput
-                  style={{ flex: 1, color: '#FFFFFF', fontSize: 13, paddingVertical: 0 }}
-                  placeholder="Tìm nhanh tên phim, diễn viên, đạo diễn..."
-                  placeholderTextColor="#8E8E93"
-                  value={catalogSearchQuery}
-                  onChangeText={setCatalogSearchQuery}
-                />
-                {catalogSearchQuery.length > 0 && (
-                  <TouchableOpacity onPress={() => setCatalogSearchQuery('')}>
-                    <Svg width={16} height={16} viewBox="0 0 24 24" fill="#8E8E93">
-                      <SvgPath d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z" />
-                    </Svg>
-                  </TouchableOpacity>
-                )}
-              </View>
 
               {/* GENRE / CATEGORY PILLS (100% SVG ICONS CHUYÊN NGHIỆP) */}
               <ScrollView
@@ -33249,10 +33446,10 @@ function MainApp() {
                 id="lockx-video-player-container"
                 style={{
                   width: '100%',
-                  aspectRatio: 16 / 9,
-                  maxHeight: 320,
+                  height: Math.min(Math.round(Dimensions.get('window').width * (9 / 16)), 360),
                   backgroundColor: '#000000',
                   position: 'relative',
+                  overflow: 'hidden',
                   borderBottomWidth: 1,
                   borderBottomColor: 'rgba(255, 255, 255, 0.1)',
                 }}
@@ -33457,30 +33654,32 @@ function MainApp() {
                     <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#8E8E93' }}>Xem Chung</Text>
                   </TouchableOpacity>
 
-                  {/* 5. Sửa URL */}
+                  {/* 5. Bình Luận */}
                   <TouchableOpacity
-                    onPress={() => {
-                      setPlayerTab('settings');
-                      setIsEditingPlayerUrl(true);
-                      setEditPlayerStreamInput(previewVideoUrl);
-                      setEditPlayerEmbedInput(previewEmbedUrl);
-                    }}
+                    onPress={() => setPlayerTab('comments')}
                     style={{ alignItems: 'center', gap: 5 }}
                   >
-                    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
-                      <SvgCircle cx="12" cy="12" r="3" stroke="#007AFF" strokeWidth="2" />
-                      <SvgPath d="M19.4 15A1.65 1.65 0 0020 16.4L20.2 16.6C20.6 17 20.6 17.6 20.2 18L18 20.2C17.6 20.6 17 20.6 16.6 20.2L16.4 20A1.65 1.65 0 0015 19.4 1.65 1.65 0 0013.6 20.8V21.1C13.6 21.6 13.2 22 12.7 22H9.3C8.8 22 8.4 21.6 8.4 21.1V20.8A1.65 1.65 0 007 19.4 1.65 1.65 0 005.6 20L5.4 20.2C5 20.6 4.4 20.6 4 20.2L1.8 18C1.4 17.6 1.4 17 1.8 16.6L2 16.4A1.65 1.65 0 002.6 15 1.65 1.65 0 001.2 13.6H0.9C0.4 13.6 0 13.2 0 12.7V9.3C0 8.8 0.4 8.4 0.9 8.4H1.2A1.65 1.65 0 002.6 7 1.65 1.65 0 002 5.6L1.8 5.4C1.4 5 1.4 4.4 1.8 4L4 1.8C4.4 1.4 5 1.4 5.4 1.8L5.6 2A1.65 1.65 0 007 2.6 1.65 1.65 0 008.4 1.2V0.9C8.4 0.4 8.8 0 9.3 0H12.7C13.2 0 13.6 0.4 13.6 0.9V1.2A1.65 1.65 0 0015 2.6 1.65 1.65 0 0016.4 2L16.6 1.8C17 1.4 17.6 1.4 18 1.8L20.2 4C20.6 4.4 20.6 5 20.2 5.4L20 5.6A1.65 1.65 0 0019.4 7 1.65 1.65 0 0020.8 8.4H21.1C21.6 8.4 22 8.8 22 9.3V12.7C22 13.2 21.6 13.6 21.1 13.6H20.8A1.65 1.65 0 0019.4 15Z" stroke="#007AFF" strokeWidth="1.8" />
+                    <Svg width={22} height={22} viewBox="0 0 24 24" fill={playerTab === 'comments' ? '#E50914' : 'none'}>
+                      <SvgPath
+                        d="M21 15C21 15.5304 20.7893 16.0391 20.4142 16.4142C20.0391 16.7893 19.5304 17 19 17H7L3 21V5C3 4.46957 3.21071 3.96086 3.58579 3.58579C3.96086 3.21071 4.46957 3 5 3H19C19.5304 3 20.0391 3.21071 20.4142 3.58579C20.7893 3.96086 21 4.46957 21 5V15Z"
+                        stroke={playerTab === 'comments' ? '#E50914' : '#FFFFFF'}
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
                     </Svg>
-                    <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#007AFF' }}>Sửa URL</Text>
+                    <Text style={{ fontSize: 10.5, fontWeight: '700', color: playerTab === 'comments' ? '#E50914' : '#8E8E93' }}>
+                      Bình Luận ({movieComments.length})
+                    </Text>
                   </TouchableOpacity>
                 </View>
 
-                {/* ── 4. TABS NAVIGATION (TẬP PHIM | TƯƠNG TỰ | CẤU HÌNH URL) ── */}
+                {/* ── 4. TABS NAVIGATION (TẬP PHIM | TƯƠNG TỰ | BÌNH LUẬN) ── */}
                 <View style={{ flexDirection: 'row', gap: 14, marginBottom: 14, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)' }}>
                   {[
                     { key: 'episodes', label: 'Tập Phim' },
                     { key: 'similar', label: 'Nội Dung Tương Tự' },
-                    { key: 'settings', label: 'Cấu Hình & Sửa URL' },
+                    { key: 'comments', label: `Bình Luận (${movieComments.length})` },
                   ].map((tab) => {
                     const isActive = playerTab === tab.key;
                     return (
@@ -33673,126 +33872,217 @@ function MainApp() {
                   </View>
                 )}
 
-                {/* TAB 3: CẤU HÌNH & SỬA URL WEB */}
-                {playerTab === 'settings' && (
-                  <View style={{ backgroundColor: '#121217', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
-                    <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#FFFFFF', marginBottom: 12 }}>
-                      Bộ Chỉnh Sửa Luồng Phát & URL Web Phim
-                    </Text>
-
-                    {/* Stream URL */}
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#9CA3AF', marginBottom: 4 }}>
-                      Link Luồng HLS (.m3u8 CDN):
-                    </Text>
-                    <View
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        backgroundColor: '#1A1A24',
-                        borderRadius: 10,
-                        paddingHorizontal: 10,
-                        height: 42,
-                        marginBottom: 10,
-                        borderWidth: 1,
-                        borderColor: 'rgba(0,122,255,0.4)',
-                      }}
-                    >
-                      <TextInput
-                        style={{ flex: 1, color: '#FFFFFF', fontSize: 12, paddingVertical: 0 }}
-                        placeholder="Dán hoặc sửa link .m3u8..."
-                        placeholderTextColor="#8E8E93"
-                        value={editPlayerStreamInput}
-                        onChangeText={setEditPlayerStreamInput}
-                        autoCapitalize="none"
-                      />
-                      {editPlayerStreamInput.length > 0 && (
-                        <TouchableOpacity onPress={() => setEditPlayerStreamInput('')}>
-                          <Text style={{ color: '#8E8E93', fontSize: 13, fontWeight: '700' }}>✕</Text>
-                        </TouchableOpacity>
-                      )}
+                {/* TAB 3: BÌNH LUẬN & THẢO LUẬN (THÍCH & TRẢ LỜI BÌNH LUẬN) */}
+                {playerTab === 'comments' && (
+                  <View style={{ gap: 14 }}>
+                    {/* Header thông tin bình luận */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Text style={{ fontSize: 14, fontWeight: '800', color: '#FFFFFF' }}>
+                        Bình Luận ({movieComments.reduce((acc, c) => acc + 1 + (c.replies ? c.replies.length : 0), 0)})
+                      </Text>
+                      <Text style={{ fontSize: 11, color: '#8E8E93' }}>Cộng đồng người xem LockX</Text>
                     </View>
 
-                    {/* Embed URL */}
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#9CA3AF', marginBottom: 4 }}>
-                      Link Player Nhúng Web (Embed iframe):
-                    </Text>
-                    <View
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        backgroundColor: '#1A1A24',
-                        borderRadius: 10,
-                        paddingHorizontal: 10,
-                        height: 42,
-                        marginBottom: 14,
-                        borderWidth: 1,
-                        borderColor: 'rgba(255,255,255,0.1)',
-                      }}
-                    >
-                      <TextInput
-                        style={{ flex: 1, color: '#FFFFFF', fontSize: 12, paddingVertical: 0 }}
-                        placeholder="Dán hoặc sửa link embed..."
-                        placeholderTextColor="#8E8E93"
-                        value={editPlayerEmbedInput}
-                        onChangeText={setEditPlayerEmbedInput}
-                        autoCapitalize="none"
-                      />
-                    </View>
-
-                    {/* Buttons */}
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                      <TouchableOpacity
-                        activeOpacity={0.8}
-                        onPress={() => {
-                          if (!editPlayerStreamInput.trim() && !editPlayerEmbedInput.trim()) {
-                            triggerToast('Vui lòng nhập đường dẫn URL!', 'Chưa Nhập', 'warning');
-                            return;
-                          }
-                          setPreviewVideoUrl(editPlayerStreamInput.trim());
-                          setPreviewEmbedUrl(editPlayerEmbedInput.trim());
-                          triggerToast('Đã lưu & tải lại luồng phát mới!', 'Thành Công', 'success');
-                        }}
+                    {/* Banner hiển thị khi đang Trả Lời một bình luận cụ thể */}
+                    {replyingToComment && (
+                      <View
                         style={{
-                          flex: 1,
                           flexDirection: 'row',
                           alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: 6,
-                          backgroundColor: '#E50914',
-                          paddingVertical: 10,
+                          justifyContent: 'space-between',
+                          backgroundColor: 'rgba(229, 9, 20, 0.15)',
+                          paddingHorizontal: 12,
+                          paddingVertical: 7,
                           borderRadius: 8,
+                          borderLeftWidth: 3,
+                          borderLeftColor: '#E50914',
                         }}
                       >
-                        <Svg width={14} height={14} viewBox="0 0 24 24" fill="#FFFFFF">
-                          <SvgPolygon points="5,3 19,12 5,21" />
-                        </Svg>
-                        <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#FFFFFF' }}>
-                          Áp Dụng & Tải Lại
+                        <Text style={{ fontSize: 11.5, color: '#FFFFFF', fontWeight: '600' }}>
+                          Đang trả lời <Text style={{ color: '#E50914', fontWeight: '800' }}>@{replyingToComment.user}</Text>
                         </Text>
-                      </TouchableOpacity>
+                        <TouchableOpacity onPress={() => setReplyingToComment(null)} style={{ padding: 4 }}>
+                          <Text style={{ fontSize: 12, fontWeight: '800', color: '#8E8E93' }}>✕ Hủy</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
 
+                    {/* Ô Nhập Bình Luận Mới / Trả Lời */}
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        backgroundColor: '#16161F',
+                        borderRadius: 12,
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                        borderWidth: 1,
+                        borderColor: 'rgba(255, 255, 255, 0.12)',
+                        gap: 8,
+                      }}
+                    >
+                      <TextInput
+                        style={{ flex: 1, color: '#FFFFFF', fontSize: 13, minHeight: 38, paddingVertical: 4 }}
+                        placeholder={replyingToComment ? `Trả lời @${replyingToComment.user}...` : 'Viết cảm nghĩ về bộ phim...'}
+                        placeholderTextColor="#71717A"
+                        value={commentInputText}
+                        onChangeText={setCommentInputText}
+                        multiline
+                      />
                       <TouchableOpacity
                         activeOpacity={0.8}
-                        onPress={() => {
-                          if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                            navigator.clipboard.readText().then((t) => {
-                              if (t) {
-                                if (t.includes('.m3u8')) setEditPlayerStreamInput(t);
-                                else setEditPlayerEmbedInput(t);
-                                triggerToast('Đã dán từ clipboard!', 'Dán URL', 'info');
-                              }
-                            });
-                          }
-                        }}
+                        onPress={handleSendMovieComment}
                         style={{
-                          paddingHorizontal: 14,
-                          paddingVertical: 10,
-                          borderRadius: 8,
-                          backgroundColor: '#26262F',
+                          backgroundColor: commentInputText.trim() ? '#E50914' : 'rgba(255, 255, 255, 0.1)',
+                          width: 36,
+                          height: 36,
+                          borderRadius: 18,
+                          justifyContent: 'center',
+                          alignItems: 'center',
                         }}
                       >
-                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFFFFF' }}>Dán Link</Text>
+                        <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                          <SvgPath d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13" stroke="#FFFFFF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                        </Svg>
                       </TouchableOpacity>
+                    </View>
+
+                    {/* Danh Sách Bình Luận & Trả Lời */}
+                    <View style={{ gap: 12 }}>
+                      {movieComments.map((comment) => (
+                        <View
+                          key={comment.id}
+                          style={{
+                            backgroundColor: '#121217',
+                            borderRadius: 12,
+                            padding: 12,
+                            borderWidth: 1,
+                            borderColor: 'rgba(255, 255, 255, 0.06)',
+                          }}
+                        >
+                          {/* User Header */}
+                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                              <View
+                                style={{
+                                  width: 30,
+                                  height: 30,
+                                  borderRadius: 15,
+                                  backgroundColor: comment.avatarBg || '#E50914',
+                                  justifyContent: 'center',
+                                  alignItems: 'center',
+                                }}
+                              >
+                                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>
+                                  {(comment.user || 'U').charAt(0).toUpperCase()}
+                                </Text>
+                              </View>
+                              <View>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                                  <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#FFFFFF' }}>
+                                    {comment.user}
+                                  </Text>
+                                  {comment.badge && (
+                                    <View style={{ backgroundColor: 'rgba(229, 9, 20, 0.2)', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 3 }}>
+                                      <Text style={{ fontSize: 8.5, fontWeight: '800', color: '#E50914' }}>{comment.badge}</Text>
+                                    </View>
+                                  )}
+                                </View>
+                                <Text style={{ fontSize: 10, color: '#71717A' }}>{comment.time}</Text>
+                              </View>
+                            </View>
+                          </View>
+
+                          {/* Nội dung bình luận */}
+                          <Text style={{ fontSize: 12.5, color: '#E4E4E7', lineHeight: 18, marginBottom: 10 }}>
+                            {comment.text}
+                          </Text>
+
+                          {/* Nút Tương tác: Thích & Trả lời */}
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+                            <TouchableOpacity
+                              activeOpacity={0.8}
+                              onPress={() => handleToggleCommentLike(comment.id)}
+                              style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}
+                            >
+                              <Svg width={15} height={15} viewBox="0 0 24 24" fill={comment.isLiked ? '#E50914' : 'none'}>
+                                <SvgPath
+                                  d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
+                                  stroke={comment.isLiked ? '#E50914' : '#8E8E93'}
+                                  strokeWidth="1.8"
+                                />
+                              </Svg>
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: comment.isLiked ? '#E50914' : '#8E8E93' }}>
+                                {comment.likes > 0 ? comment.likes : 'Thích'}
+                              </Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              activeOpacity={0.8}
+                              onPress={() => setReplyingToComment({ id: comment.id, user: comment.user })}
+                              style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                            >
+                              <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
+                                <SvgPath d="M3 10H14C17.3 10 20 12.7 20 16C20 19.3 17.3 22 14 22H5M3 10L8 5M3 10L8 15" stroke="#8E8E93" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                              </Svg>
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: '#8E8E93' }}>
+                                Trả lời
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+
+                          {/* Các phản hồi lồng nhau (Replies) */}
+                          {comment.replies && comment.replies.length > 0 && (
+                            <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(255, 255, 255, 0.05)', gap: 8, paddingLeft: 10 }}>
+                              {comment.replies.map((reply) => (
+                                <View key={reply.id} style={{ backgroundColor: '#181820', borderRadius: 8, padding: 8 }}>
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                      <View
+                                        style={{
+                                          width: 22,
+                                          height: 22,
+                                          borderRadius: 11,
+                                          backgroundColor: reply.avatarBg || '#007AFF',
+                                          justifyContent: 'center',
+                                          alignItems: 'center',
+                                        }}
+                                      >
+                                        <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '800' }}>
+                                          {(reply.user || 'U').charAt(0).toUpperCase()}
+                                        </Text>
+                                      </View>
+                                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#FFFFFF' }}>
+                                        {reply.user}
+                                      </Text>
+                                      <Text style={{ fontSize: 9.5, color: '#71717A' }}>• {reply.time}</Text>
+                                    </View>
+                                  </View>
+                                  <Text style={{ fontSize: 11.5, color: '#D4D4D8', lineHeight: 16, marginBottom: 6 }}>
+                                    {reply.text}
+                                  </Text>
+                                  <TouchableOpacity
+                                    activeOpacity={0.8}
+                                    onPress={() => handleToggleCommentLike(comment.id, reply.id)}
+                                    style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start' }}
+                                  >
+                                    <Svg width={13} height={13} viewBox="0 0 24 24" fill={reply.isLiked ? '#E50914' : 'none'}>
+                                      <SvgPath
+                                        d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
+                                        stroke={reply.isLiked ? '#E50914' : '#8E8E93'}
+                                        strokeWidth="1.8"
+                                      />
+                                    </Svg>
+                                    <Text style={{ fontSize: 10.5, fontWeight: '700', color: reply.isLiked ? '#E50914' : '#8E8E93' }}>
+                                      {reply.likes > 0 ? reply.likes : 'Thích'}
+                                    </Text>
+                                  </TouchableOpacity>
+                                </View>
+                              ))}
+                            </View>
+                          )}
+                        </View>
+                      ))}
                     </View>
                   </View>
                 )}
