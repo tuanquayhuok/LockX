@@ -33463,10 +33463,13 @@ function MainApp() {
                 // Cân chỉnh vừa vặn tỉ lệ 16:9 chuẩn (targetWidth 468px)
                 // Đảm bảo video to rõ không bị teo nhỏ, không lộ khoảng đen bên dưới,
                 // đồng thời thanh điều khiển hiển thị đầy đủ 100% (Settings, PiP, Fullscreen).
-                const isMobileScaled = screenWidth < 468;
-                const targetWidth = isMobileScaled ? 468 : screenWidth;
+                // Tối ưu video to rõ, xóa sạch khoảng đen thừa bên dưới:
+                // targetWidth = 416px giúp video to lớn (scale ~94% trên màn 390px),
+                // tỉ lệ khung hình canh chuẩn triệt tiêu khoảng đen, hiển thị trọn vẹn mọi nút (Settings, PiP, Fullscreen).
+                const isMobileScaled = screenWidth < 416;
+                const targetWidth = isMobileScaled ? 416 : screenWidth;
                 const scaleRatio = isMobileScaled ? screenWidth / targetWidth : 1;
-                const targetHeight = isMobileScaled ? Math.round(targetWidth * (9 / 16)) : '100%';
+                const targetHeight = isMobileScaled ? Math.round(targetWidth * (9 / 17.2)) : '100%';
                 const containerHeight = isMobileScaled ? Math.round(targetHeight * scaleRatio) : Math.min(Math.round(screenWidth * (9 / 16)), 360);
 
                 return (
